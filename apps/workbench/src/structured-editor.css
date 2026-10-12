@@ -1,0 +1,43 @@
+.editor-form-view{display:flex;flex:1;min-height:0;min-width:0}.editor-form-view[hidden]{display:none!important}
+.structured-editor{flex:1;overflow:auto;padding:18px 22px;min-width:0}
+.form-object,.form-detail,.form-collection{display:grid;gap:16px;min-width:0}
+.form-field{display:grid;gap:8px;min-width:0;font-size:13px}
+.form-field>span{font-weight:600}
+.form-field textarea,.form-field input,.form-field select,.form-collection input{width:100%;min-width:0;box-sizing:border-box;font:inherit}
+.form-field textarea{resize:vertical;line-height:1.55;min-height:84px}
+.form-boolean{display:flex;align-items:center}.form-boolean input{width:auto}
+.form-object>details{border-bottom:1px solid var(--app-line);padding:12px 0}
+.form-object summary{cursor:pointer;display:flex;gap:10px;align-items:center;min-height:36px}
+.form-object details>section{padding:12px 0 0 12px}.form-object details>button{margin:6px}
+.form-object small,.form-entry small{opacity:.7}
+.form-collection-tools,.form-add,.form-entry-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.form-collection-tools label{flex:1;min-width:160px;display:grid;gap:6px}
+.form-entry{border-bottom:1px solid var(--app-line);padding:12px 0;display:grid;gap:8px;min-width:0}
+.form-entry-open{display:flex;align-items:flex-start;flex-direction:column;gap:5px;text-align:left;white-space:normal;overflow-wrap:anywhere;min-height:48px}
+.form-entry-open{flex-direction:row;align-items:center}.form-entry-open>span:last-child{display:grid;gap:6px;min-width:0}
+.form-entry-thumbnail,.form-entry-placeholder{width:48px;height:48px;flex-shrink:0;border-radius:5px;object-fit:cover;background:var(--app-panel-alt)}
+.form-entry-placeholder{display:grid;place-items:center;font-size:20px;color:var(--app-muted)}
+.form-image{display:block;width:auto;max-width:100%;max-height:240px;object-fit:contain}
+.form-health{display:grid;gap:8px;font-size:13px}.form-health [role=meter]{height:8px;overflow:hidden;border-radius:4px;background:var(--app-panel-alt)}.form-health [role=meter] span{height:100%;display:block;background:var(--app-accent)}
+.text-field-heading{position:relative}.text-field-heading>label{display:grid;gap:8px;font-weight:600}.text-field-heading>button{position:absolute;right:0;top:-6px}.text-field-heading textarea{font-weight:400;margin-top:6px}
+.text-edit-screen{position:fixed;inset:0;width:100vw;max-width:none;height:100dvh;max-height:none;box-sizing:border-box;margin:0;border:0;padding:20px;background:var(--app-bg);color:var(--app-ink)}
+.text-edit-screen[open]{display:flex;flex-direction:column;gap:12px}.text-edit-screen::backdrop{background:#000b}
+.text-edit-toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.text-edit-toolbar strong{flex:1;min-width:120px}.text-edit-toolbar span{font-size:12px;color:var(--app-muted)}
+.text-edit-screen p{font-size:12px;color:var(--app-muted);margin:0}.text-edit-screen textarea{flex:1;min-height:0;resize:none;width:100%;box-sizing:border-box;font:inherit;line-height:1.6}
+.editor-transfer-status{margin:0;padding:4px 18px 12px;font-size:12px;color:var(--app-muted)}
+.editor-caption>div{flex-wrap:wrap}.editor-caption{gap:8px;flex-wrap:wrap}
+.text-field-heading>label>span{padding-right:80px;min-height:24px}
+.text-edit-screen{padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
+.json-editor{position:relative;display:flex;flex:1;min-height:240px;min-width:0;margin:0 18px 18px;border:1px solid var(--app-line);border-radius:6px;overflow:hidden;background:var(--app-input)}
+.json-line-numbers{position:relative;width:44px;flex-shrink:0;overflow:hidden;border-right:1px solid var(--app-line);background:var(--app-panel-alt);color:var(--app-muted);text-align:right;padding-right:8px;box-sizing:border-box}
+.json-line-numbers>div>div{height:20px;font:12px/20px Consolas,monospace}
+.json-code{position:relative;flex:1;min-width:0;display:flex;min-height:0}
+.json-highlight-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.json-highlight-layer pre,.adaptive-app .json-code .json-source-editor{margin:0;padding:14px;font:13px/20px Consolas,monospace;letter-spacing:normal;tab-size:2;white-space:pre;font-variant-ligatures:none;box-sizing:border-box}
+.json-highlight-layer pre{min-width:100%;width:max-content;background:transparent;color:var(--app-ink)}
+.adaptive-app .json-code .json-source-editor,.adaptive-app .json-code .json-source-editor:focus{position:relative;flex:1;min-width:0;width:100%;min-height:240px;border:0;border-radius:0;resize:none;background:transparent;color:transparent;caret-color:var(--app-ink);-webkit-text-fill-color:transparent}
+.json-token-key{color:#287697}.json-token-string{color:#547436}.json-token-number{color:#926331}.json-token-literal{color:#855399}.json-token-punctuation{color:var(--app-ink)}
+[data-theme=dark] .json-token-key{color:#89bbc8}[data-theme=dark] .json-token-string{color:#a9bb92}[data-theme=dark] .json-token-number{color:#d2b28b}[data-theme=dark] .json-token-literal{color:#baa9cb}
+@media(max-width:760px){.json-editor{margin:0 12px 12px;flex:none;height:55dvh;min-height:280px}.json-line-numbers{width:36px}.adaptive-app .json-code .json-source-editor{min-height:0}.text-edit-screen textarea{font-size:16px}}
+.form-entry-actions{justify-content:flex-end}.form-add input{flex:1;min-width:120px}
+@media(max-width:760px){.editor-form-view{flex:0 0 auto}.structured-editor{padding:16px;overflow:visible}.editor-caption,.entry-tool-actions,.builder-notes{flex-shrink:0}.form-entry-actions button{min-height:44px}.form-object details>section{padding-left:6px}}

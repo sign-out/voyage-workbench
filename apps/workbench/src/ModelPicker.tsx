@@ -1,0 +1,7 @@
+import React,{useRef} from 'react';
+import type {ModelChoice} from '../../../packages/core/model-catalog';
+export function ModelPicker({label,value,onChange,models=[],placeholder='Provider default',disabled=false}:{label:string;value:string;onChange:(value:string)=>void;models?:ModelChoice[];placeholder?:string;disabled?:boolean}){
+ const listed=models.some(model=>model.id===value);
+ const input=useRef<HTMLInputElement>(null);
+ return <div className="model-picker"><select aria-label={label+' selection'} value={value&&!listed?'__custom__':value} disabled={disabled} onChange={event=>{if(event.target.value==='__custom__')input.current?.focus();else onChange(event.target.value);}}><option value="">{placeholder}</option>{models.map(model=><option key={model.id} value={model.id}>{model.name===model.id?model.id:model.name+' · '+model.id}{model.isDefault?' · provider default':''}</option>)}<option value="__custom__">{value&&!listed?'Custom / saved model · '+value:'Custom model ID (enter below)'}</option></select><input ref={input} aria-label={label} value={value} placeholder="Exact model ID" disabled={disabled} autoCapitalize="none" spellCheck={false} onChange={event=>onChange(event.target.value)}/>{models.some(model=>model.source==='fallback')&&<small className="muted">Author suggestions · availability is not verified. Refresh models for provider/runtime choices.</small>}{models.find(model=>model.id===value)?.description&&<small className="muted">{models.find(model=>model.id===value)!.description}</small>}</div>;
+}

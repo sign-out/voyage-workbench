@@ -1,0 +1,44 @@
+VOYAGE WORKBENCH — THIRD-PARTY NOTICES AND SOURCE OFFER
+
+Distributor: the sign-out GitHub account publishing Voyage Workbench test
+downloads at https://github.com/sign-out/voyage-workbench-downloads
+
+This offer accompanies the third-party GPL/LGPL runtime components supplied
+with these downloads. It does not relicense the application or any dependency.
+The individual copyright notices and licenses remain controlling.
+
+The distributor offers to provide any person requesting it a complete,
+machine-readable copy of the corresponding source for the supplied covered
+third-party components, including their associated interface definitions,
+patches, and compilation/installation scripts, under their applicable licenses.
+Electronic delivery is free of charge. This offer remains valid for at least
+three years after the distributor's last distribution of each covered build.
+
+Request this material by opening an issue at:
+https://github.com/sign-out/voyage-workbench-downloads/issues
+Include the build version and component or platform. Requests do not require
+payment or proof that the requester downloaded the application.
+
+For licenses requiring direct access rather than an offer alone, SOURCES.json
+also identifies the exact existing upstream source archives, pinned recipe
+and patch trees, source hashes, and corresponding build-system snapshots.
+These links provide source/build access without a separate source asset in
+the Workbench downloads repository. A source request is also available if
+an upstream link becomes unavailable.
+
+Android native compatibility libraries are separately loaded shared objects;
+PRoot and Codex are separately invoked executables. The Android libraries were
+copied without Workbench-specific source patches. Their packaging changes
+filenames and records SONAME aliases. The package manifests describe the exact
+upstream binaries and source versions. No Workbench EULA restricts replacement
+or reverse engineering of these components for debugging such replacements.
+
+Windows Codex voice components include separate dynamically linked libraries.
+Their version/source hashes and build commit are in the supplied voice
+provenance. The pinned upstream Codex third_party/voice tree provides their
+build and runtime-projection scripts. Applicable Microsoft runtime terms
+remain separate from the open-source notices.
+
+The offer concerns third-party components, not an upload of the original
+Voyage Workbench application-source repository. Compiled JavaScript included
+in the application can be inspected; this is not a separate source release.

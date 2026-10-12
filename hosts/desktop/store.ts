@@ -1,0 +1,21 @@
+import {DatabaseSync} from 'node:sqlite';
+import {mkdirSync} from 'node:fs';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {create,reduce,hash,type Project} from '../../packages/core/project';
+export class Store {
+  db:DatabaseSync;
+  constructor(public directory:string){mkdirSync(directory,{recursive:true});this.db=new DatabaseSync(path.join(directory,'workbench.sqlite3'));
+    this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,name TEXT,updated INTEGER,revision INTEGER,body TEXT); CREATE TABLE IF NOT EXISTS checkpoints(id TEXT PRIMARY KEY,project_id TEXT,label TEXT,created INTEGER,source TEXT); CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);');}
+  list(){return this.db.prepare('SELECT id,name,updated,revision FROM projects ORDER BY updated DESC').all().map((row:any)=>({...row,status:this.project(row.id).status||'active'}));}
+  get(id:string,knownRevision?:number){const row=this.db.prepare('SELECT revision,body FROM projects WHERE id=?').get(id) as any;if(!row)throw new Error('Project not found.');if(knownRevision===row.revision)return {unchanged:true,revision:row.revision};return {revision:row.revision,project:JSON.parse(row.body) as Project};}
+  project(id:string):Project{return (this.get(id) as any).project;}
+  create(name:string,source:string){const p=create(randomUUID(),name,source,Date.now());this.db.prepare('INSERT INTO projects VALUES(?,?,?,?,?)').run(p.id,p.name,p.updated,1,JSON.stringify(p));return this.get(p.id);}
+  dispatch(id:string,command:any){this.db.exec('BEGIN IMMEDIATE');try{const p=this.project(id),beforeCheckpointId=randomUUID(),afterCheckpointId=randomUUID(),next=reduce(p,{...command,beforeCheckpointId,afterCheckpointId,now:Date.now()});if(next.activeSource!==p.activeSource){this.checkpoint(id,command.type==='accept'?'Before accepting proposal':'Before '+command.type,p.activeSource,beforeCheckpointId);if((next.noteChanges?.length||0)>(p.noteChanges?.length||0))this.checkpoint(id,'After note-linked work: '+next.noteChanges!.at(-1)!.title,next.activeSource,afterCheckpointId);}this.db.prepare('UPDATE projects SET name=?,updated=?,revision=revision+1,body=? WHERE id=?').run(next.name,next.updated,JSON.stringify(next),id);this.db.exec('COMMIT');return this.get(id);}catch(e){this.db.exec('ROLLBACK');throw e;}}
+  checkpoint(id:string,label:string,source?:string,checkpointId=randomUUID()){const value=source??this.project(id).activeSource;this.db.prepare('INSERT INTO checkpoints VALUES(?,?,?,?,?)').run(checkpointId,id,label,Date.now(),value);}
+  history(id:string){return this.db.prepare('SELECT id,label,created,length(source) AS size FROM checkpoints WHERE project_id=? ORDER BY created DESC').all(id);}
+  restore(id:string,checkpoint:string){const row=this.db.prepare('SELECT source,label FROM checkpoints WHERE id=? AND project_id=?').get(checkpoint,id) as any;if(!row)throw new Error('Checkpoint not found.');return this.dispatch(id,{type:'stage',id:randomUUID(),title:'Restore: '+row.label,source:row.source,kind:'checkpoint'});}
+  setting(key:string,value?:string){if(value!==undefined)this.db.prepare('INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,value);return (this.db.prepare('SELECT value FROM settings WHERE key=?').get(key) as any)?.value??'';}
+  recover(){for(const row of this.list() as any[])if(this.project(row.id).tasks.some(t=>['PREPARED','RUNNING'].includes(t.state)))this.dispatch(row.id,{type:'recover'});}
+  close(){this.db.close();}
+}

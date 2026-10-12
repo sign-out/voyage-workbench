@@ -1,0 +1,16 @@
+body[data-palette]{color-scheme:dark;--radius:7px;--primary-ink:#f0f3f5}
+body[data-palette=graphite]{--bg:#17191c;--panel:#23262a;--panel-alt:#1e2125;--input:#1a1d21;--line:#3c4148;--ink:#dadddf;--muted:#a0a6af;--accent:#a7b3c3;--accent-soft:#303a46;--selected:#323b47;--button:#2b3036;--success:#9cac9e;--primary-bg:#596673}
+body[data-palette=slate]{--bg:#171e25;--panel:#232d37;--panel-alt:#1d2630;--input:#1b242d;--line:#3b4a59;--ink:#d7dfe7;--muted:#a0aebd;--accent:#9eb5c9;--accent-soft:#2c3e4d;--selected:#304353;--button:#2d3945;--success:#9bafa7;--primary-bg:#486277}
+body[data-palette=olive]{--bg:#1c201c;--panel:#272d28;--panel-alt:#222722;--input:#202520;--line:#424c40;--ink:#dee1d5;--muted:#a9b2a2;--accent:#b1bca0;--accent-soft:#35402f;--selected:#3b4636;--button:#30372e;--success:#b1bca0;--primary-bg:#5e6b53;--primary-ink:#f0f2e9}
+body[data-palette=umber]{--bg:#231e1b;--panel:#302925;--panel-alt:#28221f;--input:#27211e;--line:#51463f;--ink:#e5dcd2;--muted:#b9aa9c;--accent:#d0b091;--accent-soft:#41332b;--selected:#47392f;--button:#3a302a;--success:#b2b59a;--primary-bg:#80634c;--primary-ink:#fbf0e8}
+body[data-palette=fog]{--bg:#34383a;--panel:#424849;--panel-alt:#3c4243;--input:#373e3f;--line:#626a6b;--ink:#edf0ea;--muted:#c0c7c1;--accent:#c0cfcb;--accent-soft:#4d5b57;--selected:#485853;--button:#4a5252;--success:#c0cfb9;--primary-bg:#596f69;--primary-ink:#f1f5f2}
+body[data-palette] .primary{background:var(--primary-bg);border-color:var(--primary-bg);color:var(--primary-ink)}
+body[data-palette] .primary:hover{background:var(--primary-bg);filter:brightness(1.08)}
+body[data-palette] .object-symbol{color:var(--accent);background:var(--accent-soft)}
+body[data-palette] .layout-schematic .sketch-top{fill:var(--panel-alt)}
+body[data-palette] .layout-schematic .sketch-side{fill:var(--panel-alt)}
+body[data-palette] .layout-schematic .sketch-main,body[data-palette] .layout-schematic .sketch-object{fill:var(--panel)}
+body[data-palette] .layout-schematic .sketch-line{fill:var(--line)}
+.launcher-link{margin-left:auto;font-size:11px;color:var(--muted);text-decoration:none;border:1px solid var(--line);padding:7px 10px;border-radius:5px}
+.launcher-link:hover{color:var(--ink);background:var(--selected)}
+@media(max-width:760px){.launcher .app-identity>.muted{display:none}.launcher-link{font-size:10px;padding:7px 8px}.launcher .app-identity strong{font-size:11px}}

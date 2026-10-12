@@ -1,0 +1,9 @@
+package dev.voyage.workbench;
+import org.mozilla.javascript.*;import org.json.*;import java.nio.charset.StandardCharsets;
+final class Core {
+ private final Scriptable scope; private final Function request;
+ Core(android.content.Context app)throws Exception{Context c=Context.enter();try{c.setOptimizationLevel(-1);c.setLanguageVersion(Context.VERSION_ES6);c.setClassShutter(name->false);scope=c.initSafeStandardObjects();c.evaluateString(scope,new String(app.getAssets().open("core-native.js").readAllBytes(),StandardCharsets.UTF_8),"core",1,null);Scriptable module=(Scriptable)ScriptableObject.getProperty(scope,"VoyageCore");Function setter=(Function)ScriptableObject.getProperty(module,"setHasher");setter.call(c,scope,module,new Object[]{new BaseFunction(){public Object call(Context cx,Scriptable sc,Scriptable self,Object[] args){try{byte[] digest=java.security.MessageDigest.getInstance("SHA-256").digest(Context.toString(args[0]).getBytes(StandardCharsets.UTF_8));StringBuilder hex=new StringBuilder();for(byte b:digest)hex.append(String.format("%02x",b));return hex.toString();}catch(Exception e){throw new RuntimeException(e);}}}});request=(Function)ScriptableObject.getProperty((Scriptable)ScriptableObject.getProperty(scope,"VoyageCore"),"nativeRequest");}finally{Context.exit();}}
+ synchronized Object call(JSONObject data)throws Exception{Context c=Context.enter();try{c.setOptimizationLevel(-1);c.setLanguageVersion(Context.VERSION_ES6);c.setClassShutter(name->false);String result=Context.toString(request.call(c,scope,scope,new Object[]{data.toString()}));return new JSONTokener(result).nextValue();}finally{Context.exit();}}
+ Object doc(String operation,Object...args)throws Exception{return call(new JSONObject().put("operation",operation).put("args",new JSONArray(args)));}
+ String hash(String s)throws Exception{return (String)call(new JSONObject().put("operation","hash").put("source",s));}
+}

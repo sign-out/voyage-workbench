@@ -1,0 +1,45 @@
+const {app}=require('electron');
+const fs=require('node:fs');
+const os=require('node:os');
+const path=require('node:path');
+const assert=require('node:assert/strict');
+const directory=fs.mkdtempSync(path.join(os.tmpdir(),'voyage-studio-smoke-'));
+app.setPath('userData',directory);
+const timeout=setTimeout(()=>{console.error('Studio smoke timed out');app.exit(1);},120000);
+app.on('browser-window-created',(_,window)=>window.webContents.once('did-finish-load',async()=>{
+ try{
+  const evaluate=expression=>window.webContents.executeJavaScript(expression);
+  async function wait(expression){for(let attempt=0;attempt<100;attempt++){if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,100));}throw new Error('Not ready: '+expression);}
+  async function tool(name){await evaluate(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.querySelector('span').textContent===${JSON.stringify(name)}).click()`);await new Promise(resolve=>setTimeout(resolve,100));}
+  async function button(text,container='document'){
+   const expression=`[...${container}.querySelectorAll('button')].find(button=>button.textContent.trim()===${JSON.stringify(text)})`;
+   await wait(`!!(${expression})&&!(${expression}).disabled`);
+   const hit=await evaluate(`(()=>{const button=${expression};button.scrollIntoView({block:'center'});const rect=button.getBoundingClientRect(),target=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);return button===target||button.contains(target);})()`);
+   assert.ok(hit,'Button covered or clipped: '+text);await evaluate(`(${expression}).click()`);
+  }
+  async function input(label,value){await evaluate(`(()=>{const input=[...document.querySelectorAll('label')].find(item=>item.textContent.trim()===${JSON.stringify(label)})?.querySelector('input,textarea');if(!input)throw Error('Missing field '+${JSON.stringify(label)});Object.getOwnPropertyDescriptor(input.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(value)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`);}
+  const source='{"world":{"shortId":"studio-fixture","title":"Studio smoke","description":"Before","initialGameState":{"exact":9007199254740993,"npcs":{"mara":{"name":"Mara"}},"combatSettings":{"abilityCooldown":1.2300e+42},"aiInstructions":{"generateStory":{"rules":"Stay in character"}},"gameplayMusicSettings":{"characterCreationTrackId":"Travel","tracks":{"Travel":{"cues":["travel"],"variants":[{"url":""}]}}}}}}';
+  const id=await evaluate(`(async()=>{const created=await window.voyage.invoke('create',{name:'Studio smoke',source:${JSON.stringify(source)}});localStorage.setItem('voyage-project',created.project.id);window.confirm=()=>true;return created.project.id;})()`);
+  window.webContents.reload();await wait(`document.querySelector('.workspace-world-title')?.textContent==='Studio smoke'`);await evaluate('window.confirm=()=>true; true');
+  window.setMinimumSize(320,480);window.setContentSize(320,915);await wait('innerWidth===320');
+  await tool('Music');await button('TravelCharacter creation');await button('Add audio variant');await wait(`!!document.querySelector('.studio-section .primary')&&!document.querySelector('.studio-section .primary').disabled`);await button('Review changes');await wait(`document.body.textContent.includes('Soundtrack changes')&&!!document.querySelector('.review-page')`);
+  let stored=await evaluate(`window.voyage.invoke('project',{id:${JSON.stringify(id)}})`);assert.equal(stored.project.activeSource,source);assert.equal(stored.project.draft,null);assert.equal(stored.project.candidates.length,1);await button('Accept proposal');
+  stored=await evaluate(`window.voyage.invoke('project',{id:${JSON.stringify(id)}})`);assert.match(stored.project.activeSource,/9007199254740993/);assert.match(stored.project.activeSource,/1\.2300e\+42/);
+  await tool('Asset library');await wait(`!!document.querySelector('.asset-library input[type=file]')`);
+  const wav=Buffer.alloc(52);wav.write('RIFF');wav.writeUInt32LE(44,4);wav.write('WAVE',8);wav.write('fmt ',12);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(8000,24);wav.writeUInt32LE(16000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(8,40);
+  await evaluate(`(()=>{const bytes=Uint8Array.from(atob(${JSON.stringify(wav.toString('base64'))}),character=>character.charCodeAt(0)),files=new DataTransfer();files.items.add(new File([bytes],'track.wav',{type:'audio/wav'}));files.items.add(new File([bytes],'duplicate.wav',{type:'audio/wav'}));files.items.add(new File(['invalid'],'bad.mp3',{type:'audio/mpeg'}));const input=document.querySelector('.asset-library input[type=file]');input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await wait(`document.querySelector('.asset-library [role=status]')?.textContent.includes('2/3 files')`);const catalog=JSON.parse(await evaluate(`window.voyage.invoke('featureGet',{key:'asset-library'})`));assert.equal(catalog.length,1);assert.ok(catalog[0].aliases.includes('duplicate.wav'));assert.match(await evaluate(`document.querySelector('.asset-library [role=alert]').textContent`),/bad.mp3/);
+  await evaluate(`document.querySelector('.asset-library details summary').click()`);await input('HTTPS URL','https://latitude-standard-pull-zone-1.b-cdn.net/studio-fixture.mp3');await evaluate(`(()=>{const select=[...document.querySelectorAll('label')].find(label=>label.textContent.startsWith('Media type')).querySelector('select');select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);await button('Keep URL in library');await wait(`document.querySelector('.asset-library [role=status]')?.textContent.includes('URL retained')`);
+  await tool('Music');await button('TravelCharacter creation');await button('Choose from asset library');await wait(`document.querySelector('.media-dialog')?.open`);
+  assert.equal(await evaluate(`document.activeElement.closest('dialog')!==null`),true);
+  await evaluate(`[...document.querySelectorAll('.library-picker-list button')].find(button=>button.textContent.includes('studio-fixture.mp3')).click()`);await button('Use existing hosted URL','document.querySelector(".media-dialog")');await wait('!document.querySelector(".media-dialog")');await button('Review changes');await button('Accept proposal');
+  stored=await evaluate(`window.voyage.invoke('project',{id:${JSON.stringify(id)}})`);assert.match(stored.project.activeSource,/studio-fixture.mp3/);assert.equal(JSON.parse(await evaluate(`window.voyage.invoke('featureGet',{key:'music-uploads'})`)||'[]').length,0);
+  await tool('Publish');await input('Public title','Studio smoke edited');await wait(`!document.querySelector('.publication-details .primary').disabled`);await button('Review changes','document.querySelector(".publication-details")');await button('Accept proposal');stored=await evaluate(`window.voyage.invoke('project',{id:${JSON.stringify(id)}})`);assert.match(stored.project.activeSource,/Studio smoke edited/);assert.match(stored.project.activeSource,/"shortId":"studio-fixture"/);
+  await evaluate(`(async()=>{await window.voyage.invoke('command',{id:${JSON.stringify(id)},command:{type:'attachMod',id:'a',name:'a.json',source:'{"npcs":{"m":{"name":"A"}}}'}});await window.voyage.invoke('command',{id:${JSON.stringify(id)},command:{type:'attachMod',id:'b',name:'b.json',source:'{"npcs":{"m":{"name":"B"}}}'}});})()`);
+  window.webContents.reload();await wait(`document.querySelector('.workspace-world-title')?.textContent==='Studio smoke edited'`);await evaluate('window.confirm=()=>true; true');await tool('Mod overlays');await button('Use reference');await evaluate(`[...document.querySelectorAll('button')].filter(button=>button.textContent==='Use reference')[1].click()`);await wait(`document.body.textContent.includes('1 displayed conflicts')`);await button('Review mod stack');await button('Accept proposal');
+  for(const width of [320,412,1280]){window.setContentSize(width,915);await wait(`innerWidth===${width}`);for(const name of ['Asset library','Music','Mechanics & AI','Publish','Mod overlays']){await tool(name);assert.ok(await evaluate('document.documentElement.scrollWidth<=innerWidth'),'Overflow: '+name+' '+width);}}
+  await tool('Mechanics & AI');await button('Combat SettingscombatSettings');await wait(`!!document.querySelector('.studio-section')`);assert.ok(await evaluate(`document.querySelector('.studio-section').textContent.includes('Ability Cooldown')`));
+  console.log(JSON.stringify({ok:true,bulkImportDeduplication:true,partialImportFeedback:true,musicDraftRecoveryAndReview:true,hostedUrlReuseWithoutUpload:true,publicationIdentityPreserved:true,modConflictsAndReview:true,layouts:15,buttonHitTesting:true}));clearTimeout(timeout);app.exit(0);
+ }catch(error){console.error(error);clearTimeout(timeout);app.exit(1);}
+}));
+require('../build/desktop/main.cjs');
