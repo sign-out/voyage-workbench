@@ -22,8 +22,7 @@ final class CliRuntime implements AutoCloseable {
     private boolean closed;
 
     static boolean available(Context app) {
-        String libs = app.getApplicationInfo().nativeLibraryDir;
-        return new File(libs, "libclaude.so").isFile() && new File(libs, "libmusl-loader.so").isFile();
+        return RuntimePacks.ready(app, "claude");
     }
 
     static boolean available(Context app, String provider) {
@@ -155,6 +154,7 @@ final class CliRuntime implements AutoCloseable {
     }
 
     String execute(List<String> args, String input, String key, BooleanSupplier canceled, int seconds, boolean requireSuccess) throws Exception {
+        if (canceled.getAsBoolean()) throw new IOException("Task canceled.");
         if (input.getBytes(StandardCharsets.UTF_8).length > 8 * 1024 * 1024) throw new IOException("CLI context exceeds 8 MiB. Narrow the work order.");
         Process child = start(args, key);
         ExecutorService readers = Executors.newFixedThreadPool(2);

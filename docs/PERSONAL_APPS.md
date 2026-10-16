@@ -6,14 +6,17 @@ These are local, personal preview builds of the lean hybrid workbench. They use 
 
 | Platform | File | Requirements |
 | --- | --- | --- |
-| Windows | `releases/test-0.2.7/Voyage-Workbench-0.2.7-test-windows-x64.exe` | Windows x64; portable executable; not Authenticode signed |
-| Android phone | `releases/test-0.2.7/Voyage-Workbench-0.2.7-test-arm64.apk` | Android 13+; ARM64; permit installation from the source used to open the APK |
-| Android emulator | `releases/test-0.2.7/Voyage-Workbench-0.2.7-test-x86_64.apk` | Android 13+ x86-64 |
-| This Linux computer | `releases/run-linux.sh` | Launches the bundled Linux desktop app |
+| Windows | `releases/test-0.2.11/Voyage-Workbench-0.2.11-windows-x64.exe` | Windows x64; portable executable; self-signed test certificate, not publicly trusted |
+| Android phone | `releases/test-0.2.11/Voyage-Workbench-0.2.11-android-arm64-v8a.apk` | Android 13+; ARM64; permit installation from the source used to open the APK |
+| Android emulator | `releases/test-0.2.11/Voyage-Workbench-0.2.11-android-x86_64.apk` | Android 13+ x86-64 |
+| Linux | `releases/test-0.2.11/Voyage-Workbench-0.2.11-linux-x64.tar.gz` | Linux x64; extract the archive, then run `./run-linux.sh` |
+| Android lightweight | `releases/test-0.2.11/Voyage-Workbench-0.2.11-android-arm64-v8a-lightweight.apk` | Optional ARM64 editor with provider packs installed on demand; x86-64 variant also available |
 
-The Android release APKs are non-debuggable and signed with this machine's development certificate. Preserve that certificate to build compatible updates. Version 0.2.7 uses Android version code 9 and updates the existing app without uninstalling. These are personal installation packages, not store releases. Native Windows execution is unverified on this Linux computer; scoped provider startup/login/vault and catalog tests run on the attached ARM64 Samsung phone.
+The Android release APKs are non-debuggable and signed with this machine's development certificate. Preserve that certificate to build compatible updates. Version 0.2.11 uses Android version code 13 and updates the existing app without uninstalling. These are personal installation packages, not store releases. Native Windows execution is unverified on this Linux computer; earlier scoped provider startup/login/vault and catalog tests ran on an attached ARM64 Samsung phone.
 
-Codex and its companion runtime are bundled. Android also bundles the PRoot runtime proven in the emulator experiment; it does not require a Linux distribution or a separate Termux installation. PRoot is a compatibility layer, not a security sandbox. Agent access is restricted to Workbench's structured read/edit tools.
+The default full/offline Android edition bundles Codex, Claude Code and Cursor with their required support. The optional lightweight edition starts with the same editor but no provider binaries. Open **Settings → Models & agents → On-device runtimes**, permit Android installation prompts, then explicitly install the provider you need. Save settings first and approve the normal Android installation dialog. Packs are version-pinned Workbench release downloads built from qualified official packages, not untested vendor `latest`. Install over the existing application when switching editions; do not uninstall to preserve projects and encrypted credentials. The full/offline APK is the simplest option if all providers are needed or installation prompts are not available.
+
+Android uses PRoot support; it does not require a Linux distribution or a separate Termux installation. PRoot is a compatibility layer, not a security sandbox. Agent access is restricted to Workbench's structured read/edit tools. Provider installation never performs inference or substitutes a direct API fallback.
 
 ## First use
 
@@ -21,7 +24,7 @@ Codex and its companion runtime are bundled. Android also bundles the PRoot runt
 2. Navigate objects in World Explorer. Edit the selected JSON value, then select **Apply edit**. Drafts save locally; the status distinguishes an in-flight save from a saved draft. Apply or discard a draft before navigating to another value.
 3. In **Connection**, sign into Codex with the displayed device code. Complete the browser sign-in and select **Refresh status**. Desktop can explicitly copy an existing Codex CLI login into the app's isolated provider directory.
 4. Use **Planning** to discuss changes. Write the objective and requirements in **Work Order**, optionally restrict allowed paths, and save it. **Approve & run** starts the implementation agent.
-5. Inspect the proposed diff in **Proposals**. Only **Accept proposal** changes the active world. Stale proposals are blocked. Imports and checkpoint restores use the same review path.
+5. Completed assistant work applies locally automatically by default, with a before-change checkpoint. Choose **Proposal only** in Settings to review it first. Open drafts, unapplied edits in the task's editor snapshot, or newer local changes keep the result as a proposal. Imports and checkpoint restores always require **Accept proposal**; stale proposals are blocked.
 6. Export the active world using the native file dialog. Automatic checkpoints preserve the state before edits; the latest 30 are retained.
 
 **Graphite dark mode is the default.** All tools → Settings offers Graphite, Light, and System. The choice is saved separately on each device.

@@ -10,7 +10,7 @@ import java.util.zip.*;
 
 final class CursorRuntime {
     static boolean available(Context app) {
-        return new File(app.getApplicationInfo().nativeLibraryDir, "libcursor-node.so").isFile();
+        return RuntimePacks.ready(app, "cursor");
     }
 
     static JSONObject metadata(Context app) throws Exception {
@@ -27,20 +27,29 @@ final class CursorRuntime {
             if (!root.mkdirs()) throw new IOException("Could not prepare the Cursor SDK.");
             long total = 0;
             int count = 0;
-            try (ZipInputStream input = new ZipInputStream(app.getAssets().open("cursor-sdk-" + android.os.Build.SUPPORTED_ABIS[0] + ".zip"))) {
-                ZipEntry entry;
-                byte[] buffer = new byte[8192];
-                while ((entry = input.getNextEntry()) != null) {
-                    File file = new File(root, entry.getName());
-                    if (++count > 5000 || !file.getCanonicalPath().startsWith(root.getCanonicalPath() + File.separator)) throw new IOException("Invalid Cursor runtime archive.");
-                    if (entry.isDirectory()) { file.mkdirs(); continue; }
-                    if (!file.getParentFile().isDirectory() && !file.getParentFile().mkdirs()) throw new IOException("Could not extract Cursor dependencies.");
-                    try (OutputStream output = new FileOutputStream(file)) {
-                        int size;
-                        while ((size = input.read(buffer)) != -1) {
-                            total += size;
-                            if (total > 100L * 1024 * 1024) throw new IOException("Cursor runtime exceeds its extraction limit.");
-                            output.write(buffer, 0, size);
+            String architectureArchive = "cursor-sdk-" + android.os.Build.SUPPORTED_ABIS[0] + ".zip";
+            JSONArray archives = metadata.optJSONArray("archives");
+            if (archives == null) archives = new JSONArray().put(architectureArchive);
+            if (archives.length() < 1 || archives.length() > 2) throw new IOException("Invalid Cursor runtime archives.");
+            Set<String> extracted = new HashSet<>();
+            for (int archiveIndex = 0; archiveIndex < archives.length(); archiveIndex++) {
+                String archive = archives.getString(archiveIndex);
+                if (!archive.equals("cursor-sdk-common.zip") && !archive.equals(architectureArchive)) throw new IOException("Invalid Cursor runtime archive.");
+                try (ZipInputStream input = new ZipInputStream(app.getAssets().open(archive))) {
+                    ZipEntry entry;
+                    byte[] buffer = new byte[8192];
+                    while ((entry = input.getNextEntry()) != null) {
+                        File file = new File(root, entry.getName());
+                        if (++count > 5000 || !file.getCanonicalPath().startsWith(root.getCanonicalPath() + File.separator) || !extracted.add(entry.getName())) throw new IOException("Invalid Cursor runtime archive.");
+                        if (entry.isDirectory()) { file.mkdirs(); continue; }
+                        if (!file.getParentFile().isDirectory() && !file.getParentFile().mkdirs()) throw new IOException("Could not extract Cursor dependencies.");
+                        try (OutputStream output = new FileOutputStream(file)) {
+                            int size;
+                            while ((size = input.read(buffer)) != -1) {
+                                total += size;
+                                if (total > 100L * 1024 * 1024) throw new IOException("Cursor runtime exceeds its extraction limit.");
+                                output.write(buffer, 0, size);
+                            }
                         }
                     }
                 }

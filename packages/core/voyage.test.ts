@@ -36,4 +36,5 @@ test('success feedback requires confirmed read-back; uncertain and rejected save
   assert.equal(voyageSaveFeedback({state:'UNKNOWN',detail:'Read-back differs'})?.title,'Voyage save not confirmed');
   assert.equal(voyageSaveFeedback({state:'REJECTED',detail:'Revision conflict'})?.tone,'error');
   assert.match(voyageSaveFeedback({state:'UNKNOWN'})!.detail,/local project is safe/);
+  assert.match(voyageSaveFeedback({state:'UNKNOWN',comparison:{paths:[['world','initialGameState','compatibilityRevision']]}})!.detail,/different schema-version fields/);
 });

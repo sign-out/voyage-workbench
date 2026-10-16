@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import os
 import re
@@ -36,6 +37,8 @@ for apk in apks:
     badging = subprocess.run([str(build_tools / 'aapt'), 'dump', 'badging', str(apk)], check=True, capture_output=True, text=True).stdout
     if f"versionName='{version}'" not in badging or f"versionCode='{code}'" not in badging or "name='dev.voyage.workbench'" not in badging:
         raise ValueError('Stale Android package metadata: ' + apk.name)
+    if 'application-debuggable' in badging or 'application-testOnly' in badging:
+        raise ValueError('Debug or test-only Android package cannot be released: ' + apk.name)
     with zipfile.ZipFile(apk) as archive:
         names = archive.namelist()
         if any('libcursorlab_' in name or name.endswith(('.jks', '.keystore', '.p12', '.pfx', '.map')) or name.rsplit('/', 1)[-1] in ['auth.json', 'credentials.bin', '.env'] for name in names):
@@ -48,6 +51,22 @@ for apk in apks:
         if not required or abis != required:
             raise ValueError('Unexpected APK architecture: ' + apk.name)
         for abi in abis:
+            metadata = json.loads(archive.read('assets/cursor-runtime-' + abi + '.json'))
+            if metadata.get('archives') != ['cursor-sdk-common.zip', 'cursor-sdk-' + abi + '.zip']:
+                raise ValueError('Unexpected Cursor archive layout: ' + abi)
+            restored = {}
+            for name in metadata['archives']:
+                with zipfile.ZipFile(io.BytesIO(archive.read('assets/' + name))) as sdk_archive:
+                    for entry in sdk_archive.infolist():
+                        if entry.is_dir():
+                            continue
+                        if entry.filename in restored:
+                            raise ValueError('Duplicate Cursor SDK entry: ' + entry.filename)
+                        restored[entry.filename] = hashlib.sha256(sdk_archive.read(entry)).digest()
+            with zipfile.ZipFile(root / '.android-lab/cursor-runtime' / ('cursor-sdk-' + abi + '.zip')) as original:
+                original_files = {entry.filename: hashlib.sha256(original.read(entry)).digest() for entry in original.infolist() if not entry.is_dir()}
+            if restored != original_files:
+                raise ValueError('Factored Cursor SDK differs from original vendor files: ' + abi)
             for source in (root / 'android/app/src/main/jniLibs' / abi).glob('*.so'):
                 if hashlib.sha256(archive.read('lib/' + abi + '/' + source.name)).digest() != hashlib.sha256(source.read_bytes()).digest():
                     raise ValueError('Changed Android runtime: ' + source.name)

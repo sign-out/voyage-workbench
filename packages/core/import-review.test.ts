@@ -6,6 +6,53 @@ import {create,reduce,hash,remotePayload} from './project';
 const envelope='{"shortId":"WORLD","title":"API title","description":"API metadata","visibility":"private","initialGameState":{"npcs":{"Ada":{"name":"Ada","hp":9007199254740993}},"keep":-0,"fraction":1.000,"remove":"old"},"loadStatus":"ready"}';
 const state='{"npcs":{"Ada":{"name":"Edited","hp":9007199254740995}},"keep":0,"fraction":1.000,"added":1E+99}';
 
+test('linked import restores removed schema fields and rejects new untrusted managed flags',()=>{
+ const trusted='{"shortId":"WORLD","initialGameState":{"heroesVersion":"alpha","compatibilityRevision":9007199254740993,"text":"Before"}}';
+ let project=create('p','Linked',trusted,1);
+ project=reduce(project,{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'v1',envelopeSource:trusted});
+ project=reduce(project,{type:'stage',id:'import',kind:'import',source:'{"shortId":"OTHER","canSafelySave":true,"degradedReason":"untrusted","initialGameState":{"text":"After","custom":{"compatibilityRevision":"authored"}}}'});
+ project=reduce(project,{type:'accept',id:'import'});
+ assert.equal(doc.read(project.activeSource,['shortId']),'"WORLD"');
+ assert.equal(doc.read(project.activeSource,['initialGameState','compatibilityRevision']),'9007199254740993');
+ assert.equal(doc.read(project.activeSource,['initialGameState','heroesVersion']),'"alpha"');
+ assert.equal(doc.read(project.activeSource,['initialGameState','custom','compatibilityRevision']),'"authored"');
+ assert.throws(()=>doc.read(project.activeSource,['canSafelySave']));
+ assert.throws(()=>doc.read(project.activeSource,['degradedReason']));
+ assert.equal(project.remote.envelopeSource,trusted);assert.equal(project.remote.operations.length,0);
+});
+
+test('linked JSON imports cannot replace identity, load flags or schema revisions across wrappers',()=>{
+ const trusted='{"shortId":"WORLD","loadStatus":"ready","canSafelySave":true,"initialGameState":{"heroesVersion":"alpha-current","compatibilityRevision":9007199254740993,"npcs":{"Ada":{"name":"Original"}},"custom":{"compatibilityRevision":"authored"}}}';
+ for(const incoming of [
+  '{"heroesVersion":"old","compatibilityRevision":1,"npcs":{"Ada":{"name":"Edited"}}}',
+  '{"shortId":"OTHER","loadStatus":"broken","canSafelySave":false,"initialGameState":{"npcs":{"Ada":{"name":"Edited"}}}}',
+  '{"data":{"world":{"shortId":"OTHER","loadStatus":"broken","initialGameState":{"heroesVersion":"old","compatibilityRevision":1,"npcs":{"Ada":{"name":"Edited"}}}}}}'
+ ]){
+  let project=create('p','Linked world',trusted,1);project=reduce(project,{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'v1',envelopeSource:trusted});
+  project=reduce(project,{type:'stage',id:'import',kind:'import',source:incoming});assert.match(project.candidates[0].importNote!,/Protected Voyage fields retained/);
+  const value=(text:string,path:doc.Path)=>{try{return doc.read(text,path);}catch{return undefined;}};
+  for(const path of doc.voyageManagedPaths(trusted))assert.equal(value(project.candidates[0].source,path),value(trusted,path));
+  project=reduce(project,{type:'accept',id:'import'});assert.equal(doc.read(project.activeSource,['initialGameState','npcs','Ada','name']),'"Edited"');assert.equal(project.remote.worldId,'WORLD');assert.equal(project.remote.etag,'v1');assert.equal(project.remote.operations.length,0);
+ }
+ assert.equal(doc.explorerDescribe(trusted,['initialGameState','compatibilityRevision']).readOnly,true);
+ assert.equal(doc.explorerDescribe(trusted,['initialGameState','custom','compatibilityRevision']).readOnly,false);
+});
+test('acceptance rechecks old imported proposals and explicit API refresh may update managed fields',()=>{
+ const trusted='{"shortId":"WORLD","initialGameState":{"heroesVersion":"current","compatibilityRevision":3,"text":"Before"}}';
+ let project=create('p','Linked',trusted,1);project=reduce(project,{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'v1',envelopeSource:trusted});
+ project.candidates.push({id:'old',title:'Old import',source:'{"shortId":"OTHER","initialGameState":{"text":"After"}}',baseHash:hash(trusted),created:1,kind:'import'});
+ project=reduce(project,{type:'accept',id:'old'});assert.equal(doc.read(project.activeSource,['shortId']),'"WORLD"');assert.equal(doc.read(project.activeSource,['initialGameState','compatibilityRevision']),'3');assert.equal(doc.read(project.activeSource,['initialGameState','text']),'"After"');
+ project=reduce(project,{type:'stage',id:'refresh',kind:'remote',source:trusted.replace('"current"','"new-current"').replace('Revision":3','Revision":4')});project=reduce(project,{type:'accept',id:'refresh'});assert.equal(doc.read(project.activeSource,['initialGameState','heroesVersion']),'"new-current"');assert.equal(doc.read(project.activeSource,['initialGameState','compatibilityRevision']),'4');
+ assert.throws(()=>doc.preserveVoyageFields(trusted,'{"initialGameState":null}'),/object GameState/);
+});
+test('upload recovery preserves downloaded schema versions without losing edited content or exact numbers',()=>{
+ const trusted='{"shortId":"WORLD","initialGameState":{"heroesVersion":"alpha","compatibilityRevision":3,"number":9007199254740993}}';
+ const edited=trusted.replace('"alpha"','"old"').replace('Revision":3','Revision":1').replace('9007199254740993','9007199254740995');
+ const payload=remotePayload(edited,trusted,'WORLD');assert.equal(doc.read(payload,['world','initialGameState','heroesVersion']),'"alpha"');assert.equal(doc.read(payload,['world','initialGameState','compatibilityRevision']),'3');assert.equal(doc.read(payload,['world','initialGameState','number']),'9007199254740995');
+ assert.throws(()=>remotePayload(edited.replace('WORLD','OTHER'),trusted,'WORLD'),/shortId/);
+ assert.equal(doc.read(remotePayload('{"world":'+edited+'}',trusted,'WORLD'),['world','shortId']),'"WORLD"');
+});
+
 test('raw GameState imports align inside the downloaded envelope instead of deleting API metadata',()=>{
  const project=create('p','Imported',envelope,1),staged=reduce(project,{type:'stage',id:'c',source:state,kind:'import'});
  assert.equal(staged.activeSource,envelope);assert.match(staged.candidates[0].importNote||'',/metadata.*preserved/);

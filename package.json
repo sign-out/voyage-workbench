@@ -1,6 +1,6 @@
 {
   "name": "voyage-workbench",
-  "version": "0.2.9",
+  "version": "0.2.11",
   "license": "GPL-2.0-only",
   "private": true,
   "type": "module",
@@ -14,7 +14,8 @@
     "test:release": "node --test tests/test_map_camera.mjs tests/test_remote_world_list.mjs tests/test_release_artifacts.mjs",
     "verify:artifacts": "node tools/verify-artifacts.mjs && python3 tools/verify-android-artifacts.py",
     "desktop": "node tools/start-desktop.mjs",
-    "android:sync": "python3 tools/android/package_runtime.py && python3 tools/android/package_provider_runtimes.py && npm run build && npx cap sync android",
+    "android:sync": "python3 tools/android/package_runtime.py && python3 tools/android/package_provider_runtimes.py && python3 tools/android/package_cursor_runtime.py && npm run build && npx cap sync android",
+    "android:provider-packs": "python3 tools/android/prototype_provider_packs.py",
     "package:windows": "npm run package:windows:signed",
     "package:windows:signed": "python3 tools/prepare-windows-signing.py && python3 tools/package-desktop-runtime.py && npm run build && electron-builder --win --x64 --config.afterPack=tools/windows-sign-hook.cjs --config.artifactBuildCompleted=tools/windows-sign-hook.cjs",
     "package:linux": "python3 tools/package-desktop-runtime.py && npm run build && electron-builder --linux --x64"
@@ -54,16 +55,6 @@
       "!node_modules/**",
       "!**/*.map",
       "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "apps/workbench/public/references",
-        "to": "references"
-      },
-      {
-        "from": "apps/workbench/public/third-party",
-        "to": "third-party"
-      }
     ],
     "win": {
       "target": [

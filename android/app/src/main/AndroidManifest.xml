@@ -35,6 +35,7 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
         <service android:name=".AgentService" android:exported="false" android:process=":agent" android:foregroundServiceType="specialUse"><property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User initiated local world editing agent"/></service>
+        <receiver android:name=".RuntimeInstallReceiver" android:exported="false" />
     </application>
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
@@ -43,4 +44,5 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

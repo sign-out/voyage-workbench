@@ -6,12 +6,14 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-DEVICE = 'R5CY40AMQ7N'
+DEVICE = os.environ.get('VOYAGE_ANDROID_SERIAL', '')
 OUTPUT = Path('docs/showcase')
 TOOLS = ['World', 'Map', 'Characters', 'Mod overlays', 'Changes', 'Validation', 'Planning', 'Proposals', 'Artwork', 'Asset library', 'Music', 'Mechanics & AI', 'Publish', 'Base template', 'History', 'Models & agents', 'Voyage sync', 'Connection', 'World tools', 'Settings']
 
 
 def adb(*args):
+    if not DEVICE:
+        raise RuntimeError('Set VOYAGE_ANDROID_SERIAL to the intended phone before capturing screenshots.')
     return subprocess.check_output(['adb', '-s', DEVICE, *args])
 
 

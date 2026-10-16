@@ -74,6 +74,7 @@ public class CursorRuntimeTest {
         try (CliRuntime runtime = new CliRuntime(app, "cursor-cancel-test", "cursor")) {
             try { runtime.execute(Collections.emptyList(), "{\"operation\":\"status\"}\n", "", () -> true, 30, true); fail("Canceled Cursor operation returned success"); }
             catch (IOException expected) { assertTrue(expected.getMessage().contains("canceled")); }
+            assertNull("An already-canceled operation must not launch the Cursor subprocess", runtime.process);
         }
     }
 }

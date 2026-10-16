@@ -3,8 +3,8 @@
 __pycache__/
 *.pyc
 .DS_Store
-.android-lab/
-node_modules/
+.android-lab
+node_modules
 dist/
 build/
 releases/
@@ -12,17 +12,18 @@ releases/
 android/.gradle/
 android/local.properties
 android/**/build/
-android/app/src/main/jniLibs/
+android/app/src/main/jniLibs
 android/app/src/main/assets/cursor-sdk-*.zip
 android/app/src/main/assets/cursor-runtime-*.json
 android/app/src/main/assets/cursor-sdk.cjs
 android/app/src/main/assets/cursor-runner.cjs
+android/app/src/main/assets/core-native.js
 
-.desktop-runtime/
-.release-compliance/
+.desktop-runtime
+.release-compliance
 apps/workbench/public/third-party/
 
-.build-tools/
+.build-tools
 *.jks
 *.keystore
 *.p12

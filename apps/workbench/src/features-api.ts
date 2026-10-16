@@ -3,6 +3,7 @@ import {feature,saveFeature} from './feature-store';
 export {feature,saveFeature} from './feature-store';
 import {importLocal,library,registerRemote} from './asset-library';
 import {reusableRemote} from '../../../packages/core/asset-library';
+import {imageTargets} from '../../../packages/core/artwork';
 export async function creator(method:string,endpoint:string,body?:string,idempotencyKey?:string){const r=await request('creatorRequest',{method,endpoint,body,idempotencyKey});return {...r,data:JSON.parse(r.text)};}
 export const worldSource=(source:string)=>doc.read(source,doc.statePath(doc.parse(source)).slice(0,-1));
 export async function validateSource(source:string,stage='draft'){return (await creator('POST','/validate','{"stage":'+JSON.stringify(stage)+',"world":{"initialGameState":'+doc.read(source,doc.statePath(doc.parse(source)))+'}}')).data;}
@@ -14,6 +15,17 @@ export function privateDraft(p:Project,creationDetails='{}'){
  return '{"world":{'+Object.keys(fields).map(key=>JSON.stringify(key)+':'+fields[key]).join(',')+'}}';
 }
 export interface PublicationOperation {id:string;kind:string;worldId:string;body:string;sourceHash:string;created:number;state:string;result?:any;detail?:string}
+export async function createWorldCopy(project:Project){
+ const current=(await request('project',{id:project.id})).project as Project;
+ if(current.draft||current.tasks.some(task=>['PREPARED','RUNNING'].includes(task.state)))throw new Error('Apply/discard the draft and finish the agent before creating a new world.');
+ if(current.remote.operations.some(operation=>['PREPARED','SEND_ATTEMPTED','UNKNOWN'].includes(operation.state)))throw new Error('Reconcile the pending save before creating a new world.');
+ const publication=await feature<PublicationOperation[]>('publication:'+current.id,[]);
+ if(publication.some(operation=>['PREPARED','SEND_ATTEMPTED','UNKNOWN'].includes(operation.state)))throw new Error('Resolve the recorded publication request before creating another world. Replay the same request from the publication journal.');
+ const details=await feature<string>('creation-details:'+current.id,'{}');
+ const copy=await request('create',{name:current.name+' — new world',source:current.activeSource});
+ await saveFeature('creation-details:'+copy.project.id,details);
+ return copy;
+}
 export async function publicationAction(project:Project,kind:string,retry?:PublicationOperation){let p=(await request('project',{id:project.id})).project as Project;if(p.draft||p.tasks.some(t=>['PREPARED','RUNNING'].includes(t.state)))throw new Error('Apply/discard the draft and finish the agent before publication.');if(p.remote.operations.some(o=>['PREPARED','SEND_ATTEMPTED','UNKNOWN'].includes(o.state)))throw new Error('Reconcile the remote save first.');const key='publication:'+p.id,ops=await feature<PublicationOperation[]>(key,[]);if(!retry&&ops.some(o=>['PREPARED','UNKNOWN','SEND_ATTEMPTED'].includes(o.state)))throw new Error('Resolve the recorded publication request before starting another.');let op=retry||{id:crypto.randomUUID(),kind,worldId:p.remote.worldId,body:kind==='create'?privateDraft(p,await feature<string>('creation-details:'+p.id,'{}')):kind==='moderation'?'{"forceFullCheck":false}':'{}',sourceHash:hash(p.activeSource),created:Date.now(),state:'PREPARED'};kind=op.kind;
  if(!retry){if(kind==='create'){if(p.remote.worldId)throw new Error('This project already has a linked draft.');if(!valid(await validateSource(p.activeSource)))throw new Error('Official draft validation must pass first.');}else if(!p.remote.worldId)throw new Error('Create or download a Voyage draft first.');ops.unshift(op);}
  else{if(!retry.result&&Date.now()-retry.created>23*60*60*1000)throw new Error('The exact-replay window expired. Inspect the Voyage draft before any new publication request.');const found=ops.find(v=>v.id===retry.id);if(!found)throw new Error('Recorded request not found.');op=found;}
@@ -28,7 +40,7 @@ export async function saveAsset(data:Omit<Asset,'id'|'created'>){return importLo
 export interface Upload {id:string;shortId:string;target:string;assetId:string;mimeType:string;width:number;height:number;state:string;step:string;uploadId?:string;directUploadUrl?:string;expiresAt?:string;imageUrl?:string;error?:string;created:number}
 export async function prepareUpload(p:Project,target:string,asset:Asset){
  if(!p.remote.worldId)throw new Error('Create or download a Voyage draft first.');
- if(!['REGION_MAP_IMAGE','NPC_PORTRAIT','LOCATION_IMAGE','AREA_IMAGE'].includes(target))throw new Error('Unknown upload target.');
+ if(!Object.prototype.hasOwnProperty.call(imageTargets,target))throw new Error('Unknown upload target.');
  const key='uploads:'+p.id,rows=await feature<Upload[]>(key,[]),catalog=await library(),entry=catalog.find(item=>item.storageId===asset.id),remote=entry&&reusableRemote(entry,target);
  if(remote){const prior=rows.find(row=>row.assetId===asset.id&&row.target===target&&row.state==='ready'&&row.imageUrl===remote.url);if(prior)return prior;const reused:Upload={id:crypto.randomUUID(),shortId:p.remote.worldId,target,assetId:asset.id,mimeType:entry!.mime,width:0,height:0,state:'ready',step:'done',imageUrl:remote.url,created:Date.now()};rows.unshift(reused);await saveFeature(key,rows);return reused;}
  const info=await imageInfo(asset.dataUrl),base64=asset.dataUrl.split(',')[1];

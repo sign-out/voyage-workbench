@@ -17,4 +17,5 @@ export function assertReleaseVersions(metadata,lock,android){
  if(metadata.dependencies?.['@capacitor/cli'])throw new Error('Capacitor CLI is a build dependency, not an application runtime.');
  if(!metadata.dependencies?.['js-sha256'])throw new Error('Hashing dependency must be declared for clean installs.');
  if(!metadata.scripts?.['package:windows']?.includes('package:windows:signed'))throw new Error('Default Windows packaging must use the verified signing workflow.');
+ for(const config of [metadata.build,metadata.build?.win,metadata.build?.linux])for(const resource of config?.extraResources||[])if(['references','third-party'].includes(resource.to))throw new Error('Reference data and notices must use their single bundled dist copy.');
 }

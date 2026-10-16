@@ -305,7 +305,7 @@ class Handler(BaseHTTPRequestHandler):
         self.dispatch('DELETE')
 
     def templates(self):
-        return {p.stem: p for p in self.server.fixtures_root.glob('*.json') if p.is_file()}
+        return {p.stem: p for p in sorted(self.server.fixtures_root.glob('*.json')) if p.is_file()}
 
     def dispatch(self, method):
         # Serialize request mutations with lifecycle operations, so a start

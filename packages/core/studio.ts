@@ -62,24 +62,27 @@ export function assetSlots(source:string){
   if(node.kind==='string'){
    const music=path.includes('gameplayMusicSettings')&&path.includes('variants')&&['url','narrationUrl','gameplayUrl'].includes(key);
    const image=/^(image|imageUrl|portraitUrl|portrait|mapImageUrl|establishingShotUrl)$/i.test(key);
-   if(music||image)result.push({path,kind:music?'audio':'image',url:String(node.value),target:music?undefined:path.includes('npcs')?'NPC_PORTRAIT':path.includes('regions')?'REGION_MAP_IMAGE':path.includes('areas')?'AREA_IMAGE':path.includes('locations')?'LOCATION_IMAGE':undefined});
+   const relative=path.slice(base.length),section=relative[0];
+   if(music||image)result.push({path,kind:music?'audio':'image',url:String(node.value),target:music?undefined:section==='npcs'||section==='premadeCharacters'?'NPC_PORTRAIT':section==='itemTypes'?'ITEM_IMAGE':section==='regions'?'REGION_MAP_IMAGE':section==='locations'?(relative[2]==='areas'?'AREA_IMAGE':'LOCATION_IMAGE'):undefined});
   }
   node.children.forEach(child=>walk(child.node,path.concat(child.key),depth+1));
  };
  walk(doc.at(root,base),base,0);
- const addMissing=(entry:doc.Node,path:doc.Path,field:doc.Path,target:string)=>{
+ const addMissing=(entry:doc.Node,path:doc.Path,field:doc.Path,target?:string)=>{
   if(entry.kind!=='object')return;
   const destination=path.concat(field);
   if(result.some(slot=>JSON.stringify(slot.path)===JSON.stringify(destination)))return;
-  try{doc.at(root,destination);return;}catch{}
+  try{if(doc.at(root,destination).kind!=='null')return;}catch{}
   for(let index=1;index<field.length;index++){try{if(doc.at(root,path.concat(field.slice(0,index))).kind!=='object')return;}catch{}}
   result.push({path:destination,kind:'image',target,url:'',present:false});
  };
- for(const section of ['npcs','premadeCharacters','regions','locations']){
+ for(const section of ['npcs','premadeCharacters','regions','locations','itemTypes']){
   let collection:doc.Node;try{collection=doc.at(root,base.concat(section));}catch{continue;}
-  for(const child of collection.children){const path=base.concat(section,child.key);addMissing(child.node,path,section==='npcs'||section==='premadeCharacters'?['portraitUrl']:section==='regions'?['images','map','imageUrl']:['images','establishingShot','imageUrl'],section==='regions'?'REGION_MAP_IMAGE':section==='locations'?'LOCATION_IMAGE':'NPC_PORTRAIT');}
+  for(const child of collection.children){const path=base.concat(section,child.key);addMissing(child.node,path,section==='npcs'||section==='premadeCharacters'?['portraitUrl']:section==='itemTypes'?['imageUrl']:section==='regions'?['images','map','imageUrl']:['images','establishingShot','imageUrl'],section==='regions'?'REGION_MAP_IMAGE':section==='locations'?'LOCATION_IMAGE':section==='itemTypes'?'ITEM_IMAGE':'NPC_PORTRAIT');
+   if(section==='locations'){const areas=child.node.children.find(field=>field.key==='areas')?.node;if(areas?.kind==='object')for(const area of areas.children)addMissing(area.node,path.concat('areas',area.key),['images','establishingShot','imageUrl'],'AREA_IMAGE');}
+  }
  }
- if(base.length){const parent=base.slice(0,-1),node=doc.at(root,parent).children.find(child=>child.key==='image')?.node;if(node?.kind==='string')result.push({path:parent.concat('image'),kind:'image',url:String(node.value)});}
+ if(base.length){const parent=base.slice(0,-1),world=doc.at(root,parent),node=world.children.find(child=>child.key==='image')?.node;if(node?.kind==='string')result.push({path:parent.concat('image'),kind:'image',url:String(node.value)});else addMissing(world,parent,['image']);}
  return result;
 }
 export function assignAsset(source:string,path:doc.Path,url:string){

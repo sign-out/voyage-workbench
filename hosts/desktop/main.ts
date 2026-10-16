@@ -9,7 +9,7 @@ app.whenReady().then(()=>{
   const secretFile=path.join(app.getPath('userData'),'credentials.bin');
   const durable=safeStorage.isEncryptionAvailable()&&(process.platform!=='linux'||safeStorage.getSelectedStorageBackend()!=='basic_text');
   const secrets:Secrets=credentialStore(secretFile,durable,text=>safeStorage.encryptString(text),encrypted=>safeStorage.decryptString(encrypted));
-  service=new Service(directory,app.isPackaged?path.join(process.resourcesPath,'references'):path.resolve(__dirname,'../../apps/workbench/public/references'),secrets);
+  service=new Service(directory,app.isPackaged?path.join(app.getAppPath(),'dist','references'):path.resolve(__dirname,'../../apps/workbench/public/references'),secrets);
   const window=new BrowserWindow({width:1450,height:940,minWidth:800,minHeight:600,backgroundColor:'#101719',title:'Voyage Workbench',webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   const entry=path.resolve(__dirname,'../../dist/index.html');
   ipcMain.handle('workbench',async(event,method,payload)=>{if(window.isDestroyed()||event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame)throw new Error('Invalid application frame.');

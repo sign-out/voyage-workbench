@@ -66,12 +66,34 @@ export function statePath(root:Node):Path {
   return [];
 }
 export const packageReadOnlyFields=['shortId','loadStatus','degradedReason','canSafelySave'];
+export const gameStateReadOnlyFields=['heroesVersion','compatibilityRevision'];
+export function voyageManagedPaths(source:string):Path[]{
+ const base=statePath(parse(source));
+ return [...(base.length?packageReadOnlyFields.map(field=>base.slice(0,-1).concat(field)):[]),...gameStateReadOnlyFields.map(field=>base.concat(field))];
+}
+export function preserveVoyageFields(current:string,incoming:string){
+ const original=parse(current),changed=parse(incoming),beforeBase=statePath(original),afterBase=statePath(changed);
+ if(at(changed,afterBase).kind!=='object')throw new Error('A linked Voyage import must keep an object GameState. Import other JSON as a separate local project.');
+ let source=incoming;const protectedPaths:Path[]=[];
+ for(const path of voyageManagedPaths(current)){
+  const stateField=JSON.stringify(path.slice(0,-1))===JSON.stringify(beforeBase),field=path[path.length-1];
+  const target=(stateField?afterBase:afterBase.slice(0,-1)).concat(field);
+  const value=(text:string,node:Node,selected:Path)=>{try{const entry=at(node,selected);return text.slice(entry.start,entry.end);}catch{return undefined;}};
+  const previous=value(current,original,path),next=value(source,parse(source),target);
+  if(previous===next)continue;
+  protectedPaths.push(target);
+  if(previous===undefined){if(next!==undefined)source=remove(source,target);}
+  else if(next!==undefined)source=edit(source,target,previous);
+  else source=insert(source,target.slice(0,-1),field,previous);
+ }
+ return {source,protectedPaths};
+}
 export function explorerDescribe(source:string,requested:Path=[]){
  const root=parse(source),rootPath=statePath(root);
  const ancestor=requested.length<rootPath.length&&requested.every((key,index)=>rootPath[index]===key);
  const path=ancestor?rootPath:requested;
  const packagePath=rootPath.slice(0,-1);
- const readOnly=rootPath.length>0&&path.length>packagePath.length&&packagePath.every((key,index)=>path[index]===key)&&packageReadOnlyFields.includes(String(path[packagePath.length]));
+ const readOnly=voyageManagedPaths(source).some(managed=>managed.length<=path.length&&managed.every((key,index)=>key===path[index]));
  const fields=rootPath.length?at(root,packagePath).children.filter(child=>child.key!=='initialGameState').map(child=>({key:child.key,source:source.slice(child.node.start,child.node.end)})):[];
  return {...describe(source,path),path,rootPath,readOnly,packageFields:fields};
 }
@@ -80,23 +102,24 @@ export function explorerSearch(source:string,query:string,limit=60){
  return search(source.slice(content.start,content.end),query,limit).map(result=>({...result,path:base.concat(result.path)}));
 }
 export function assertPackageMetadataUnchanged(before:string,after:string){
- const original=parse(before),base=statePath(original);
- if(!base.length)return;
- const changed=parse(after),parent=base.slice(0,-1);
- for(const field of packageReadOnlyFields){
-  const get=(root:Node)=>{try{return at(root,parent.concat(field));}catch{return null;}};
+ const original=parse(before),changed=parse(after);
+ for(const path of voyageManagedPaths(before)){
+  const field=path[path.length-1];
+  const get=(root:Node)=>{try{return at(root,path);}catch{return null;}};
   const previous=get(original),next=get(changed);
-  if((previous===null)!==(next===null)||previous&&next&&(previous.kind!==next.kind||(['object','array','number'].includes(previous.kind)?before.slice(previous.start,previous.end)!==after.slice(next.start,next.end):previous.value!==next.value)))throw new Error('Package metadata '+field+' is read only. Import or sync it from Voyage; do not edit it as world content.');
+  if((previous===null)!==(next===null)||previous&&next&&(previous.kind!==next.kind||(['object','array','number'].includes(previous.kind)?before.slice(previous.start,previous.end)!==after.slice(next.start,next.end):previous.value!==next.value)))throw new Error('Package metadata '+field+' is read only. Refresh it from Voyage or import as a separate local project; do not edit it as world content.');
  }
 }
 export interface Change {path:Path;kind:'added'|'removed'|'changed'|'order';before:string;after:string}
 export interface ChangeChoice {path:Path;kind:Change['kind']}
-export function alignImport(current:string,incoming:string){
+export function alignImport(current:string,incoming:string,protectVoyageMetadata=false){
  const currentPath=statePath(parse(current)),incomingPath=statePath(parse(incoming));
- if(currentPath.length&&!incomingPath.length)return {source:edit(current,currentPath,incoming),note:'Imported GameState is reviewed inside the existing world envelope. API metadata and world identity are preserved.'};
- if(!currentPath.length&&incomingPath.length)return {source:read(incoming,incomingPath),note:'Imported world envelope is reviewed as GameState to match this local document. Its metadata is not substituted for the linked API world.'};
- if(currentPath.length&&incomingPath.length)return {source:edit(current,currentPath.slice(0,-1),read(incoming,incomingPath.slice(0,-1))),note:JSON.stringify(currentPath)!==JSON.stringify(incomingPath)?'Imported envelope is aligned to the current document wrapper.':''};
- return {source:incoming,note:''};
+ let aligned={source:incoming,note:''};
+ if(currentPath.length&&!incomingPath.length)aligned={source:edit(current,currentPath,incoming),note:'Imported GameState is reviewed inside the existing world envelope. API metadata and world identity are preserved.'};
+ else if(!currentPath.length&&incomingPath.length)aligned={source:read(incoming,incomingPath),note:'Imported world envelope is reviewed as GameState to match this local document. Its metadata is not substituted for the linked API world.'};
+ else if(currentPath.length&&incomingPath.length)aligned={source:edit(current,currentPath.slice(0,-1),read(incoming,incomingPath.slice(0,-1))),note:JSON.stringify(currentPath)!==JSON.stringify(incomingPath)?'Imported envelope is aligned to the current document wrapper.':''};
+ if(protectVoyageMetadata){const preserved=preserveVoyageFields(current,aligned.source);aligned.source=preserved.source;aligned.note+=(aligned.note?' ':'')+(preserved.protectedPaths.length?'Protected Voyage fields retained from the linked world: '+preserved.protectedPaths.map(label).join(', ')+'. ':'')+'Voyage identity and schema-version fields are protected. Import as a separate project to use another world identity or schema version.';}
+ return aligned;
 }
 export function selectChanges(before:string,after:string,rejected:ChangeChoice[]=[]):string {
  if(!rejected.length)return after;

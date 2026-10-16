@@ -1,7 +1,7 @@
 const {app,BrowserWindow,dialog}=require('electron');const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const assert=require('node:assert/strict');
 assert.equal(JSON.parse(fs.readFileSync('package.json','utf8')).main,'build/desktop/main.cjs','Desktop package must declare its Electron entry point');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'voyage-electron-'));app.setPath('userData',dir);
-const timeout=setTimeout(()=>{console.error('Electron smoke timed out');app.exit(1)},120000);
+const timeout=setTimeout(()=>{console.error('Electron smoke timed out');app.exit(1)},Number(process.env.VOYAGE_SMOKE_TIMEOUT_MS||120000));
 async function ensureJsonView(window){
  for(let attempt=0;attempt<60;attempt++){
   const ready=await window.webContents.executeJavaScript(`(()=>{if(document.querySelector('textarea[aria-label="JSON source"]'))return true;const toggle=document.querySelector('button[aria-label="Switch to JSON view"]');if(toggle)toggle.click();return false;})()`);
@@ -164,6 +164,106 @@ async function verifyVoyageSync(window){
 
  }finally{globalThis.fetch=originalFetch;}
 }
+async function verifyLocalEditing(window){
+ let calls=0;
+ const server=require('node:http').createServer(async(request,response)=>{
+  for await(const chunk of request){}
+  const message=++calls%2===1?{tool_calls:[{id:'edit',type:'function',function:{name:'world_edit',arguments:JSON.stringify({action:'replace',path:['initialGameState','npcs','mara','basicInfo'],source:'"Stronger motivation"'})}}]}:{content:'Updated motivation'};
+  response.writeHead(200,{'Content-Type':'application/json'});response.end(JSON.stringify({choices:[{message,finish_reason:message.tool_calls?'tool_calls':'stop'}]}));
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ async function evaluate(expression){return window.webContents.executeJavaScript(expression);}
+ async function waitFor(expression){for(let attempt=0;attempt<100;attempt++){if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Local editing UI did not become ready: '+expression);}
+ async function tool(text){await evaluate(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent===${JSON.stringify(text)}).click()`);}
+ async function choose(mode){await evaluate(`(()=>{const select=document.querySelector('[aria-label="Local assistant edit mode"]');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(select,${JSON.stringify(mode)});select.dispatchEvent(new Event('change',{bubbles:true}));})()`);await waitFor(`(async()=>{return (await window.voyage.invoke('localEditingSettings')).mode===${JSON.stringify(mode)};})()`);}
+ try{
+  await tool('Settings');await waitFor(`document.querySelector('[aria-label="Local assistant edit mode"]')&&!document.querySelector('[aria-label="Local assistant edit mode"]').disabled`);
+  assert.equal(await evaluate(`document.querySelector('[aria-label="Local assistant edit mode"]').value`),'automatic');
+  await choose('proposal-only');await tool('Planning');await tool('Settings');await waitFor(`document.querySelector('[aria-label="Local assistant edit mode"]')?.value==='proposal-only'`);await choose('automatic');
+  const before=await evaluate(`(async()=>{const id=localStorage.getItem('voyage-project'),settings=(await window.voyage.invoke('providerSettings')).settings;settings.profiles.push({id:'local-work-mock',name:'Local work mock',protocol:'openai',baseUrl:'http://127.0.0.1:${server.address().port}',model:'test'});settings.routes.building={profileId:'local-work-mock',model:'test'};await window.voyage.invoke('saveProviderSettings',{settings});await window.voyage.invoke('command',{id,command:{type:'workOrder',order:{objective:'Improve motivation',requirements:[],allowedPaths:[['initialGameState','npcs','mara']]}}});const source=(await window.voyage.invoke('project',{id})).project.activeSource;await window.voyage.invoke('startAgent',{id,kind:'work'});return source;})()`);
+  await tool('Planning');await waitFor(`document.querySelector('.work-order').textContent.includes('Assistant changes applied locally')`);
+  const after=await evaluate(`(async()=>{return (await window.voyage.invoke('project',{id:localStorage.getItem('voyage-project')})).project;})()`);assert.equal(after.tasks[0].state,'APPLIED');assert.equal(after.activeSource,before.replace('Archivist','Stronger motivation'));assert.equal(after.candidates.length,0);
+  await evaluate(`document.querySelector('.work-order .feature-status button').click()`);await waitFor(`document.querySelector('header h1').textContent==='History'&&document.body.textContent.includes('Before automatic assistant apply')`);
+ }finally{server.close();}
+}
+async function verifyCharacterRefreshPreservesTyping(window){
+ const moduleSource=fs.readFileSync('web/character-explorer.js','utf8').replace('export function initCharacterExplorer','function initCharacterExplorer');
+ const retained=await window.webContents.executeJavaScript(`(async()=>{
+  ${moduleSource}
+  const host=document.createElement('div');document.body.append(host);
+  const node=(tag,text,cls)=>{const element=document.createElement(tag);if(text!==undefined)element.textContent=text;if(cls)element.className=cls;return element;};
+  const result={characters:[{id:'mara',name:'Mara',kind:'npc',path:['npcs','mara'],fields:[{key:'name',type:'string',value:'Mara'}]}]};
+  let resolveRefresh,delay=false;
+  const view=initCharacterExplorer({host,node,getSource:()=>'{}',getProject:()=>({id:'refresh-fixture'}),api:async()=>delay?new Promise(resolve=>{resolveRefresh=resolve;}):result,applyText:async()=>{},status:()=>{}});
+  try{
+   await view.render();host.querySelector('.ce-card').click();await new Promise(resolve=>setTimeout(resolve,0));
+   delay=true;const refreshing=view.render();
+   const input=host.querySelector('.ce-form textarea');input.value='Keep my typing';input.dispatchEvent(new Event('input',{bubbles:true}));
+   resolveRefresh(result);await refreshing;
+   return host.querySelector('.ce-form textarea').value;
+  }finally{host.remove();}
+ })()`);
+ assert.equal(retained,'Keep my typing','A pending character refresh must not replace newly typed edits');
+ console.log('Character refresh preserves typing: passed');
+}
+async function verifyContextualAssistant(window){
+ await verifyCharacterRefreshPreservesTyping(window);
+ const bodies=[];
+ const server=require('node:http').createServer(async(request,response)=>{
+  let raw='';for await(const chunk of request)raw+=chunk;
+  bodies.push(JSON.parse(raw));
+  response.writeHead(200,{'Content-Type':'application/json'});
+  response.end(JSON.stringify({choices:[{message:{content:'Context-aware suggestion '+bodies.length},finish_reason:'stop'}]}));
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ async function evaluate(expression){return window.webContents.executeJavaScript(expression);}
+ async function waitFor(expression){for(let attempt=0;attempt<100;attempt++){if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Assistant UI did not become ready: '+expression);}
+ async function button(text){await evaluate(`[...document.querySelectorAll('button')].find(button=>button.textContent===${JSON.stringify(text)}).click()`);}
+ async function tool(text){await evaluate(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent===${JSON.stringify(text)}).click()`);}
+ async function input(selector,value){await evaluate(`(()=>{const element=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(element,${JSON.stringify(value)});element.dispatchEvent(new Event('input',{bubbles:true}));})()`);await new Promise(resolve=>setTimeout(resolve,50));}
+ try{
+  await resizeWindow(window,1440,1000);
+  const source='{"shortId":"SMOKE_SYNC","initialGameState":{"npcs":{"mara":{"name":"Mara","basicInfo":"Archivist","exact":9007199254740993}},"regions":{"coast":{"name":"The Coast","realm":"earth"}},"realms":{"earth":{"name":"Earth"}}}}';
+  await evaluate(`(async()=>{const id=localStorage.getItem('voyage-project');await window.voyage.invoke('command',{id,command:{type:'stage',id:'assistant-fixture',source:${JSON.stringify(source)},kind:'import'}});await window.voyage.invoke('command',{id,command:{type:'accept',id:'assistant-fixture'}});const settings=(await window.voyage.invoke('providerSettings')).settings;settings.profiles.push({id:'assistant-mock',name:'Assistant mock',protocol:'openai',baseUrl:'http://127.0.0.1:${server.address().port}',model:'test'});settings.routes.planning={profileId:'assistant-mock',model:'test'};await window.voyage.invoke('saveProviderSettings',{settings});})()`);
+  await tool('Characters');await waitFor(`document.querySelector('[aria-label="Edit Mara"]')`);
+  await evaluate(`document.querySelector('[aria-label="Edit Mara"]').click()`);
+  await waitFor(`document.querySelector('.ce-detail-heading h3')?.textContent==='Mara'`);
+  await input('.ce-form textarea','Unapplied name');
+  await evaluate(`document.querySelector('.assistant-toggle').click()`);
+  await waitFor(`document.querySelector('.assistant-focus')?.textContent.includes('Mara')`);
+  assert.equal(await evaluate(`document.querySelector('header h1').textContent`),'Characters');
+  assert.equal(await evaluate(`document.querySelector('.ce-form textarea').value`),'Unapplied name');
+  assert.ok(await evaluate(`document.querySelector('.contextual-assistant').textContent.includes('not your unsaved form values')`));
+  const colors=await evaluate(`(()=>{const panel=document.querySelector('.contextual-assistant');return {background:getComputedStyle(panel).backgroundColor,expected:getComputedStyle(document.querySelector('.workspace')).backgroundColor};})()`);
+  assert.ok(colors.background);
+  await input('[aria-label="Contextual assistant message"]','How can we improve this?');await button('Send to assistant');
+  await waitFor(`document.querySelector('.assistant-thread').textContent.includes('Context-aware suggestion 1')`);
+  assert.equal(bodies.length,1);
+  const first=JSON.parse(bodies[0].messages.find(message=>message.role==='user').content);
+  assert.equal(first.editorContext.label,'Mara');assert.equal(first.editorContext.hasUnappliedEdits,true);
+  assert.match(first.editorContext.excerpts[0].source,/9007199254740993/);assert.doesNotMatch(first.editorContext.excerpts[0].source,/Unapplied name/);
+  assert.ok(!bodies[0].tools.some(tool=>tool.function.name==='world_edit'));
+  for(const width of [320,412,1440]){
+   await resizeWindow(window,width,1000);
+   const layout=await evaluate(`(()=>{const panel=document.querySelector('.contextual-assistant'),bounds=panel.getBoundingClientRect();return {left:bounds.left,right:bounds.right,width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth};})()`);
+   assert.ok(layout.left>=0&&layout.right<=layout.width,'Assistant extends outside viewport at '+width);assert.equal(layout.overflow,false);
+   if(width===320||width===1440)fs.writeFileSync('/tmp/voyage-assistant-'+width+'.png',(await window.webContents.capturePage()).toPNG());
+  }
+  await button('Close assistant');await button('Discard edits');await button('← All characters');
+  await button('Assistant');await waitFor(`document.querySelector('.assistant-focus').textContent.includes('All characters')`);
+  await input('[aria-label="Contextual assistant message"]','How about all of them?');await button('Send to assistant');
+  await waitFor(`document.querySelector('.assistant-thread').textContent.includes('Context-aware suggestion 2')`);
+  const second=JSON.parse(bodies[1].messages.find(message=>message.role==='user').content);
+  assert.deepEqual(second.editorContext.focusPaths,[['initialGameState','npcs']]);assert.equal(second.history[0].editorContext.label,'Mara');
+  await tool('Map');await waitFor(`document.querySelector('.map-viewport')`);
+  await waitFor(`document.querySelector('.assistant-focus').textContent.includes('Earth')`);
+  assert.ok(await evaluate(`document.querySelector('.assistant-thread').textContent.includes('Context-aware suggestion 1')`));
+  await button('Review suggestions');await waitFor(`document.querySelector('header h1').textContent==='Planning'`);
+  assert.ok(await evaluate(`document.querySelector('.assistant-focus').textContent.includes('Earth')`));
+  assert.equal(await evaluate(`(async()=>{return (await window.voyage.invoke('project',{id:localStorage.getItem('voyage-project')})).project.activeSource;})()`),source);
+  await button('Close assistant');
+ }finally{server.close();}
+}
 async function verifyAuthoringTools(window){
  async function waitFor(expression){for(let attempt=0;attempt<80;attempt++){if(await window.webContents.executeJavaScript(expression))return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Authoring UI did not become ready: '+expression);}
  async function tool(name){await window.webContents.executeJavaScript(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent===${JSON.stringify(name)}).click()`);await waitFor(`document.querySelector('header h1').textContent===${JSON.stringify(name)}`);}
@@ -190,7 +290,44 @@ async function verifyAuthoringTools(window){
  await tool('Publish');await waitFor(`document.querySelectorAll('.readiness-checklist li').length===8`);assert.ok(await window.webContents.executeJavaScript(`!document.querySelector('.readiness-checklist [role="alert"]')`));
  for(const width of [320,412,1280]){await resizeWindow(window,width,915);await tool('World tools');for(const name of ['Find & bookmark','Completeness','Reference impact','Asset inventory','Duplicate entry','Batch edit']){await button(name);await new Promise(resolve=>setTimeout(resolve,150));const layout=await window.webContents.executeJavaScript(`({width:document.documentElement.scrollWidth,viewport:innerWidth,error:document.querySelector('.authoring-workbench [role="alert"]')?.textContent||''})`);assert.ok(layout.width<=layout.viewport,'Authoring tool overflows: '+name+' '+width);assert.equal(layout.error,'');}}
 }
+async function verifyArtworkDestinations(window){
+ async function evaluate(expression){try{return await window.webContents.executeJavaScript(expression);}catch(error){throw new Error("Artwork smoke expression failed: "+expression,{cause:error});}}
+ async function waitFor(expression){for(let attempt=0;attempt<80;attempt++){if(await evaluate(expression))return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Artwork destinations did not become ready: '+expression);}
+ const fixture='{"shortId":"SMOKE_SYNC","initialGameState":{"npcs":{"mara":{"name":"Mara"}},"premadeCharacters":[{"name":"Traveler"}],"regions":{"north":{"name":"North","realm":"earth"}},"locations":{"home":{"name":"Home","region":"north","areas":{"dock":{"name":"Dock"}}}},"itemTypes":{"compass":{"name":"Compass"}},"realms":{"earth":{}},"exact":90071992547409931234}}';
+ await evaluate(`(async()=>{const id=localStorage.getItem('voyage-project');await window.voyage.invoke('command',{id,command:{type:'stage',id:'artwork-destinations-smoke',source:${JSON.stringify(fixture)},kind:'import',title:'Artwork destinations fixture'}});await window.voyage.invoke('command',{id,command:{type:'accept',id:'artwork-destinations-smoke'}});window.confirm=()=>true;})()`);
+ await evaluate(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent==='Artwork').click()`);
+ await waitFor(`document.querySelectorAll('.artwork-destination-list button:not(:disabled)').length===7&&[...document.querySelectorAll('.artwork-destination-list strong')].some(element=>element.textContent==='Compass')`);
+ const dataUrl=await evaluate(`(()=>{const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=1000;const context=canvas.getContext('2d');context.fillStyle='#465d75';context.fillRect(0,0,1000,1000);return canvas.toDataURL('image/png');})()`);
+ const originalFetch=globalThis.fetch;let generations=0;
+ globalThis.fetch=async(url,options)=>{if(!String(url).startsWith('https://cover-test.example/'))return originalFetch(url,options);assert.ok(String(url).endsWith('/images/generations'));generations++;assert.match(JSON.parse(options.body).prompt,/Compass/);return new Response(JSON.stringify({data:[{b64_json:dataUrl.split(',')[1]}]}));};
+ try{
+  await evaluate(`[...document.querySelectorAll('.artwork-destination-list button')].find(button=>button.querySelector('strong').textContent==='Compass').click()`);
+  await waitFor(`document.querySelector('.artwork-destination-editor h3')?.textContent==='Compass'`);
+  for(const width of [320,412,1280]){await resizeWindow(window,width,915);assert.ok(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Artwork destination editor overflow at '+width);}
+  await evaluate(`(async()=>{const file=new File([await (await fetch(${JSON.stringify(dataUrl)})).blob()],'compass.png',{type:'image/png'});const transfer=new DataTransfer();transfer.items.add(file);const input=document.querySelector('.artwork-destination-editor input[type="file"]');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await waitFor(`document.querySelector('.artwork-workspace [role="status"]')?.textContent.includes('Image saved locally')`);
+  assert.equal(generations,0);
+  await evaluate(`[...document.querySelectorAll('.artwork-destination-editor button')].find(button=>button.textContent==='Upload & attach selected artwork…').click()`);
+  await waitFor(`!!document.querySelector('.media-dialog select option:checked')`);
+  assert.equal(await evaluate(`document.querySelector('.media-dialog select').value`),'ITEM_IMAGE');
+  await evaluate(`[...document.querySelectorAll('.media-dialog button')].find(button=>button.textContent==='Close').click()`);
+  await evaluate(`[...document.querySelectorAll('.artwork-destination-editor button')].find(button=>button.textContent==='Generate artwork locally').click()`);
+  await waitFor(`document.querySelector('.artwork-workspace [role="status"]')?.textContent.includes('Artwork saved to the local library')`);
+  assert.equal(generations,1);
+  assert.equal(await evaluate(`(async()=>{const project=(await window.voyage.invoke('project',{id:localStorage.getItem('voyage-project')})).project;return project.activeSource;})()`),fixture);
+  await evaluate(`(()=>{const input=document.querySelector('[aria-label="Artwork hosted URL"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'https://example.invalid/compass.png');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await new Promise(resolve=>setTimeout(resolve,100));
+  await evaluate(`[...document.querySelectorAll('.artwork-destination-editor button')].find(button=>button.textContent==='Attach hosted URL locally').click()`);
+  await waitFor(`document.querySelector('.artwork-workspace [role="status"]')?.textContent.includes('Artwork attached locally to Compass')`);
+  const assigned=await evaluate(`(async()=>{const project=(await window.voyage.invoke('project',{id:localStorage.getItem('voyage-project')})).project;return project.activeSource;})()`);
+  assert.equal(JSON.parse(assigned).initialGameState.itemTypes.compass.imageUrl,'https://example.invalid/compass.png');assert.match(assigned,/90071992547409931234/);
+  await evaluate(`[...document.querySelectorAll('.artwork-destination-list button')].find(button=>button.querySelector('strong').textContent==='World cover').click()`);
+  await waitFor(`document.querySelector('.artwork-destination-editor').textContent.includes('no dedicated cover upload target')`);
+  assert.equal(generations,1);
+ }finally{globalThis.fetch=originalFetch;}
+}
 async function verifyArtworkDefaults(window){
+ await verifyArtworkDestinations(window);
  await window.webContents.executeJavaScript(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent==='Artwork').click()`);
  await new Promise(resolve=>setTimeout(resolve,150));await window.webContents.executeJavaScript(`[...document.querySelectorAll('.artwork-purpose button')].find(button=>button.textContent==='Map artwork').click()`);
  await new Promise(resolve=>setTimeout(resolve,150));
@@ -372,6 +509,8 @@ async function verifyCoverStudio(window){
  try{
   const before=await window.webContents.executeJavaScript(`(async()=>{const status=await window.voyage.invoke('providerSettings');status.settings.profiles.push({id:'cover-test',name:'Cover test provider',protocol:'openai',baseUrl:'https://cover-test.example/v1',model:'vision-text',imageModel:'image-test'});status.settings.routes.artwork={profileId:'cover-test',model:'image-test'};status.settings.routes.building={profileId:'cover-test',model:'building-vision-override'};await window.voyage.invoke('saveProviderSettings',{settings:status.settings});await window.voyage.invoke('providerKey',{profileId:'cover-test',key:'cover-test-key'});window.confirm=()=>true;return (await window.voyage.invoke('project',{id:localStorage.getItem('voyage-project')})).project.activeSource;})()`);
   await window.webContents.executeJavaScript(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent==='Artwork').click()`);
+  await waitFor(`!![...document.querySelectorAll('.artwork-purpose button')].find(button=>button.textContent==='Cover art & grading')`);
+  await window.webContents.executeJavaScript(`[...document.querySelectorAll('.artwork-purpose button')].find(button=>button.textContent==='Cover art & grading').click()`);
   await waitFor(`!!document.querySelector('select[aria-label="Cover grader profile"] option[value="cover-test"]')`);
   await window.webContents.executeJavaScript(`(()=>{if(document.querySelector('[aria-label="Cover grader profile"]').value!=='cover-test'||document.querySelector('[aria-label="Cover grader model"]').value!=='building-vision-override')throw Error('Grader must default to the effective Building route');const direction=[...document.querySelectorAll('.cover-studio label')].find(label=>label.textContent.startsWith('Cover art direction')).querySelector('textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(direction,'One iconic landmark and a dominant traveler');direction.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await new Promise(resolve=>setTimeout(resolve,100));
@@ -432,5 +571,5 @@ async function verifySharedViews(window){
  await waitFor(`!!document.querySelector('.map-region-tile')`);
  const afterNavigation=await window.webContents.executeJavaScript(`window.voyage.invoke('project',{id:localStorage.getItem('voyage-project')})`);assert.equal(afterNavigation.project.activeSource,beforeNavigation.project.activeSource);
 }
-app.on('browser-window-created',(_,window)=>{window.webContents.once('did-finish-load',async()=>{try{const result=await window.webContents.executeJavaScript(`(async()=>{if(!window.voyage)throw Error('Preload bridge unavailable');const created=await window.voyage.invoke('create',{name:'Electron smoke',source:'{"title":"Desktop native","exact":9007199254740993}'});const stored=await window.voyage.invoke('project',{id:created.project.id});return {source:stored.project.activeSource,theme:document.documentElement.dataset.theme,title:document.title,bridge:!!window.voyage};})()`);assert.equal(result.source,'{"title":"Desktop native","exact":9007199254740993}');assert.equal(result.theme,'dark');await window.webContents.executeJavaScript(`(()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent==='New world');if(!b)throw Error('New-world action missing');b.click();})()`);await ensureJsonView(window);let editorReady=false;for(let i=0;i<40;i++){await new Promise(r=>setTimeout(r,150));editorReady=await window.webContents.executeJavaScript(`!!document.querySelector('textarea[aria-label="JSON source"]')?.value.length`);if(editorReady)break;}assert.ok(editorReady,'Native file loading and document worker did not populate the editor');result.editorReady=editorReady;await verifyEditorViews(window);result.formJsonDraftVerified=true;await verifySharedViews(window);result.characterLayoutVerified=true;result.mapClippingVerified=true;await verifyVoyageSync(window);result.voyageImportSaveVerified=true;result.selectiveImportReviewVerified=true;result.characterEditingVerified=true;result.regionNavigationVerified=true;result.workspaceLayoutsVerified=await verifyWorkspaceLayouts(window);await verifyProviderSaving(window);result.providerSettingsAndKeysVerified=true;await verifyPublicationPreview(window);result.publicationPreviewVerified=true;await verifyCoverStudio(window);result.coverGenerationAndGradingVerified=true;await verifyAuthoringTools(window);result.authoringWorkflowsVerified=true;await verifyArtworkDefaults(window);result.artworkDefaultsVerified=true;fs.mkdirSync('docs/evidence/app',{recursive:true});await new Promise(r=>setTimeout(r,700));try{fs.writeFileSync('docs/evidence/app/electron-dark.png',(await window.webContents.capturePage()).toPNG());}catch(e){console.warn('Screenshot unavailable:',e.message);}fs.writeFileSync('docs/evidence/app/electron-smoke.json',JSON.stringify(result,null,2));console.log(JSON.stringify({ok:true,...result}));clearTimeout(timeout);app.exit(0);}catch(e){console.error(e);app.exit(1);}});});
+app.on('browser-window-created',(_,window)=>{window.webContents.once('did-finish-load',async()=>{try{const result=await window.webContents.executeJavaScript(`(async()=>{if(!window.voyage)throw Error('Preload bridge unavailable');const created=await window.voyage.invoke('create',{name:'Electron smoke',source:'{"title":"Desktop native","exact":9007199254740993}'});const stored=await window.voyage.invoke('project',{id:created.project.id});return {source:stored.project.activeSource,theme:document.documentElement.dataset.theme,title:document.title,bridge:!!window.voyage};})()`);assert.equal(result.source,'{"title":"Desktop native","exact":9007199254740993}');assert.equal(result.theme,'dark');await window.webContents.executeJavaScript(`(()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent==='New world');if(!b)throw Error('New-world action missing');b.click();})()`);await ensureJsonView(window);let editorReady=false;for(let i=0;i<40;i++){await new Promise(r=>setTimeout(r,150));editorReady=await window.webContents.executeJavaScript(`!!document.querySelector('textarea[aria-label="JSON source"]')?.value.length`);if(editorReady)break;}assert.ok(editorReady,'Native file loading and document worker did not populate the editor');result.editorReady=editorReady;await verifyEditorViews(window);result.formJsonDraftVerified=true;await verifySharedViews(window);result.characterLayoutVerified=true;result.mapClippingVerified=true;await verifyVoyageSync(window);result.voyageImportSaveVerified=true;result.selectiveImportReviewVerified=true;result.characterEditingVerified=true;result.regionNavigationVerified=true;result.workspaceLayoutsVerified=await verifyWorkspaceLayouts(window);await verifyProviderSaving(window);result.providerSettingsAndKeysVerified=true;await verifyPublicationPreview(window);result.publicationPreviewVerified=true;await verifyCoverStudio(window);result.coverGenerationAndGradingVerified=true;await verifyAuthoringTools(window);result.authoringWorkflowsVerified=true;await verifyArtworkDefaults(window);result.artworkDefaultsVerified=true;await verifyContextualAssistant(window);result.contextualAssistantVerified=true;await verifyLocalEditing(window);result.automaticLocalEditingVerified=true;fs.mkdirSync('docs/evidence/app',{recursive:true});await new Promise(r=>setTimeout(r,700));try{fs.writeFileSync('docs/evidence/app/electron-dark.png',(await window.webContents.capturePage()).toPNG());}catch(e){console.warn('Screenshot unavailable:',e.message);}fs.writeFileSync('docs/evidence/app/electron-smoke.json',JSON.stringify(result,null,2));console.log(JSON.stringify({ok:true,...result}));clearTimeout(timeout);app.exit(0);}catch(e){console.error(e);app.exit(1);}});});
 require('../build/desktop/main.cjs');

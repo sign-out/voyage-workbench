@@ -4,6 +4,7 @@ final class Rpc implements AutoCloseable {
  interface Listener {void event(JSONObject event)throws Exception;}
  Listener listener=e->{};Process child;BufferedWriter input;int sequence;final BlockingQueue<String> output=new LinkedBlockingQueue<>(512);
  Rpc(Context app,File task)throws Exception{
+ RuntimePacks.require(app,"codex");
  File home=new File(app.getFilesDir(),"provider");home.mkdirs();task.mkdirs();
  String[] disabled={"shell_tool","unified_exec","plugins","remote_plugin","apps","hooks","browser_use","browser_use_external","computer_use","view_image","multi_agent","multi_agent_v2","workspace_dependencies","skill_search","skill_mcp_dependency_install","image_generation","memories","goals","sleep_tool","recommended_plugins","code_mode","code_mode_only"};
  String config="approval_policy=\"never\"\nsandbox_mode=\"read-only\"\nweb_search=\"disabled\"\nproject_doc_max_bytes=0\n[features]\n";

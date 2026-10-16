@@ -88,6 +88,7 @@ public class CliRuntimeTest {
         try (CliRuntime runtime = new CliRuntime(app, "runtime-cancel-test")) {
             try { runtime.execute(Arrays.asList("--version"), "", "", () -> true, 30, true); fail("Canceled CLI returned success"); }
             catch (IOException expected) { assertTrue(expected.getMessage().contains("canceled")); }
+            assertNull("An already-canceled operation must not launch the Claude subprocess", runtime.process);
         }
     }
 

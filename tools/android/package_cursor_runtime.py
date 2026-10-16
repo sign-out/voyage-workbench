@@ -7,6 +7,7 @@ import subprocess
 import tarfile
 import zipfile
 from package_provider_runtimes import ROOT, fetch
+from sdk_archives import factor_sdk_archives
 
 CACHE = ROOT / '.android-lab/cursor-runtime'
 SDK_VERSION = '1.0.37'
@@ -74,7 +75,7 @@ def main():
                             aliases[PurePosixPath(member.name).name] = aliases[target]
             components.append({'url': url, 'sha256': digest})
         native = {}
-        with zipfile.ZipFile(assets / ('cursor-sdk-' + abi + '.zip'), 'w', zipfile.ZIP_DEFLATED) as output:
+        with zipfile.ZipFile(CACHE / ('cursor-sdk-' + abi + '.zip'), 'w', zipfile.ZIP_DEFLATED) as output:
             for path, entry in lock['packages'].items():
                 if not path or entry.get('optional') and path != 'node_modules/@cursor/sdk-linux-' + cpu:
                     continue
@@ -97,11 +98,13 @@ def main():
                         if 'license' in relative.name.lower() or relative.name.lower().startswith(('notice', 'copying')):
                             (notices / (path.replace('/', '_') + '-' + relative.name)).write_bytes(data)
                 components.append({'url': entry['resolved'], 'integrity': entry['integrity']})
-        metadata = {'sdkVersion': SDK_VERSION, 'nodeVersion': NODE_VERSION, 'libraries': aliases, 'native': native}
+        metadata = {'sdkVersion': SDK_VERSION, 'nodeVersion': NODE_VERSION, 'libraries': aliases, 'native': native,
+                    'archives': ['cursor-sdk-common.zip', 'cursor-sdk-' + abi + '.zip']}
         (assets / ('cursor-runtime-' + abi + '.json')).write_text(json.dumps(metadata) + '\n')
         records.append({'provider': 'cursor', 'abi': abi, 'sdkVersion': SDK_VERSION, 'nodeVersion': NODE_VERSION,
                         'components': components, 'binaries': binaries})
         print(abi, 'official Cursor SDK', SDK_VERSION, 'packaged', flush=True)
+    factor_sdk_archives({abi: CACHE / ('cursor-sdk-' + abi + '.zip') for abi in TARGETS}, assets)
     (CACHE / 'provenance.json').write_text(json.dumps(records, indent=2) + '\n')
 
 

@@ -34,7 +34,7 @@ def main():
             entries.append({'file': name, 'url': source_url, 'sha256': digest})
     packaging = retained / 'workbench-runtime-packaging'
     packaging.mkdir(exist_ok=True)
-    for name in ['package_cursor_runtime.py', 'package_provider_runtimes.py', 'retain_cursor_sources.py', 'cursor-sdk-package-lock.json']:
+    for name in ['package_cursor_runtime.py', 'package_provider_runtimes.py', 'retain_cursor_sources.py', 'sdk_archives.py', 'cursor-sdk-package-lock.json']:
         shutil.copyfile(ROOT / 'tools/android' / name, packaging / name)
     (retained / 'cursor-source-manifest.json').write_text(json.dumps(entries, indent=2) + '\n')
     print('Retained and verified Cursor dependency sources and Debian recipes', flush=True)

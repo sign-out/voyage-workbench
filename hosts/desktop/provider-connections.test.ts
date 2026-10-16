@@ -21,7 +21,7 @@ test('Codex discovery uses its app-server catalog without changing routes or pro
   assert.equal(service.providerSettings().routes.planning.model,'saved-custom-model');
  }finally{service.store.db.close();rmSync(directory,{recursive:true,force:true});}
 });
-for(const [name,protocol] of presets)test(name+' connects, discovers models, probes, and stages exact edits',async()=>{
+for(const [name,protocol] of presets)test(name+' connects, discovers models, probes, and applies exact edits locally by default',async()=>{
  const directory=mkdtempSync(path.join(tmpdir(),'voyage-connect-'));
  const credentials:Record<string,string>={};
  const requests:any[]=[];
@@ -64,9 +64,12 @@ for(const [name,protocol] of presets)test(name+' connects, discovers models, pro
   await service.request('command',{id:project.id,command:{type:'workOrder',order:{objective:'Change title',requirements:[],allowedPaths:[['title']]}}});
   await service.request('startAgent',{id:project.id,kind:'work'});
   const result=await wait();
-  assert.equal(result.tasks[0].state,'PROPOSAL_READY',result.tasks[0].error);
-  assert.equal(result.activeSource,source);
-  assert.equal(result.candidates[0].source,source.replace('Original','Connected'));
+  assert.equal(result.tasks[0].state,'APPLIED',result.tasks[0].error);
+  assert.equal(result.activeSource,source.replace('Original','Connected'));
+  assert.equal(result.candidates.length,0);
+  const checkpoints=service.store.history(project.id) as any[];
+  assert.equal(checkpoints.length,1);
+  assert.equal((service.store.db.prepare('SELECT source FROM checkpoints WHERE id=?').get(checkpoints[0].id) as any).source,source);
   assert.equal(result.tasks[0].route?.model,'test-model');
   const header=protocol==='anthropic'?'x-api-key':protocol==='gemini'?'x-goog-api-key':'authorization';
   for(const request of requests)assert.equal(request.headers[header],protocol.startsWith('openai')?'Bearer test-secret':'test-secret');

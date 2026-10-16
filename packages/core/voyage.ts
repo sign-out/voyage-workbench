@@ -46,6 +46,9 @@ export function voyageSaveFeedback(operation:any){
   if(!operation)return null;
   if(operation.state==='CONFIRMED')return {tone:'success',title:'Saved to Voyage',detail:'The remote draft was confirmed by read-back. Your local project remains saved on this device.'};
   if(operation.state==='REJECTED')return {tone:'error',title:'Voyage save rejected',detail:(operation.detail||'Voyage rejected this save.')+' Your local project is unchanged. Resolve the error before starting another save.'};
-  if(operation.state==='UNKNOWN')return {tone:'warning',title:'Voyage save not confirmed',detail:(operation.detail||'The result of the remote save is uncertain.')+' Your local project is safe. Use Reconcile save to check the remote draft; do not resend automatically.'};
+  if(operation.state==='UNKNOWN'){
+    const schemaMismatch=(operation.comparison?.paths||[]).some((path:Path)=>path.length===3&&path[0]==='world'&&path[1]==='initialGameState'&&['heroesVersion','compatibilityRevision'].includes(String(path[2])));
+    return {tone:'warning',title:'Voyage save not confirmed',detail:(operation.detail||'The result of the remote save is uncertain.')+(schemaMismatch?' Voyage returned different schema-version fields. Download the current Alpha world into a separate project and merge your edited JSON there; linked imports protect these fields. This mismatch is not treated as a successful save.':'')+' Your local project is safe. Use Reconcile save to check the remote draft; do not resend automatically.'};
+  }
   return {tone:'pending',title:'Voyage save awaiting confirmation',detail:'A save was prepared or sent but has not been confirmed. Your local project is safe. Use Reconcile save before trying another save.'};
 }

@@ -15,6 +15,13 @@ test('release versions, entry point and packaging exclusions agree',()=>{
  assert.throws(()=>assertReleaseVersions({...metadata,build:{files:[]}},lock,android),/must exclude/);
  assert.throws(()=>assertReleaseVersions({...metadata,dependencies:{}},lock,android),/must be declared/);
  assert.throws(()=>assertReleaseVersions({...metadata,scripts:{}},lock,android),/signing workflow/);
+ for(const group of ['references','third-party'])assert.throws(()=>assertReleaseVersions({...metadata,build:{...metadata.build,extraResources:[{from:'dist/'+group,to:group}]}},lock,android),/single bundled dist copy/);
+});
+
+test('packaged desktop reads references from the same ASAR dist copy as the UI',()=>{
+ const main=readFileSync('hosts/desktop/main.ts','utf8');
+ assert.ok(main.includes("path.join(app.getAppPath(),'dist','references')"));
+ assert.ok(!main.includes("path.join(process.resourcesPath,'references')"));
 });
 
 test('artifact allowlist permits compiled app assets and bundled runtime only',()=>{

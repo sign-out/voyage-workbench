@@ -1,5 +1,7 @@
 import {sha256} from 'js-sha256';
 import * as doc from './document';
+import {editorSnapshot,type EditorSnapshot} from './assistant-context';
+import * as assistantContext from './assistant-context';
 import * as providers from './providers';
 import * as covers from './covers';
 import * as codexMedia from './codex-media';
@@ -12,10 +14,12 @@ import {proposedOrder,type WorkOrder} from './work-orders';
 import * as authoring from './authoring';
 export type {WorkOrder} from './work-orders';
 export interface WorkOrderProposal {id:string;taskId:string;baseHash:string;order:WorkOrder;created:number;noteIds?:string[]}
-export interface Task {id:string;attempt:string;kind:'plan'|'work';state:string;prompt:string;reply:string;baseSource:string;baseHash:string;stagedSource:string;workOrder:WorkOrder;sourceNoteIds?:string[];builderNotes?:BuilderNote[];noteQueue?:NotePlanItem[];sessionId?:string;route?:TaskRoute;created:number;error?:string}
+export type LocalEditMode='automatic'|'proposal-only';
+export function localEditMode(value:unknown=''):LocalEditMode {if(value==='')return 'automatic';if(value==='automatic'||value==='proposal-only')return value;throw new Error('Choose automatic local apply or proposal-only.');}
+export interface Task {editorContext?:EditorSnapshot;localEditMode?:LocalEditMode;localApplyBlockedReason?:string;id:string;attempt:string;kind:'plan'|'work';state:string;prompt:string;reply:string;baseSource:string;baseHash:string;stagedSource:string;workOrder:WorkOrder;sourceNoteIds?:string[];builderNotes?:BuilderNote[];noteQueue?:NotePlanItem[];sessionId?:string;route?:TaskRoute;created:number;error?:string}
 export interface NoteChangeReceipt {id:string;taskId:string;proposalId:string;noteIds:string[];title:string;beforeHash:string;afterHash:string;beforeCheckpointId:string;afterCheckpointId:string;created:number}
 export interface Candidate {id:string;title:string;source:string;baseHash:string;created:number;kind:string;sourceProposalId?:string;noteIds?:string[];importNote?:string;rejectedChanges?:doc.ChangeChoice[]}
-export interface Project {bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string}[];workOrder:WorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
+export interface Project {bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string;editorContext?:Pick<EditorSnapshot,'screen'|'label'|'focusPaths'>}[];workOrder:WorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
 let nativeHasher:((source:string)=>string)|undefined;
 export function setHasher(fn:(source:string)=>string){nativeHasher=fn;}
 export const hash=(source:string)=>nativeHasher?nativeHasher(source):sha256(source);
@@ -25,6 +29,12 @@ export function reduce(project:Project,c:any):Project {
   const p:Project={...project,draft:project.draft?{...project.draft}:null,candidates:project.candidates.slice(),tasks:project.tasks.map(t=>({...t})),chat:project.chat.slice(),workOrder:{...project.workOrder},remote:{...project.remote,operations:project.remote.operations.map(o=>({...o}))}};p.updated=c.now||Date.now();
   function task():Task {const t=p.tasks.filter(t=>t.id===c.taskId&&(!c.attempt||t.attempt===c.attempt))[0];if(!t)throw new Error('This task attempt no longer exists.');return t;}
   function active(source:string,protectMetadata=true){doc.parse(source);if(protectMetadata)doc.assertPackageMetadataUnchanged(p.activeSource,source);p.builderNotes=reconcileNotes(p.builderNotes||[],p.activeSource,source,c.type==='edit'?c.path:c.type==='applyDraft'?p.draft?.path:undefined);p.activeSource=source;p.sourceRevision++;p.draft=null;}
+  function acceptCandidate(candidate:Candidate){
+    requireCurrent(p,candidate.baseHash);const before=p.activeSource,selected=doc.selectChanges(before,candidate.source,candidate.rejectedChanges);
+    active(candidate.kind==='import'&&p.remote.worldId?doc.preserveVoyageFields(before,selected).source:selected,!['import','remote'].includes(candidate.kind));
+    if(candidate.sourceProposalId&&candidate.noteIds?.length&&before!==p.activeSource)p.noteChanges=[...(p.noteChanges||[]),{id:candidate.id,taskId:candidate.id,proposalId:candidate.sourceProposalId,noteIds:candidate.noteIds.slice(),title:candidate.title,beforeHash:hash(before),afterHash:hash(p.activeSource),beforeCheckpointId:c.beforeCheckpointId||'',afterCheckpointId:c.afterCheckpointId||'',created:p.updated}];
+    p.candidates=p.candidates.filter(value=>value.id!==candidate.id);
+  }
   if(p.draft&&['edit','insert','remove','accept'].indexOf(c.type)>=0)throw new Error('Apply or discard the editor draft first.');
   switch(c.type){
     case 'bookmark':{
@@ -82,12 +92,10 @@ export function reduce(project:Project,c:any):Project {
     case 'edit':requireCurrent(p,c.baseHash);active(doc.edit(p.activeSource,c.path,c.source));break;
     case 'insert':requireCurrent(p,c.baseHash);active(doc.insert(p.activeSource,c.path,c.key,c.source));break;
     case 'remove':requireCurrent(p,c.baseHash);active(doc.remove(p.activeSource,c.path));break;
-    case 'stage':{doc.parse(c.source);const aligned=!c.kind||['import','remote'].includes(c.kind)?doc.alignImport(p.activeSource,c.source):{source:c.source,note:''};p.candidates.unshift({id:c.id,title:c.title,source:aligned.source,importNote:aligned.note,baseHash:c.baseHash||hash(p.activeSource),created:p.updated,kind:c.kind||'import'});break;}
+    case 'stage':{doc.parse(c.source);const aligned=!c.kind||['import','remote'].includes(c.kind)?doc.alignImport(p.activeSource,c.source,(!c.kind||c.kind==='import')&&!!p.remote.worldId):{source:c.source,note:''};p.candidates.unshift({id:c.id,title:c.title,source:aligned.source,importNote:aligned.note,baseHash:c.baseHash||hash(p.activeSource),created:p.updated,kind:c.kind||'import'});break;}
     case 'candidateChange':{const candidate=p.candidates.find(candidate=>candidate.id===c.id);if(!candidate)throw new Error('Proposal no longer exists.');requireCurrent(p,candidate.baseHash);if(c.candidateHash!==hash(candidate.source))throw new Error('The proposal changed. Reload its diff.');if(typeof c.reject!=='boolean'||!doc.diff(p.activeSource,candidate.source,1,0,{kind:c.kind,path:c.path}).changes.some(change=>change.kind===c.kind&&JSON.stringify(change.path)===JSON.stringify(c.path)))throw new Error('This diff change no longer exists.');const choices=(candidate.rejectedChanges||[]).filter(choice=>choice.kind!==c.kind||JSON.stringify(choice.path)!==JSON.stringify(c.path));if(c.reject)choices.push({path:c.path.slice(),kind:c.kind});p.candidates=p.candidates.map(value=>value.id===c.id?{...value,rejectedChanges:choices}:value);break;}
     case 'reject':p.candidates=p.candidates.filter(v=>v.id!==c.id);break;
-    case 'accept':{const candidate=p.candidates.filter(v=>v.id===c.id)[0];if(!candidate)throw new Error('Proposal no longer exists.');requireCurrent(p,candidate.baseHash);const before=p.activeSource;active(doc.selectChanges(before,candidate.source,candidate.rejectedChanges),!['import','remote'].includes(candidate.kind));
-      if(candidate.sourceProposalId&&candidate.noteIds?.length&&before!==p.activeSource)p.noteChanges=[...(p.noteChanges||[]),{id:candidate.id,taskId:candidate.id,proposalId:candidate.sourceProposalId,noteIds:candidate.noteIds.slice(),title:candidate.title,beforeHash:hash(before),afterHash:hash(p.activeSource),beforeCheckpointId:c.beforeCheckpointId||'',afterCheckpointId:c.afterCheckpointId||'',created:p.updated}];
-      p.candidates=p.candidates.filter(v=>v.id!==c.id);break;}
+    case 'accept':{const candidate=p.candidates.filter(value=>value.id===c.id)[0];if(!candidate)throw new Error('Proposal no longer exists.');acceptCandidate(candidate);break;}
     case 'proposeWorkOrder':{
       const t=task();if(t.kind!=='plan'||t.state!=='RUNNING'||c.attempt!==t.attempt)throw new Error('Only the current running planning attempt can propose a Work Order.');
       requireCurrent(p,t.baseHash);
@@ -118,8 +126,10 @@ export function reduce(project:Project,c:any):Project {
       const taskPrompt=queuedNotes?notePlanningPrompt(queuedNotes):c.prompt||p.workOrder.objective;
       const includeNotes=c.addressNotes||(typeof c.includeBuilderNotes==='boolean'?c.includeBuilderNotes:p.builderContextDefault!==false);
       const noteSnapshot=(includeNotes?p.builderNotes||[]:[]).map(note=>({...note,path:note.path.slice()}));
-      p.tasks.unshift({id:c.id,attempt:c.attempt,kind:c.kind,state:'PREPARED',prompt:taskPrompt,builderNotes:noteSnapshot,sourceNoteIds:c.kind==='work'?(p.workOrderProposals?.find(proposal=>proposal.id===p.workOrder.sourceProposalId)?.noteIds?.slice()||[]):[],...(queuedNotes?{noteQueue:queuedNotes}:{}),reply:'',baseSource:p.activeSource,baseHash:hash(p.activeSource),stagedSource:p.activeSource,workOrder:p.workOrder,route:c.route,created:p.updated});
-      if(c.kind==='plan')p.chat.push({role:'user',text:queuedNotes?'Address project notes · '+queuedNotes.length+' flagged notes':c.prompt});break;
+      const editorContext=editorSnapshot(p.activeSource,c.editorContext);
+      const applyMode=c.localEditMode===undefined?'proposal-only':localEditMode(c.localEditMode);
+      p.tasks.unshift({localEditMode:applyMode,...(editorContext?{editorContext}:{}),id:c.id,attempt:c.attempt,kind:c.kind,state:'PREPARED',prompt:taskPrompt,builderNotes:noteSnapshot,sourceNoteIds:c.kind==='work'?(p.workOrderProposals?.find(proposal=>proposal.id===p.workOrder.sourceProposalId)?.noteIds?.slice()||[]):[],...(queuedNotes?{noteQueue:queuedNotes}:{}),reply:'',baseSource:p.activeSource,baseHash:hash(p.activeSource),stagedSource:p.activeSource,workOrder:p.workOrder,route:c.route,created:p.updated});
+      if(c.kind==='plan')p.chat.push({role:'user',...(editorContext?{editorContext:{screen:editorContext.screen,label:editorContext.label,focusPaths:editorContext.focusPaths}}:{}),text:queuedNotes?'Address project notes · '+queuedNotes.length+' flagged notes':c.prompt});break;
     }
     case 'taskRunning':{const t=task();if(t.state!=='PREPARED')throw new Error('Task is not prepared.');t.state='RUNNING';break;}
     case 'taskReply':{const t=task();if(t.state!=='RUNNING')throw new Error('Task is no longer running.');t.reply=c.text;break;}
@@ -131,7 +141,16 @@ export function reduce(project:Project,c:any):Project {
     }
     case 'taskDone':{const t=task();if(t.state!=='RUNNING')throw new Error('Task is no longer running.');t.reply=c.text||t.reply;
       if(t.kind==='plan'){t.state='COMPLETED';p.chat.push({role:'assistant',text:t.reply});p.chat=p.chat.slice(-60);}
-      else {t.state='PROPOSAL_READY';p.candidates.unshift({id:t.id,title:t.workOrder.objective.slice(0,100),source:t.stagedSource,baseHash:t.baseHash,created:p.updated,kind:'agent',...(t.workOrder.sourceProposalId?{sourceProposalId:t.workOrder.sourceProposalId,noteIds:t.sourceNoteIds?.slice()||[]}:{})});}t.baseSource='';t.stagedSource='';t.builderNotes=[];break;}
+      else {
+        const candidate:Candidate={id:t.id,title:t.workOrder.objective.slice(0,100),source:t.stagedSource,baseHash:t.baseHash,created:p.updated,kind:'agent',...(t.workOrder.sourceProposalId?{sourceProposalId:t.workOrder.sourceProposalId,noteIds:t.sourceNoteIds?.slice()||[]}:{})};
+        t.state='PROPOSAL_READY';p.candidates.unshift(candidate);
+        if(t.localEditMode==='automatic'){
+          if(p.draft||t.editorContext?.hasUnappliedEdits)t.localApplyBlockedReason='An editing draft or unapplied form needs review. Apply or discard your edits, then review this proposal.';
+          else if(hash(p.activeSource)!==t.baseHash)t.localApplyBlockedReason='The local world changed during this task. Review the proposal instead of overwriting newer changes.';
+          else if(t.stagedSource===p.activeSource){t.state='COMPLETED';p.candidates=p.candidates.filter(value=>value.id!==t.id);}
+          else {acceptCandidate(candidate);t.state='APPLIED';}
+        }
+      }t.baseSource='';t.stagedSource='';t.builderNotes=[];break;}
     case 'taskStop':{const t=task();if(['PREPARED','RUNNING'].indexOf(t.state)>=0){t.state=c.state||'CANCELED';t.error=c.error||'';t.builderNotes=[];}break;}
     case 'recover':p.tasks.forEach(t=>{if(['PREPARED','RUNNING'].indexOf(t.state)>=0){t.state='INTERRUPTED';t.error='The host stopped. Restart explicitly from the saved Work Order.';}});break;
     case 'remoteLink':if(p.remote.operations.some(o=>['PREPARED','SEND_ATTEMPTED','UNKNOWN'].indexOf(o.state)>=0))throw new Error('Reconcile the pending save first.');p.remote.environment=c.environment||'production';if(c.envelopeSource){doc.parse(c.envelopeSource);p.remote.envelopeSource=c.envelopeSource;}p.remote.validation=undefined;p.remote.worldId=c.worldId;p.remote.etag=c.etag;p.remote.baselineHash=c.baselineHash;break;
@@ -151,10 +170,11 @@ export function reduce(project:Project,c:any):Project {
 }
 export function remotePayload(source:string,baseline?:string,worldId?:string):string {
   if(!doc.statePath(doc.parse(source)).length){if(!baseline||!doc.statePath(doc.parse(baseline)).length)throw new Error('Remote saves require the downloaded world envelope. Re-import the Alpha world to recover its metadata.');source=doc.alignImport(baseline,source).source;}
+  if(worldId){const root=doc.parse(source),world=doc.at(root,doc.statePath(root).slice(0,-1)),identity=world.children.find(child=>child.key==='shortId');if(identity&&identity.node.value!==worldId)throw new Error('The document shortId differs from the linked Voyage world. Import it as a separate project.');}
+  if(baseline&&worldId&&doc.statePath(doc.parse(baseline)).length){const root=doc.parse(baseline),world=doc.at(root,doc.statePath(root).slice(0,-1)),identity=world.children.find(child=>child.key==='shortId');if(identity&&identity.node.value!==worldId)throw new Error('The preserved Voyage envelope belongs to another world. Re-import the Alpha world before saving.');source=doc.preserveVoyageFields(baseline,source).source;}
   const root=doc.parse(source);const fields=['shortId','title','description','advancedDescription','discordThreadUrl','image','isLocked','isMod','isUnremixable','tags','visibility','initialGameState'];
   let prefix=doc.statePath(root).slice(0,-1);const object=doc.at(root,prefix);
   if(!object.children.some(c=>c.key==='initialGameState'))throw new Error('Remote saves require the downloaded world envelope.');
-  if(worldId&&object.children.some(child=>child.key==='shortId')&&doc.at(object,['shortId']).value!==worldId)throw new Error('The document shortId differs from the linked Voyage world. Import it as a separate project.');
   return '{"world":{'+fields.filter(k=>object.children.some(c=>c.key===k)).map(k=>JSON.stringify(k)+':'+doc.read(source,prefix.concat(k))).join(',')+'}}';
 }
-export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes} as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(harness as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}
+export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode} as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(harness as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}
