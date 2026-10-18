@@ -26,7 +26,7 @@ A sample-world marker was placed and dragged from `(0, 0)` to `(11.2, 9.4)`. The
 - Native Map realm creation, zoom from 100% to 120%, and touch panning were checked using a new test realm. Panning changed the visible grid cells.
 - Native Mods opened and added a pending local reference row. Publish opened with its checks collapsed and local publication fields reachable. No remote actions were submitted.
 - Android system font scaling at 200% was visually checked. Font scale and automatic rotation were restored after testing.
-- Typecheck, 249 application tests, and 12 release tests passed.
+- After integrating the current main branch, typecheck, 269 application tests, and 12 release tests passed. The assistant viewport fixture pins its device scale, and the Codex wire fixture runs through Node and waits for child-process exit so both tests work on Windows.
 
 ## Responsive coverage
 
