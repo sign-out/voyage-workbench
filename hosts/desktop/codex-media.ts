@@ -1,6 +1,6 @@
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {Rpc} from './codex';
+import {Rpc,readCodexAccount} from './codex';
 import {codexMediaInput,codexMediaThread,codexImageResult} from '../../packages/core/codex-media';
 import type {TaskRoute} from '../../packages/core/providers';
 
@@ -20,7 +20,7 @@ export class CodexMedia {
   let rpc:MediaRpc|undefined;
   try{
    rpc=this.makeRpc(this.home,cwd);await rpc.init();
-   const account=await rpc.request('account/read',{refreshToken:false});
+   const account=await readCodexAccount(rpc);
    if(!account.account)throw new Error('Sign into Codex in Connection first.');
    if(generation){const capabilities=await rpc.request('modelProvider/capabilities/read');if(!capabilities.imageGeneration)throw new Error('This Codex connection does not expose image generation. Choose a supported image provider; no API fallback was sent.');}
    const thread=await rpc.request('thread/start',codexMediaThread(cwd,route.model,generation));

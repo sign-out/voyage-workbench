@@ -1,5 +1,6 @@
 import * as doc from './document';
 import type {Project,Task} from './project';
+import {artworkPlanningContext} from './artwork-requests';
 
 export interface EditorSelection {path?:doc.Path;section?:string;key?:string;label?:string}
 export interface EditorFocus extends EditorSelection {screen:string;hasUnappliedEdits?:boolean}
@@ -22,4 +23,4 @@ export function editorSnapshot(source:string,input?:EditorFocus|null):EditorSnap
  const excerpts=paths.slice(0,8).map(path=>{const value=doc.read(source,path),text=value.slice(0,Math.min(3000,budget));budget-=text.length;return {path,source:text,truncated:text.length<value.length};}).filter(item=>item.source.length);
  return {screen:input.screen,label:typeof input.label==='string'?input.label.slice(0,200):input.screen,focusPaths:paths.slice(0,8),hasUnappliedEdits:input.hasUnappliedEdits===true,selectionMissing:missing,excerpts};
 }
-export function assistantPacket(project:Project,task:Task){return {request:task.prompt,localEditMode:task.localEditMode,memory:project.memory||'',workOrder:task.kind==='work'?task.workOrder:undefined,history:project.chat.slice(-12),context:doc.context(task.baseSource,task.prompt),editorContext:task.editorContext};}
+export function assistantPacket(project:Project,task:Task){return {request:task.prompt,localEditMode:task.localEditMode,memory:project.memory||'',workOrder:task.kind==='work'?task.workOrder:undefined,history:project.chat.slice(-12),...artworkPlanningContext(task.kind==='plan'?task.baseSource:undefined),context:doc.context(task.baseSource,task.prompt),editorContext:task.editorContext};}

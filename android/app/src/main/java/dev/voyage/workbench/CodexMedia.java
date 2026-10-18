@@ -31,7 +31,7 @@ final class CodexMedia {
   File cwd=new File(host.app.getFilesDir(),"media-tasks/"+UUID.randomUUID());
   try(Session session=factory.create(host.app,cwd)){
    session.request("initialize",new JSONObject().put("clientInfo",new JSONObject().put("name","voyage_media").put("version","0.2.6")).put("capabilities",new JSONObject().put("experimentalApi",true)));
-   JSONObject account=session.request("account/read",new JSONObject().put("refreshToken",false));
+   JSONObject account=Rpc.readAccount(params->session.request("account/read",params));
    if(account.isNull("account")||!account.has("account"))throw new Exception("Sign into Codex in Connection first.");
    if(generation&&!session.request("modelProvider/capabilities/read",new JSONObject()).optBoolean("imageGeneration"))throw new Exception("This Codex connection does not expose image generation. Choose a supported image provider; no API fallback was sent.");
    JSONObject thread=session.request("thread/start",(JSONObject)host.store.core.doc("codexMediaThread",cwd.toString(),route.optString("model"),generation));

@@ -320,3 +320,32 @@
 .readiness-state{min-width:65px;text-transform:uppercase;font-size:.75rem;}
 .readiness-state.blocked{color:#d7a5a5;}.readiness-state.stale,.readiness-state.unknown{color:#c4b59b;}
 @media(max-width:600px){.checkpoint-selectors{grid-template-columns:minmax(0,1fr);}.authoring-workbench input,.scope-picker input:not([type="checkbox"]){max-width:100%;min-width:0;}.authoring-switcher button{flex:1 1 130px;}}
+@media(max-width:760px){
+ .contextual-assistant{right:calc(12px + env(safe-area-inset-right));bottom:calc(74px + env(safe-area-inset-bottom))}
+ .contextual-assistant.is-open{width:calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right));height:min(600px,calc(78dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)));max-height:calc(100dvh - 98px - env(safe-area-inset-top) - env(safe-area-inset-bottom));padding:12px}
+ .contextual-assistant button{min-height:44px}
+ .contextual-assistant section{gap:6px}
+ .contextual-assistant section>.assistant-focus{max-height:32px}
+ .contextual-assistant .assistant-help{max-height:48px}
+ .contextual-assistant section>:is(.alert,.feature-status){max-height:32px;padding:4px 8px}
+ .contextual-assistant section>:is(.alert,.feature-status):has(button){max-height:44px}
+ .contextual-assistant section>:is(.alert,.feature-status) button{min-height:28px;padding:4px 6px;font-size:12px}
+ .contextual-assistant textarea{font-size:16px;height:48px}
+}
+@media(max-height:600px){
+ .contextual-assistant{bottom:calc(8px + env(safe-area-inset-bottom))}
+ .contextual-assistant.is-open{height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));max-height:none;padding:8px;gap:4px}
+ .contextual-assistant section{gap:4px}
+ .contextual-assistant section h2{display:none}
+ .contextual-assistant section>:is(p,.alert,.feature-status){max-height:24px;font-size:11px;line-height:1.35}
+ .contextual-assistant section>.assistant-focus{max-height:18px}
+ .contextual-assistant .assistant-help{max-height:30px;font-size:11px}
+ .contextual-assistant .assistant-help summary{padding:2px 0}
+ .contextual-assistant section>:is(.alert,.feature-status){padding:4px 8px}
+ .contextual-assistant section>:is(.alert,.feature-status):has(button){max-height:36px}
+ .contextual-assistant section>:is(.alert,.feature-status) button{min-height:24px;padding:2px 4px;font-size:11px}
+ .contextual-assistant label{gap:2px;font-size:11px}
+ .contextual-assistant textarea{height:36px;padding:6px}
+ .contextual-assistant .button-row{flex-wrap:nowrap;overflow:auto;overscroll-behavior:contain}
+ .contextual-assistant .button-row button{flex:0 0 auto;padding:6px;font-size:12px}
+}
