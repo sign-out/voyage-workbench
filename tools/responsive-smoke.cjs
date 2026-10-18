@@ -228,6 +228,7 @@ async function verifyLocalProjectActions(){
 async function verifyVoyageProjectActions(){
  const originalVoyage=service.voyage,originalSecrets=service.secrets,reads=[];
  try{
+  await evaluate("(()=>{const filter=document.querySelector('[aria-label=\"Project status filter\"]');filter.value='active';filter.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await evaluate("[...document.querySelectorAll('.project-sources button')].find(button=>button.textContent==='Voyage worlds').click()");
   await waitFor("[...document.querySelectorAll('.voyage-project-browser button')].some(button=>button.textContent==='Connect Voyage')");
   await evaluate("[...document.querySelectorAll('.voyage-project-browser button')].find(button=>button.textContent==='Connect Voyage').click()");
@@ -249,10 +250,14 @@ async function verifyVoyageProjectActions(){
    await waitFor("[...document.querySelectorAll('.mobile-menu-items button')].some(button=>button.textContent==='Close project'&&!button.disabled)");
    const id=await evaluate("localStorage.getItem('voyage-project')"),opened=service.store.project(id);
    assert.equal(opened.remote.worldId,'owned-'+kind);assert.match(opened.activeSource,/9007199254740993/);assert.equal(JSON.parse(opened.activeSource).isMod,kind==='mod');
+   assert.equal(await evaluate("document.querySelector('.project-switch .workspace-world-title').textContent"),'Owned '+kind);
+   assert.equal(await evaluate("document.querySelector('.project-switch .project-short-id').textContent"),'owned-'+kind);
    await evaluate("document.querySelector('.header-actions .mobile-menu summary').click()");
    await evaluate("[...document.querySelectorAll('.mobile-menu-items button')].find(button=>button.textContent==='Close project').click()");
    await waitFor("document.querySelector('.projects-page')");
    await waitFor("!document.querySelector('.project-sources button[disabled]')");
+   await waitFor(`document.querySelector('.local-project-card[aria-label="Owned ${kind}"] .project-short-id')`);
+   assert.equal(await evaluate(`document.querySelector('.local-project-card[aria-label="Owned ${kind}"] .project-short-id').textContent`),'owned-'+kind);
   }
   assert.ok(reads.includes('/worlds?page=0&type=world'));assert.ok(reads.includes('/worlds?page=0&type=mod'));
   console.log('Voyage project picker: connection setup, owned worlds, and owned mods passed');

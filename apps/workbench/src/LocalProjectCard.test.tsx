@@ -6,6 +6,14 @@ import {LocalProjectCard} from './LocalProjectCard';
 
 const props={project:{id:'local',name:'My world',updated:0,status:'active'},busy:false,current:false,onOpen:()=>{},onClose:()=>{},onStatus:()=>{},onDelete:()=>{}};
 
+test('project cards keep the world title and Voyage short ID alongside project actions',()=>{
+ const markup=renderToStaticMarkup(<LocalProjectCard {...props} project={{...props.project,worldTitle:'Authored world title',shortId:'VOYAGE1'}} current/>);
+ assert.match(markup,/<strong>Authored world title<\/strong>/);
+ assert.match(markup,/<small class="project-short-id">VOYAGE1<\/small>/);
+ assert.match(markup,/Close project/);
+ assert.match(markup,/Move to trash/);
+});
+
 test('local projects expose trash separately from opening the workspace',()=>{
  const markup=renderToStaticMarkup(<LocalProjectCard {...props}/>);
  assert.match(markup,/Move to trash/);
