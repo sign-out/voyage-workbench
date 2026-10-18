@@ -22,7 +22,7 @@ export function useMeasuredBlockSize(property:string):RefCallback<HTMLElement>{
   if(!workspace)return;
   const measure=()=>workspace.style.setProperty(property,element.getBoundingClientRect().height+'px');
   const observer=new ResizeObserver(measure);
-  measure();observer.observe(element);
+  measure();observer.observe(element,{box:'border-box'});
   return()=>{observer.disconnect();workspace.style.removeProperty(property);};
  },[property]);
 }

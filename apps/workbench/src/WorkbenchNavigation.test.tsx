@@ -39,6 +39,13 @@ test('mobile Editor mode falls back to content if passed the chat route',()=>{
  assert.equal(target,'editor');
 });
 
+test('Planning stays in all tools but does not duplicate the mobile Chat mode',()=>{
+ const markup=renderToStaticMarkup(<WorkbenchNavigation tabs={tabs} activeTab="editor" proposalCount={0} onNavigate={()=>true} preferences={{order:toolIds,desktop:['plan'],mobile:['editor','plan','review','voyage']}}/>);
+ assert.equal((markup.match(/mobile-primary/g)||[]).length,3);
+ assert.match(markup,/desktop-primary [^"]*"><svg[^]*?<span>plan<\/span>/);
+ assert.match(markup.slice(markup.indexOf('tools-menu-items')),/<span>plan<\/span>/);
+});
+
 test('supplementary tools expose the active selection without losing the primary tools',()=>{
  for(const id of ['mods','validation','publish','providers','voyage','connection']){
   const markup=renderToStaticMarkup(<WorkbenchNavigation tabs={tabs} activeTab={id} proposalCount={0} onNavigate={()=>true}/>);

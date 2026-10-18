@@ -8,6 +8,10 @@ Version **0.2.11** is an alpha/test build. Conservative packaging cleanup is sta
 
 For source development, install Node.js 22 or newer, then run `npm ci`, `npm run build`, `npm run typecheck`, `npm test`, and `npm run dev`. The build generates the reference assets required by desktop service tests. Run `npm run desktop` for the Electron app. Android also requires a JDK, Android SDK, and separately prepared native/provider runtimes; see [development and packaging prerequisites](docs/PERSONAL_APPS.md). Packaging scripts currently expect locally prepared provider runtimes and retained dependency compliance inputs, which are not included in this source snapshot. Building from source does not reproduce the distributor's signing identity; never share private signing keys.
 
+Local project management: **Close project** returns to **Your projects** without deleting the project or its saved local draft. On phones, find it under **Files & sync** (the header’s three-dot menu); it is also available on the open project’s card. **Move to trash** removes a project from the active list. Select **Trash** in the project status filter to restore it or confirm **Delete permanently**, which removes the local project and its checkpoints, not the world on Voyage. Stop active tasks before trashing or deleting a project.
+
+The project picker also has **Voyage worlds** and **Voyage mods**. Connect your Creator API key, browse or search the loaded owned projects, load more results, or open a project by short ID. **Open world** and **Open mod** download separate local projects with their Voyage link intact; they never replace the currently open project, attach a mod to it, or upload changes automatically.
+
 Original Voyage Workbench code is licensed under **GNU GPL version 2 only** (`GPL-2.0-only`), not "version 2 or later". See [LICENSE](LICENSE) and [licensing scope and dependency obligations](docs/LICENSING.md). Third-party software and reference material retain their own licenses; the application license does not relicense provider CLIs/SDKs, dependencies, or third-party content.
 
 # Voyage Workbench

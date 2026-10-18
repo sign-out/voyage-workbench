@@ -41,7 +41,7 @@
   --app-primary-ink:#0d2028;
  }
  .adaptive-app {font-size:15px;--line:var(--app-line);--border:var(--app-line);--muted:var(--app-muted);--text:var(--app-ink)}
- .adaptive-app .workspace {position:relative;height:100dvh;padding-top:var(--app-safe-top)}
+ .adaptive-app .workspace {position:relative;height:100dvh;padding-top:var(--app-safe-top);--mobile-mode-clearance:max(var(--workspace-mode-size,0px),calc(68px + var(--app-safe-bottom)))}
  .adaptive-app header {height:auto;min-height:60px;padding:8px max(12px,var(--app-safe-right)) 8px calc(54px + var(--app-safe-left));gap:8px;flex-wrap:nowrap;background:var(--app-panel-alt)}
  .adaptive-app .app-identity,.adaptive-app .workspace-heading {display:none}
  .adaptive-app .project-switch {max-width:none;min-width:0;height:44px;padding:0;gap:6px;border:0;background:transparent}
@@ -60,10 +60,10 @@
  .adaptive-app .mobile-menu-items button {min-height:48px;font-size:15px}
 
  .adaptive-app .workspace-tools {position:static;flex-shrink:0;flex-wrap:wrap;justify-content:flex-start;gap:4px;height:auto;min-height:54px;padding:6px max(10px,var(--app-safe-right)) 6px max(10px,var(--app-safe-left));border-top:0;border-bottom:1px solid var(--app-line);background:var(--app-bg)}
- .workspace-shortcuts {display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}
+ .workspace-shortcuts {display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:4px;flex:1;min-width:0}
  .workspace-shortcuts::-webkit-scrollbar {display:none}
- .adaptive-app .workspace-tools .mobile-primary {display:flex;flex:1 0 auto;flex-direction:row;justify-content:center;gap:7px;font-size:13px;padding:9px 10px;min-height:44px;min-width:max-content;border:1px solid transparent;border-radius:24px;background:transparent;color:var(--app-muted)}
- .adaptive-app .workspace-tools .mobile-primary>span {max-width:none;overflow:visible;text-overflow:clip}
+ .adaptive-app .workspace-tools .mobile-primary {display:flex;flex-direction:column;justify-content:center;gap:5px;font-size:12px;padding:8px 4px;min-height:52px;min-width:0;border:1px solid transparent;border-radius:14px;background:transparent;color:var(--app-muted);white-space:normal}
+ .adaptive-app .workspace-tools .mobile-primary>span {max-width:100%;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;white-space:normal}
  .adaptive-app .workspace-tools .mobile-primary>svg {width:18px;height:18px;flex-shrink:0}
  .adaptive-app .workspace-tools .mobile-primary.selected {background:var(--app-panel);border-color:var(--app-line);color:var(--app-ink)}
  .adaptive-app .workspace-tools b {position:static;margin:0;flex-shrink:0}
@@ -73,8 +73,8 @@
  .adaptive-app .tools-menu .mobile-tools-icon {display:block}
  .adaptive-app .tools-menu .mobile-menu-count {display:block;position:absolute;top:0;right:0;min-width:16px;padding:2px 4px;border-radius:10px;background:var(--app-accent);color:var(--app-bg);font-size:10px;text-align:center}
  .adaptive-app .tools-menu[open]::before {content:'';position:fixed;inset:0;background:#0009;z-index:40}
- .adaptive-app .tools-menu-items {position:fixed;z-index:42;top:auto;bottom:calc(var(--workspace-mode-size,68px) + 10px);left:max(8px,var(--app-safe-left));right:max(8px,var(--app-safe-right));width:auto;max-height:calc(100dvh - var(--workspace-mode-size,68px) - var(--app-safe-top) - 88px);padding:12px 8px;overflow:auto;overscroll-behavior:contain;background:var(--app-panel);border-radius:20px;box-shadow:0 16px 50px #0006}
- .adaptive-app .tools-menu-heading {font-size:13px;padding:8px 12px 12px}
+ .adaptive-app .tools-menu-items {position:fixed;z-index:42;top:calc(68px + var(--app-safe-top));bottom:calc(var(--mobile-mode-clearance) + 8px);left:max(8px,var(--app-safe-left));right:max(8px,var(--app-safe-right));width:auto;max-height:none;padding:0 8px 12px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;background:var(--app-panel);border-radius:16px;box-shadow:0 16px 50px #0006}
+ .adaptive-app .tools-menu-heading {position:sticky;top:0;z-index:1;background:var(--app-panel);font-size:13px;padding:16px 12px;border-bottom:1px solid var(--app-line);margin-bottom:4px}
  .adaptive-app .tools-menu-items button {min-height:48px;padding:12px;font-size:15px;border-radius:10px;gap:12px}
  .adaptive-app .tools-menu-items button b {margin-left:auto}
  .adaptive-app .mobile-tool-heading {display:block;flex-basis:100%;padding:8px 6px 4px;font-size:16px;font-weight:600}

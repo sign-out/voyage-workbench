@@ -71,6 +71,13 @@
 .current-tool {font-size:11px;font-weight:500;color:var(--app-accent);border-left:1px solid var(--app-line);padding-left:8px}
 .tools-menu-items {position:absolute;top:calc(100% + 8px);left:auto;right:0;width:260px;max-height:calc(100dvh - 130px);overflow:auto;padding:7px;background:var(--app-panel);border:1px solid var(--app-line);border-radius:7px;box-shadow:0 12px 30px #0007;z-index:40}
 .tools-menu-heading {padding:7px 10px 10px;color:var(--app-muted);font-size:11px}
+.local-project-card {display:flex;flex-direction:column;min-width:0}
+.local-project-card .project-card {width:100%;flex:1;text-align:left}
+.local-project-actions {display:flex;flex-wrap:wrap;gap:8px;padding:12px 0}
+.project-sources button[aria-pressed=true] {background:var(--app-selected);border-color:var(--app-accent);color:var(--app-accent)}
+.voyage-project-browser {min-width:0}
+.voyage-project-browser .history-row {flex-wrap:wrap}
+.voyage-project-browser .history-row>div {flex:1 1 160px;overflow-wrap:anywhere}
 .adaptive-app .tools-menu-items button {width:100%;justify-content:flex-start;min-height:36px;border-color:transparent;background:transparent}
 .adaptive-app .tools-menu-items button b {margin-left:auto}
 .adaptive-app .tools-menu-items button[aria-current=page] {background:var(--app-selected);color:var(--app-accent)}
