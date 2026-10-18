@@ -7,6 +7,7 @@ import * as covers from './covers';
 import * as codexMedia from './codex-media';
 import * as harness from './harness';
 import * as voyage from './voyage';
+import {worldIdentity} from './features';
 import type {TaskRoute} from './providers';
 import {notePath,noteQueue,notePlanningPrompt,reconcileNotes,readBuilderNotes,type BuilderNote,type NotePlanItem} from './builder-notes';
 export {readBuilderNotes} from './builder-notes';
@@ -25,6 +26,10 @@ let nativeHasher:((source:string)=>string)|undefined;
 export function setHasher(fn:(source:string)=>string){nativeHasher=fn;}
 export const hash=(source:string)=>nativeHasher?nativeHasher(source):sha256(source);
 export function create(id:string,name:string,source:string,now:number):Project {doc.parse(source);return {id,name,activeSource:source,originalSource:source,status:'active',memory:'',attachments:[],sourceRevision:0,draft:null,candidates:[],tasks:[],chat:[],workOrder:{objective:'',requirements:[],allowedPaths:[]},remote:{worldId:'',etag:'',baselineHash:'',operations:[]},updated:now};}
+export function projectSummary(project:Project){
+ const envelope=worldIdentity(project.remote.envelopeSource||'',project.name),world=worldIdentity(project.activeSource,envelope.title);
+ return {id:project.id,name:project.name,updated:project.updated,status:project.status||'active',worldTitle:world.title,shortId:project.remote.worldId||world.shortId||envelope.shortId};
+}
 function requireCurrent(p:Project,expected:string){if(hash(p.activeSource)!==expected)throw new Error('The world changed. Reload before applying this change.');}
 export function reduce(project:Project,c:any):Project {
   const p:Project={...project,draft:project.draft?{...project.draft}:null,candidates:project.candidates.slice(),tasks:project.tasks.map(t=>({...t})),chat:project.chat.slice(),workOrder:{...project.workOrder},remote:{...project.remote,operations:project.remote.operations.map(o=>({...o}))}};p.updated=c.now||Date.now();
@@ -188,4 +193,4 @@ export function remotePayload(source:string,baseline?:string,worldId?:string):st
   if(!object.children.some(c=>c.key==='initialGameState'))throw new Error('Remote saves require the downloaded world envelope.');
   return '{"world":{'+fields.filter(k=>object.children.some(c=>c.key===k)).map(k=>JSON.stringify(k)+':'+doc.read(source,prefix.concat(k))).join(',')+'}}';
 }
-export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode} as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(harness as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}
+export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode,projectSummary} as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(harness as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}

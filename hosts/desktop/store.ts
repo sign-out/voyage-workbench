@@ -2,12 +2,12 @@ import {DatabaseSync} from 'node:sqlite';
 import {mkdirSync} from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {create,reduce,hash,type Project} from '../../packages/core/project';
+import {create,reduce,hash,projectSummary,type Project} from '../../packages/core/project';
 export class Store {
   db:DatabaseSync;
   constructor(public directory:string){mkdirSync(directory,{recursive:true});this.db=new DatabaseSync(path.join(directory,'workbench.sqlite3'));
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,name TEXT,updated INTEGER,revision INTEGER,body TEXT); CREATE TABLE IF NOT EXISTS checkpoints(id TEXT PRIMARY KEY,project_id TEXT,label TEXT,created INTEGER,source TEXT); CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);');}
-  list(){return this.db.prepare('SELECT id,name,updated,revision FROM projects ORDER BY updated DESC').all().map((row:any)=>({...row,status:this.project(row.id).status||'active'}));}
+  list(){return this.db.prepare('SELECT id,name,updated,revision FROM projects ORDER BY updated DESC').all().map((row:any)=>({...row,...projectSummary(this.project(row.id))}));}
   get(id:string,knownRevision?:number){const row=this.db.prepare('SELECT revision,body FROM projects WHERE id=?').get(id) as any;if(!row)throw new Error('Project not found.');if(knownRevision===row.revision)return {unchanged:true,revision:row.revision};return {revision:row.revision,project:JSON.parse(row.body) as Project};}
   project(id:string):Project{return (this.get(id) as any).project;}
   create(name:string,source:string){const p=create(randomUUID(),name,source,Date.now());this.db.prepare('INSERT INTO projects VALUES(?,?,?,?,?)').run(p.id,p.name,p.updated,1,JSON.stringify(p));return this.get(p.id);}
