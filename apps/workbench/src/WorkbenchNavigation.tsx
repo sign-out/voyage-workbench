@@ -14,7 +14,7 @@ type NavigationProps = {
 
 export function WorkbenchNavigation({tabs,activeTab,proposalCount,onNavigate,preferences}:NavigationProps){
  const navigation=normalizeNavigation(preferences,tabs.map(tab=>tab[0]));
- const primaryTools=navigation.desktop,mobileTools=navigation.mobile;
+ const primaryTools=navigation.desktop,mobileTools=navigation.mobile.filter(id=>id!=='plan');
  const orderedTabs=navigation.order.flatMap(id=>tabs.filter(tab=>tab[0]===id));
  const shortcuts=useRef<HTMLDivElement>(null);
  useEffect(()=>{
