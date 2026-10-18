@@ -20,7 +20,7 @@ export function artworkDestinations(source:string,creationDetails='{}'):ArtworkD
   const category=cover?'World cover':section==='npcs'?'NPC portraits':section==='premadeCharacters'?'Playable characters':section==='regions'?'Region maps':section==='locations'?(area?'Area scenes':'Location scenes'):section==='itemTypes'?'Item images':'Other artwork';
   const entryPath=cover?base.slice(0,-1):area?base.concat(relative.slice(0,4)):base.concat(relative.slice(0,2));
   let entry:doc.Node|undefined;try{entry=doc.at(root,entryPath);}catch{}
-  const name=entry?.children.find(child=>child.key==='name')?.node.value||entry?.children.find(child=>child.key==='title')?.node.value||entryPath.at(-1)||'World';
+  const name=entry?.children.find(child=>child.key==='name')?.node.value||entry?.children.find(child=>child.key==='title')?.node.value||entryPath[entryPath.length-1]||'World';
   const context=(entry?.children||[]).filter(child=>['name','title','description','visualDescription','basicInfo','generatedAppearance'].includes(String(child.key))&&child.node.kind==='string').map(child=>String(child.key)+': '+String(child.node.value).slice(0,2000)).join('\n').slice(0,6000);
   return {id:JSON.stringify(slot.path),path:slot.path,label:cover?'World cover':String(name)+(category==='Area scenes'?' · '+String(relative[1]):''),category,target,url:slot.url,context};
  });

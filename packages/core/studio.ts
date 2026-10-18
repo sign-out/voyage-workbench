@@ -7,7 +7,7 @@ export function mediaUrl(value:string){
  if(value.length>8192)throw new Error('Media URL exceeds 8,192 characters.');
  const url=new URL(value);
  if(url.protocol!=='https:'||url.username||url.password||url.hash)throw new Error('Use an HTTPS media URL without credentials or a fragment.');
- if([...url.searchParams.keys()].some(key=>/^(token|access_token|api[-_]?key|key|signature|x-amz-|x-goog-|authorization)/i.test(key)))throw new Error('Use a permanent media URL, not a credential-bearing signed URL.');
+ url.searchParams.forEach((_value,key)=>{if(/^(token|access_token|api[-_]?key|key|signature|x-amz-|x-goog-|authorization)/i.test(key))throw new Error('Use a permanent media URL, not a credential-bearing signed URL.');});
  return value;
 }
 export function musicPath(source:string){return doc.statePath(doc.parse(source)).concat('gameplayMusicSettings');}

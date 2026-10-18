@@ -1,6 +1,23 @@
 package dev.voyage.workbench;
 import android.content.Context;import org.json.*;import java.io.*;import java.nio.charset.StandardCharsets;import java.nio.file.Files;import java.util.*;import java.util.concurrent.*;
 final class Rpc implements AutoCloseable {
+ static final class RpcError extends IOException {
+  final String method;final int code;final String detail;
+  RpcError(String method,int code,String detail){super(method+" ("+code+"): "+detail);this.method=method;this.code=code;this.detail=detail;}
+ }
+ interface AccountReader {JSONObject read(JSONObject params)throws Exception;}
+ static JSONObject readAccount(AccountReader reader)throws Exception {
+  for(int attempt=0;attempt<2;attempt++){
+   try{return reader.read(new JSONObject().put("refreshToken",false));}
+   catch(RpcError error){
+    if(!"account/read".equals(error.method)||error.code!=-32603||!"workspace routing discovery failed".equals(error.detail))throw error;
+    if(attempt==1)throw new IOException("Codex account verification failed: workspace routing discovery failed (account/read, -32603), including one account-only retry. This may be a network, DNS, TLS, proxy, or Codex service issue; it does not prove you are signed out. Check connectivity and retry Connection. Workbench uses its own isolated Codex sign-in. No task or image turn was started by this account check; restart failed work explicitly.",error);
+    Thread.sleep(250);
+   }
+  }
+  throw new IOException("Codex account verification failed");
+ }
+ JSONObject readAccount()throws Exception{return readAccount(params->rpc("account/read",params,60));}
  interface Listener {void event(JSONObject event)throws Exception;}
  Listener listener=e->{};Process child;BufferedWriter input;int sequence;final BlockingQueue<String> output=new LinkedBlockingQueue<>(512);
  Rpc(Context app,File task)throws Exception{
@@ -86,7 +103,7 @@ final class Rpc implements AutoCloseable {
         while(System.currentTimeMillis()<end) {
             JSONObject m=next(Math.max(1,(int)((end-System.currentTimeMillis())/1000)));
             if(m.optInt("id",-1)==id) {
-                if(m.has("error"))throw new IOException(method+": "+m.get("error"));
+                if(m.has("error")){JSONObject error=m.getJSONObject("error");throw new RpcError(method,error.getInt("code"),error.getString("message"));}
                 return m.getJSONObject("result");
             }
             listener.event(m);

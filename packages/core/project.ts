@@ -12,6 +12,7 @@ import {notePath,noteQueue,notePlanningPrompt,reconcileNotes,readBuilderNotes,ty
 export {readBuilderNotes} from './builder-notes';
 import {proposedOrder,type WorkOrder} from './work-orders';
 import * as authoring from './authoring';
+import {proposedArtwork,type ArtworkProposal} from './artwork-requests';
 export type {WorkOrder} from './work-orders';
 export interface WorkOrderProposal {id:string;taskId:string;baseHash:string;order:WorkOrder;created:number;noteIds?:string[]}
 export type LocalEditMode='automatic'|'proposal-only';
@@ -19,7 +20,7 @@ export function localEditMode(value:unknown=''):LocalEditMode {if(value==='')ret
 export interface Task {editorContext?:EditorSnapshot;localEditMode?:LocalEditMode;localApplyBlockedReason?:string;id:string;attempt:string;kind:'plan'|'work';state:string;prompt:string;reply:string;baseSource:string;baseHash:string;stagedSource:string;workOrder:WorkOrder;sourceNoteIds?:string[];builderNotes?:BuilderNote[];noteQueue?:NotePlanItem[];sessionId?:string;route?:TaskRoute;created:number;error?:string}
 export interface NoteChangeReceipt {id:string;taskId:string;proposalId:string;noteIds:string[];title:string;beforeHash:string;afterHash:string;beforeCheckpointId:string;afterCheckpointId:string;created:number}
 export interface Candidate {id:string;title:string;source:string;baseHash:string;created:number;kind:string;sourceProposalId?:string;noteIds?:string[];importNote?:string;rejectedChanges?:doc.ChangeChoice[]}
-export interface Project {bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string;editorContext?:Pick<EditorSnapshot,'screen'|'label'|'focusPaths'>}[];workOrder:WorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
+export interface Project {artworkProposals?:ArtworkProposal[];bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string;editorContext?:Pick<EditorSnapshot,'screen'|'label'|'focusPaths'>}[];workOrder:WorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
 let nativeHasher:((source:string)=>string)|undefined;
 export function setHasher(fn:(source:string)=>string){nativeHasher=fn;}
 export const hash=(source:string)=>nativeHasher?nativeHasher(source):sha256(source);
@@ -96,6 +97,16 @@ export function reduce(project:Project,c:any):Project {
     case 'candidateChange':{const candidate=p.candidates.find(candidate=>candidate.id===c.id);if(!candidate)throw new Error('Proposal no longer exists.');requireCurrent(p,candidate.baseHash);if(c.candidateHash!==hash(candidate.source))throw new Error('The proposal changed. Reload its diff.');if(typeof c.reject!=='boolean'||!doc.diff(p.activeSource,candidate.source,1,0,{kind:c.kind,path:c.path}).changes.some(change=>change.kind===c.kind&&JSON.stringify(change.path)===JSON.stringify(c.path)))throw new Error('This diff change no longer exists.');const choices=(candidate.rejectedChanges||[]).filter(choice=>choice.kind!==c.kind||JSON.stringify(choice.path)!==JSON.stringify(c.path));if(c.reject)choices.push({path:c.path.slice(),kind:c.kind});p.candidates=p.candidates.map(value=>value.id===c.id?{...value,rejectedChanges:choices}:value);break;}
     case 'reject':p.candidates=p.candidates.filter(v=>v.id!==c.id);break;
     case 'accept':{const candidate=p.candidates.filter(value=>value.id===c.id)[0];if(!candidate)throw new Error('Proposal no longer exists.');acceptCandidate(candidate);break;}
+    case 'proposeArtwork':{
+      const t=task();if(t.kind!=='plan'||t.state!=='RUNNING'||c.attempt!==t.attempt)throw new Error('Only the current running planning attempt can propose artwork.');
+      requireCurrent(p,t.baseHash);
+      if(typeof c.id!=='string'||!c.id||p.artworkProposals?.some(proposal=>proposal.id===c.id))throw new Error('Provide a unique artwork proposal ID.');
+      if((p.artworkProposals||[]).length>=500)throw new Error('Review or dismiss existing artwork requests before adding more.');
+      const request=proposedArtwork(t.baseSource,c.request);
+      if(p.artworkProposals?.some(proposal=>proposal.taskId===t.id&&proposal.destinationId===request.destinationId))throw new Error('This task already proposed artwork for that destination.');
+      p.artworkProposals=[...(p.artworkProposals||[]),{...request,id:c.id,taskId:t.id,baseHash:t.baseHash,created:p.updated}];break;
+    }
+    case 'dismissArtworkProposal':p.artworkProposals=(p.artworkProposals||[]).filter(proposal=>proposal.id!==c.id);break;
     case 'proposeWorkOrder':{
       const t=task();if(t.kind!=='plan'||t.state!=='RUNNING'||c.attempt!==t.attempt)throw new Error('Only the current running planning attempt can propose a Work Order.');
       requireCurrent(p,t.baseHash);

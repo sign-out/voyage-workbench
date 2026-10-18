@@ -1,29 +1,21 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {artworkDestinations,artworkPrompt,assignArtwork,imageTargets,type ArtworkDestination} from '../../../packages/core/artwork';
 import {resolveRoute} from '../../../packages/core/providers';
-import type {Project} from '../../../packages/core/project';
+import {hash,type Project} from '../../../packages/core/project';
+import type {ArtworkProposal} from '../../../packages/core/artwork-requests';
 import {mediaUrl} from '../../../packages/core/studio';
 import {AssetPicker,ImageFileImport} from './AssetLibrary';
 import {ImageInspection} from './ImageInspection';
 import {feature,saveAsset,type Asset} from './features-api';
 import {request} from './host';
+import {saveGeneration,type Generation} from './artwork-generation';
 
-interface Generation {id:string;created:number;destination:string;destinationId?:string;prompt:string;state:string;assetId?:string;error?:string}
 type Assignment={source:string;destination:ArtworkDestination;assetId?:string};
-type Props={project:Project;apply:(source:string,base:string)=>Promise<any>;onCover:(asset?:Asset)=>void;onDirtyChange?:(dirty:boolean)=>void};
+type Props={project:Project;apply:(source:string,base:string)=>Promise<any>;onCover:(asset?:Asset)=>void;onDirtyChange?:(dirty:boolean)=>void;command?:(command:any)=>Promise<any>};
 export async function importArtworkFile(file:File){
  if(file.size>32*1024*1024)throw new Error('Choose an image no larger than 32 MiB. Voyage uploads have a separate 5 MiB limit.');
  const dataUrl=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Could not read the image file.'));reader.readAsDataURL(file);});
  return saveAsset({dataUrl,prompt:'Imported artwork',name:file.name});
-}
-async function saveGeneration(key:string,job:Generation){
- for(let attempt=0;attempt<4;attempt++){
-  const raw=await request('featureGet',{key}),rows:Generation[]=raw?JSON.parse(raw):[];
-  const next=[job,...rows.filter(row=>row.id!==job.id)];
-  try{await request('featureSet',{key,expected:raw,value:JSON.stringify(next)});return next;}
-  catch(error){if(!/This feature changed/.test((error as Error).message)||attempt===3)throw error;}
- }
- throw new Error('Artwork history changed. Reload before continuing.');
 }
 function ArtworkPreview({url,name}:{url:string;name:string}){
  const [failed,setFailed]=useState(false);
@@ -31,9 +23,10 @@ function ArtworkPreview({url,name}:{url:string;name:string}){
  let safe='';try{safe=url.startsWith('data:image/')?url:mediaUrl(url);}catch{}
  return safe&&!failed?<ImageInspection url={safe} name={name}><img className="artwork-preview-image" src={safe} alt={name} referrerPolicy="no-referrer" onError={()=>setFailed(true)}/></ImageInspection>:<div className="artwork-empty-preview">{failed?'Image preview unavailable. The reference is retained.':'No artwork attached yet'}</div>;
 }
-export function ArtworkWorkspace({project,apply,onCover,onDirtyChange}:Props){
+export function ArtworkWorkspace({project,apply,onCover,onDirtyChange,command}:Props){
  const [details,setDetails]=useState('{}'),[selected,setSelected]=useState(''),[category,setCategory]=useState('All artwork'),[search,setSearch]=useState('');
  const [prompt,setPrompt]=useState(''),[dirty,setDirty]=useState(false),[asset,setAsset]=useState<Asset|null>(null),[reference,setReference]=useState(false);
+ const [proposalId,setProposalId]=useState('');
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[jobs,setJobs]=useState<Generation[]>([]),[picker,setPicker]=useState<Assignment|null>(null),[url,setUrl]=useState('');
  const latest=useRef(project);latest.current=project;
  const key='artwork-studio:'+project.id,destinations=artworkDestinations(project.activeSource,details),destination=destinations.find(item=>item.id===selected);
@@ -43,14 +36,22 @@ export function ArtworkWorkspace({project,apply,onCover,onDirtyChange}:Props){
  useEffect(()=>{onDirtyChange?.(dirty||busy);return()=>onDirtyChange?.(false);},[dirty,busy,onDirtyChange]);
  async function act(action:()=>Promise<void>){setBusy(true);setError('');setNotice('');try{await action();}catch(reason){setError((reason as Error).message);}finally{setBusy(false);}}
  function choose(item?:ArtworkDestination){
-  if(dirty&&!window.confirm('Discard the unsaved artwork brief? Imported files and generated artwork remain in the library.'))return;
+  if(dirty&&!window.confirm('Discard the unsaved artwork brief? Imported files and generated artwork remain in the library.'))return false;
+  setProposalId('');
   setSelected(item?.id||'');setPrompt(item?artworkPrompt(item):'');setDirty(false);setAsset(null);setReference(false);setError('');setNotice('');setUrl('');
+  return true;
+ }
+ function reviewArtwork(proposal:ArtworkProposal){
+  const target=destinations.find(item=>item.id===proposal.destinationId);
+  if(!target||!choose(target))return;
+  setProposalId(proposal.id);setPrompt(proposal.prompt);setDirty(true);
+  setNotice('Review the proposed brief and current destination, then choose Generate artwork locally. No image has been generated or attached.');
  }
  async function generate(){
   if(!destination||!prompt.trim())throw new Error('Select a destination and describe the artwork first.');
   const route=resolveRoute((await request('providerSettings')).settings,'artwork');
   if(!window.confirm('Generate one image using '+route.name+'? The brief'+(reference&&asset?' and selected reference image':'')+' will be sent to this provider and may incur charges. This saves artwork locally only; nothing is uploaded or attached automatically.'))return;
-  const job:Generation={id:crypto.randomUUID(),created:Date.now(),destination:destination.label,destinationId:destination.id,prompt,state:'generating'};
+  const job:Generation={id:crypto.randomUUID(),created:Date.now(),destination:destination.label,destinationId:destination.id,...(proposalId?{proposalId}:{}),prompt,state:'generating'};
   setJobs(await saveGeneration(key,job));
   try{
    const result=await request('imageGenerate',{prompt,route,...(reference&&asset?{referenceDataUrl:asset.dataUrl}:{})});
@@ -78,6 +79,10 @@ export function ArtworkWorkspace({project,apply,onCover,onDirtyChange}:Props){
  return <div className={'feature-page artwork-workspace '+(destination?'artwork-has-selection':'')}>
   <header className="artwork-workspace-header"><div><h2>Artwork for your world</h2><p>Choose where the artwork belongs, then add a file, reuse the library, or generate an image. Preview before attaching; remote saving is always separate.</p></div><span>{destinations.length} destinations</span></header>
   {error&&<p className="alert" role="alert">{error}</p>}{notice&&<p className="feature-status" role="status">{notice}</p>}
+  {!!project.artworkProposals?.length&&<section aria-label="Assistant artwork requests" className="connection-card"><h3>Review artwork requests · {project.artworkProposals.length}</h3><p>These are proposed briefs, not generated images. Review each destination and prompt before approving a billable generation. Uploading and attaching remain separate.</p>{project.artworkProposals.map(proposal=>{
+   const target=destinations.find(item=>item.id===proposal.destinationId),generated=jobs.some(job=>job.proposalId===proposal.id&&job.state==='generated');
+   return <article className="report" key={proposal.id}><strong>{proposal.label}</strong><details><summary>Proposed artwork brief</summary><p>{proposal.prompt}</p></details>{proposal.baseHash!==hash(project.activeSource)&&<p>The world changed since this request. Check the current destination and update the brief before generating.</p>}{!target&&<p>This destination no longer exists. Ask the assistant to refresh the request.</p>}{generated&&<p>Artwork generated locally. Reuse it from Generation history below; attachment is still separate.</p>}<div className="button-row"><button disabled={busy||loading||!target} onClick={()=>reviewArtwork(proposal)}>{generated?'Review brief again':'Review artwork brief'}</button>{command&&<button disabled={busy} onClick={()=>void act(async()=>{await command({type:'dismissArtworkProposal',id:proposal.id});})}>Dismiss artwork request</button>}</div></article>;
+  })}</section>}
   <div className="artwork-workspace-layout">
    <section className="artwork-destinations" aria-label="Artwork destinations">
     <label>Artwork type<select aria-label="Artwork type" disabled={busy} value={category} onChange={event=>setCategory(event.target.value)}>{categories.map(value=><option key={value}>{value}</option>)}</select></label>
