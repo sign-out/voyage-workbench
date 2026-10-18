@@ -35,19 +35,19 @@ export function publicationInspect(source:string,fallback:string){
  try{const url=new URL(image);if(['https:','http:'].includes(url.protocol)&&!url.username&&!url.password)coverUrl=url.href;}catch{}
  return {path,title:text('title').trim()||fallback,description:text('description'),advancedDescription:text('advancedDescription'),image,coverUrl,fields:world.children.map(child=>child.key)};
 }
-export function worldTitle(source:string,fallback:string){
+export function worldIdentity(source:string,fallback:string){
  try{
   const root=d.parse(source);
   for(const path of [['data','world'],['world'],[]]){
    let world;try{world=d.at(root,path);}catch{continue;}
    if(world.kind!=='object')continue;
-   const title=world.children.find(child=>child.key==='title')?.node;
-   if(title?.kind==='string'&&String(title.value).trim())return String(title.value).trim();
-   if(path.length)return fallback;
+   const text=(key:string)=>{const node=world.children.find(child=>child.key===key)?.node;return node?.kind==='string'?String(node.value).trim():'';};
+   return {title:text('title')||fallback,shortId:text('shortId')};
   }
  }catch{}
- return fallback;
+ return {title:fallback,shortId:''};
 }
+export function worldTitle(source:string,fallback:string){return worldIdentity(source,fallback).title;}
 export function modsInspect(source:string){const path=worldPath(source),root=d.at(d.parse(source),path);if(!root.children.some(c=>c.key==='mods'))return [];const mods=JSON.parse(d.read(source,path.concat('mods')));if(!Array.isArray(mods))throw new Error('Mods must be an array.');const seen:string[]=[];mods.forEach((m:any)=>{if(!m||typeof m.shortId!=='string'||!m.shortId.trim()||m.shortId!==m.shortId.trim()||seen.includes(m.shortId))throw new Error('Each mod needs a unique short ID.');if(m.version!==null&&m.version!==undefined&&(!Number.isSafeInteger(m.version)||m.version<1))throw new Error('Mod versions must be positive integers or null.');seen.push(m.shortId);});return mods;}
 export function modsExport(source:string,mods:any[]){modsInspect('{"mods":'+JSON.stringify(mods)+'}');return put(source,worldPath(source),'mods',JSON.stringify(mods));}
 export function deriveBase(source:string,refs:any[]){if(source.length>8*1024*1024)throw new Error('Base source exceeds 8 MiB.');const root=d.parse(source),base=d.at(root,d.statePath(root));const codecs:Record<string,any>=Object.create(null);refs.forEach(r=>codecs[r.section]=r.schema);const runtime=['engineState','uiState','characters','partyState','memoryBank','summaryState','embeddings','triggerWritable','systemResults','turnData','studioSession','chatLog','embeddingModel','embeddingDimension','stateEdited','compatibilityRevision'];
