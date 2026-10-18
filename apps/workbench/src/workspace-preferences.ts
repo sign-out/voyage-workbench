@@ -3,7 +3,7 @@ export type NavigationPreferences = {order:string[];desktop:string[];mobile:stri
 export const navigationStorageKey='voyage-navigation-v1';
 export const shortcutLimits={desktop:6,mobile:4};
 const desktopDefaults=['editor','map','characters','plan','review','artwork'];
-const mobileDefaults=['editor','map','characters','review'];
+const mobileDefaults=['editor','map','mods','publish'];
 
 export function normalizeNavigation(value:unknown,toolIds:readonly string[]):NavigationPreferences {
  const stored=value&&typeof value==='object'?value as Partial<NavigationPreferences>:{};

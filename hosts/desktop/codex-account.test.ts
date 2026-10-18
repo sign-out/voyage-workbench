@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {CodexRpcError,readCodexAccount,Rpc,AgentHost} from './codex';
@@ -46,17 +46,19 @@ test('recovered account permits only the explicitly requested turn; failed turns
 });
 test('wire errors retain method and code; planner artwork dispatch only creates an approval proposal',async()=>{
  const directory=mkdtempSync(path.join(tmpdir(),'voyage-account-wire-')),previous=process.env.VOYAGE_CODEX_BINARY;
- const executable=path.join(directory,'fake-codex');
- writeFileSync(executable,`#!${process.execPath}\nconst rl=require('node:readline').createInterface({input:process.stdin});rl.on('line',line=>{const message=JSON.parse(line);if(message.id===undefined)return;const response=message.method==='account/read'?{error:{code:-32603,message:'workspace routing discovery failed'}}:{result:{}};console.log(JSON.stringify({id:message.id,...response}));});`,{mode:0o700});
- process.env.VOYAGE_CODEX_BINARY=executable;
- let rpc:Rpc|undefined;
+ const fixture=`const rl=require('node:readline').createInterface({input:process.stdin});rl.on('line',line=>{const message=JSON.parse(line);if(message.id===undefined)return;const response=message.method==='account/read'?{error:{code:-32603,message:'workspace routing discovery failed'}}:{result:{}};console.log(JSON.stringify({id:message.id,...response}));});`;
+ // Rpc invokes "app-server" from each work directory. Node runs that fixture on
+ // every platform without a Unix shebang or a Windows shell wrapper.
+ for(const cwd of [directory,path.join(directory,'tasks','task')]){mkdirSync(cwd,{recursive:true});writeFileSync(path.join(cwd,'app-server'),fixture);}
+ process.env.VOYAGE_CODEX_BINARY=process.execPath;
+ let rpc:Rpc|undefined;const processes=new Set<Rpc>();
  try{
-  rpc=new Rpc(path.join(directory,'home'),directory);await rpc.init();
+  rpc=new Rpc(path.join(directory,'home'),directory);processes.add(rpc);await rpc.init();
   await assert.rejects(rpc.request('account/read',{refreshToken:false}),error=>error instanceof CodexRpcError&&error.code===-32603&&error.method==='account/read');rpc.close();
   const commands:any[]=[],task:any={id:'task',attempt:'attempt',kind:'plan',state:'RUNNING',baseSource:'{}'};
   const store:any={directory,project:()=>({tasks:[task]}),dispatch:(_project:string,command:any)=>commands.push(command)};
   const host=new AgentHost(store,path.join(directory,'home'),()=>[]);let taskRpc:Rpc|undefined;const initialize=Rpc.prototype.init;
-  Rpc.prototype.init=async function(){taskRpc=this;return initialize.call(this);};
+  Rpc.prototype.init=async function(){taskRpc=this;processes.add(this);return initialize.call(this);};
   try{await host.run('project','task');}finally{Rpc.prototype.init=initialize;}
   assert.equal(commands.at(-1).state,'FAILED');assert.match(commands.at(-1).error,/one account-only retry/);
   assert.equal(commands.some(command=>command.type==='taskSession'),false);assert.equal(host.running.size,0);
@@ -69,6 +71,7 @@ test('wire errors retain method and code; planner artwork dispatch only creates 
   for(const invalidation of ['cancel','new-attempt','cancel-after-thread']){
    task.kind='plan';task.state='RUNNING';task.attempt='attempt';const calls:string[]=[];let reads=0;const original=Rpc.prototype.request;
    Rpc.prototype.request=async function(method){
+    processes.add(this);
     calls.push(method);if(method==='initialize')return {};
     if(method==='account/read'){if(++reads===1)throw routing();if(invalidation==='cancel')task.state='CANCELED';if(invalidation==='new-attempt')store.project=()=>({tasks:[{...task,attempt:'new-attempt'}]});return {account:{type:'chatgpt'}};}
     if(method==='thread/start'){task.state='CANCELED';return {thread:{id:'thread'}};}
@@ -77,5 +80,10 @@ test('wire errors retain method and code; planner artwork dispatch only creates 
    try{await host.run('project','task');}finally{Rpc.prototype.request=original;store.project=()=>({tasks:[task]});}
    assert.equal(calls.includes('turn/start'),false);assert.equal(calls.includes('thread/start'),invalidation==='cancel-after-thread');assert.equal(commands.at(-1).error,'Task was stopped.');
   }
- }finally{rpc?.close();if(previous===undefined)delete process.env.VOYAGE_CODEX_BINARY;else process.env.VOYAGE_CODEX_BINARY=previous;rmSync(directory,{recursive:true,force:true});}
+ }finally{
+  for(const child of processes)child.close();
+  await Promise.all([...processes].map(({process:child})=>child.exitCode!==null||child.signalCode!==null?undefined:new Promise<void>(resolve=>child.once('exit',()=>resolve()))));
+  if(previous===undefined)delete process.env.VOYAGE_CODEX_BINARY;else process.env.VOYAGE_CODEX_BINARY=previous;
+  rmSync(directory,{recursive:true,force:true,maxRetries:5,retryDelay:50});
+ }
 });

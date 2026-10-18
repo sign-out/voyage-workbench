@@ -220,7 +220,7 @@
  .adaptive-app .legacy-view .ce-panel:not(.is-editing) .ce-editor {display:block}
  .adaptive-app .legacy-view .ce-panel.is-editing .ce-layout {display:grid}
 }
-@media(max-width:760px) {
+@media(width < 761px), (pointer:coarse) and (height < 501px) {
  .adaptive-app .workspace {height:calc(100dvh - 66px - env(safe-area-inset-bottom));padding-top:env(safe-area-inset-top)}
  .adaptive-app header {padding:8px 12px;gap:8px;min-height:54px;flex-wrap:nowrap}
  .app-identity {display:none}

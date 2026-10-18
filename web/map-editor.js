@@ -57,7 +57,7 @@ export function initMapEditor({api,node,getSource,applyText,status,getProject,co
   if(location&&!data.locations.some(l=>l.key===location&&l.region===region))location='';
   draw();}
  function projectChanged(){markDirty(false);imageUploads.projectChanged();disposeViewport();cellSize=132;data=null;realm='';region='';location='';view='realm';targetCell={x:0,y:0};targetLocal={x:0,y:0};center={x:0,y:0};host.replaceChildren();}
- function draw(){const focusedKey=location||region||realm;const focusedItem=(location?data.locations:region?data.regions:data.realms)?.find(item=>item.key===focusedKey);onContextChange?.({...(focusedKey?{section:location?'locations':region?'regions':'realms',key:focusedKey}:{}),label:focusedItem?.name||focusedKey||'World map'});disposeViewport();host.replaceChildren();const heading=node('div',undefined,'map-heading');const title=node('div');title.append(node('h2','World map'),node('p','Drag regions between realm cells and locations within their parent region. North is up.'));const controls=node('div',undefined,'map-controls');const realmSelect=select(data.realms.map(r=>[r.key,r.name]),realm);realmSelect.setAttribute('aria-label','Realm');realmSelect.disabled=!data.realms.length;realmSelect.onchange=act(async()=>{if(!await canNavigate()){realmSelect.value=realm;return;}realm=realmSelect.value;region='';location='';view='realm';const first=data.regions.find(r=>r.realm===realm&&Number.isInteger(r.x)&&Number.isInteger(r.y));center={x:first?.x??0,y:first?.y??0};draw();});const newRealm=input();newRealm.placeholder='New realm name';newRealm.setAttribute('aria-label','New realm name');controls.append(labeled('Realm',realmSelect),newRealm,button('+ Realm',async()=>{const name=newRealm.value.trim();if(!name)throw new Error('Enter a realm name.');await change('add-realm',{key:name},`Added realm ${name}.`);realm=name;region='';location='';view='realm';center={x:0,y:0};targetCell={x:0,y:0};draw();}));if(region)controls.append(button(view==='realm'?'Open region map':'Realm grid',async()=>{if(!await canNavigate())return;view=view==='realm'?'region':'realm';draw();focusRegion();}));host.append(heading);const settings=node('details',undefined,'map-settings');settings.open=matchMedia('(min-width:761px)').matches||!data.realms.length;settings.append(node('summary','Map settings & realm management'),controls,settingsControls());host.append(settings);
+ function draw(){const focusedKey=location||region||realm;const focusedItem=(location?data.locations:region?data.regions:data.realms)?.find(item=>item.key===focusedKey);onContextChange?.({...(focusedKey?{section:location?'locations':region?'regions':'realms',key:focusedKey}:{}),label:focusedItem?.name||focusedKey||'World map'});disposeViewport();host.replaceChildren();const heading=node('div',undefined,'map-heading');const title=node('div');title.append(node('h2','World map'),node('p','Drag regions between realm cells and locations within their parent region. North is up.'));const controls=node('div',undefined,'map-controls');const realmSelect=select(data.realms.map(r=>[r.key,r.name]),realm);realmSelect.setAttribute('aria-label','Realm');realmSelect.disabled=!data.realms.length;realmSelect.onchange=act(async()=>{if(!await canNavigate()){realmSelect.value=realm;return;}realm=realmSelect.value;region='';location='';view='realm';const first=data.regions.find(r=>r.realm===realm&&Number.isInteger(r.x)&&Number.isInteger(r.y));center={x:first?.x??0,y:first?.y??0};draw();});const newRealm=input();newRealm.placeholder='New realm name';newRealm.setAttribute('aria-label','New realm name');heading.append(title,labeled('Realm',realmSelect));controls.append(newRealm,button('+ Realm',async()=>{const name=newRealm.value.trim();if(!name)throw new Error('Enter a realm name.');await change('add-realm',{key:name},`Added realm ${name}.`);realm=name;region='';location='';view='realm';center={x:0,y:0};targetCell={x:0,y:0};draw();}));if(region)controls.append(button(view==='realm'?'Open region map':'Realm grid',async()=>{if(!await canNavigate())return;view=view==='realm'?'region':'realm';draw();focusRegion();}));host.append(heading);const settings=node('details',undefined,'map-settings');settings.open=!matchMedia('(width < 761px), (pointer:coarse) and (height < 501px)').matches||!data.realms.length;settings.append(node('summary','Map settings & realm management'),controls,settingsControls());host.append(settings);
   if(data.warnings.length){const warning=node('details',undefined,'map-warnings');warning.append(node('summary',`${data.warnings.length} map issue${data.warnings.length===1?'':'s'} to review`));const list=node('ul');for(const item of data.warnings.slice(0,40))list.append(node('li',item));warning.append(list);host.append(warning);}
   if(!data.realms.length){host.append(node('div',data.regions.length?`Create a realm to place ${data.regions.length} existing region${data.regions.length===1?'':'s'} on the map.`:'Create a realm to place your first region.','blank-state'));return;}
   const layout=node('div',undefined,'map-layout');const stage=node('div',undefined,'map-stage');const sidebar=node('aside',undefined,'map-inspector');if(view==='region'&&region){drawLocal(stage,sidebar);}else{view='realm';drawRealm(stage,sidebar);}layout.append(stage,sidebar);host.append(layout);
@@ -66,9 +66,10 @@ export function initMapEditor({api,node,getSource,applyText,status,getProject,co
   const toolbar=node('div',undefined,'map-stage-toolbar'),nav=node('div',undefined,'map-nav');
   toolbar.append(labelToggle());
   const viewport=node('div',undefined,'map-viewport'),grid=node('div',undefined,'map-grid');
-  viewport.classList.toggle('feather-edges',data.regionMapBorderFeatheringEnabled!==false);viewport.tabIndex=0;viewport.setAttribute('aria-label','Realm map. Scroll to zoom, drag empty space to pan, or use arrow keys.');
+  viewport.classList.toggle('feather-edges',data.regionMapBorderFeatheringEnabled!==false);viewport.tabIndex=0;viewport.setAttribute('aria-label','Realm map. Pinch or scroll to zoom, drag empty space to pan, or use arrow keys.');
   grid.setAttribute('role','group');grid.setAttribute('aria-label','Visible region cells');
-  let frame=0,disposed=false,lastBounds='',drag=null,suppressClick=false;
+  let frame=0,disposed=false,lastBounds='',drag=null,pinch=null,suppressClick=false;
+  const touches=new Map();
   const placed=new Map();for(const item of data.regions){if(item.realm===realm&&Number.isInteger(item.x)&&Number.isInteger(item.y)&&!placed.has(`${item.x},${item.y}`))placed.set(`${item.x},${item.y}`,item);}
   const camera=()=>({...center,size:cellSize});
   const zoom=input(cellSize,'range');zoom.min=MAP_MIN_CELL;zoom.max=MAP_MAX_CELL;zoom.step='1';zoom.setAttribute('aria-label','Map cell size');
@@ -119,15 +120,46 @@ export function initMapEditor({api,node,getSource,applyText,status,getProject,co
    out.disabled=cellSize<=MAP_MIN_CELL;inside.disabled=cellSize>=MAP_MAX_CELL;
   }
   viewport.addEventListener('wheel',e=>{e.preventDefault();const box=viewport.getBoundingClientRect();const units=e.deltaMode===1?16:e.deltaMode===2?viewport.clientHeight:1;const delta=clamp(e.deltaY*units,-160,160);zoomAt(cellSize*Math.exp(-delta*.002),{x:e.clientX-box.left-viewport.clientLeft,y:e.clientY-box.top-viewport.clientTop});},{passive:false});
-  viewport.onpointerdown=e=>{if(e.button!==0&&e.button!==1)return;if(e.button===0&&e.target.closest('.map-region-tile'))return;drag={id:e.pointerId,x:e.clientX,y:e.clientY,camera:camera(),moved:false};if(e.button===1)e.preventDefault();};
-  viewport.onpointermove=e=>{if(!drag||drag.id!==e.pointerId)return;if(!e.buttons){drag=null;viewport.classList.remove('is-panning');return;}const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(!drag.moved&&Math.hypot(dx,dy)<4)return;drag.moved=true;viewport.setPointerCapture(e.pointerId);viewport.classList.add('is-panning');const next=panMapCamera(drag.camera,dx,dy);center={x:next.x,y:next.y};schedule();};
-  const endDrag=e=>{if(!drag||drag.id!==e.pointerId)return;suppressClick=drag.moved;drag=null;viewport.classList.remove('is-panning');if(viewport.hasPointerCapture(e.pointerId))viewport.releasePointerCapture(e.pointerId);setTimeout(()=>{suppressClick=false;},0);};
+  const touchPair=()=>{const [a,b]=touches.values();return {x:(a.x+b.x)/2,y:(a.y+b.y)/2,distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y))};};
+  const startPinch=()=>{const pair=touchPair(),box=viewport.getBoundingClientRect();pinch={...pair,camera:camera(),point:{x:pair.x-box.left-viewport.clientLeft,y:pair.y-box.top-viewport.clientTop}};drag=null;suppressClick=true;viewport.classList.add('is-panning');for(const id of touches.keys())viewport.setPointerCapture(id);};
+  viewport.onpointerdown=e=>{
+   if(e.button!==0&&e.button!==1)return;
+   if(e.pointerType==='touch'){
+    touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(touches.size>=2){if(touches.size===2)startPinch();e.preventDefault();return;}
+   }
+   if(e.button===0&&e.target.closest('.map-region-tile'))return;
+   drag={id:e.pointerId,x:e.clientX,y:e.clientY,camera:camera(),moved:false};if(e.button===1)e.preventDefault();
+  };
+  viewport.onpointermove=e=>{
+   if(touches.has(e.pointerId))touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+   if(pinch&&touches.size>=2){
+    e.preventDefault();const pair=touchPair();
+    const scaled=zoomMapCamera(pinch.camera,pinch.camera.size*pair.distance/pinch.distance,pinch.point,{width:viewport.clientWidth,height:viewport.clientHeight});
+    const next=panMapCamera(scaled,pair.x-pinch.x,pair.y-pinch.y);center={x:next.x,y:next.y};cellSize=next.size;schedule();return;
+   }
+   if(!drag||drag.id!==e.pointerId)return;
+   if(!e.buttons){drag=null;viewport.classList.remove('is-panning');return;}
+   const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(!drag.moved&&Math.hypot(dx,dy)<4)return;
+   drag.moved=true;viewport.setPointerCapture(e.pointerId);viewport.classList.add('is-panning');const next=panMapCamera(drag.camera,dx,dy);center={x:next.x,y:next.y};schedule();
+  };
+  const endDrag=e=>{
+   touches.delete(e.pointerId);
+   if(pinch){
+    if(viewport.hasPointerCapture(e.pointerId))viewport.releasePointerCapture(e.pointerId);
+    if(touches.size>=2){startPinch();return;}
+    pinch=null;const [remaining]=touches;
+    drag=remaining?{id:remaining[0],...remaining[1],camera:camera(),moved:true}:null;
+    if(drag)return;
+   }else{if(!drag||drag.id!==e.pointerId)return;suppressClick=drag.moved;drag=null;if(viewport.hasPointerCapture(e.pointerId))viewport.releasePointerCapture(e.pointerId);}
+   viewport.classList.remove('is-panning');setTimeout(()=>{suppressClick=false;},0);
+  };
   viewport.onpointerup=endDrag;viewport.onpointercancel=endDrag;
   viewport.addEventListener('click',e=>{if(suppressClick){e.preventDefault();e.stopImmediatePropagation();}},true);
   viewport.onkeydown=e=>{if(e.target!==viewport)return;const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1]};if(directions[e.key]){e.preventDefault();move(...directions[e.key]);}else if(e.key==='+'||e.key==='='){e.preventDefault();zoomAt(cellSize*1.2);}else if(e.key==='-'){e.preventDefault();zoomAt(cellSize/1.2);}};
   const resize=new ResizeObserver(schedule);resize.observe(viewport);
-  disposeViewport=()=>{disposed=true;resize.disconnect();if(frame)cancelAnimationFrame(frame);frame=0;drag=null;};
-  viewport.append(grid,scale);stage.append(viewport,node('p','Scroll to zoom at the pointer. Drag empty space (or middle-drag) to pan. Drag an occupied region to move it. Use Reset view to return to your selection.','map-help'));schedule();
+  disposeViewport=()=>{disposed=true;resize.disconnect();if(frame)cancelAnimationFrame(frame);frame=0;drag=pinch=null;touches.clear();};
+  viewport.append(grid,scale);stage.append(viewport,node('p','Pinch or scroll to zoom. Drag empty space (or middle-drag) to pan. Drag an occupied region to move it. Use Reset view to return to your selection.','map-help'));schedule();
   const unplaced=data.regions.filter(isUnplaced);if(unplaced.length){const list=node('div',undefined,'map-unplaced');list.append(node('strong',`Unplaced regions (${unplaced.length})`));for(const item of unplaced)list.append(button(item.name||item.key,async()=>{if(!await canNavigate())return;region=item.key;location='';view='region';draw();focusRegion();}));stage.append(list);}
   if(region){const found=data.regions.find(r=>r.key===region);if(found&&(found.realm===realm||isUnplaced(found))){regionInspector(sidebar,found);return;}}newRegionInspector(sidebar);
  }

@@ -32,13 +32,15 @@ test('assistant keeps controls reachable and transcript independently scrollable
   writeFileSync(path.join(directory,'fixture.html'),`<!doctype html>${viewport}<style>${styles}</style><div class="adaptive-app"><div id="root"></div></div><script>${bundle.outputFiles[0].text}</script>`);
   writeFileSync(path.join(directory,'check.cjs'),`
    const {app,BrowserWindow}=require('electron');
+   app.commandLine.appendSwitch('force-device-scale-factor','1');
    app.setPath('userData',${JSON.stringify(path.join(directory,'user-data'))});
    app.whenReady().then(async()=>{
     const window=new BrowserWindow({show:false,width:412,height:892,webPreferences:{contextIsolation:true,backgroundThrottling:false}});
     try{
      await window.loadFile(${JSON.stringify(path.join(directory,'fixture.html'))});
+     window.webContents.debugger.attach('1.3');
      for(const [width,height,safe] of [[412,892],[412,480],[412,400],[320,400],[760,550],[1280,900],[412,892,true],[412,400,true]]){
-      window.webContents.enableDeviceEmulation({screenPosition:'mobile',screenSize:{width,height},viewSize:{width,height},deviceScaleFactor:1,scale:1});
+      await window.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<1000});
       await new Promise(resolve=>setTimeout(resolve,50));
       const viewport=await window.webContents.executeJavaScript('({width:innerWidth,height:innerHeight})');
       if(viewport.width!==width||viewport.height!==height)throw Error('Incorrect test viewport: '+JSON.stringify(viewport));
@@ -98,7 +100,7 @@ test('assistant keeps controls reachable and transcript independently scrollable
    }
   })()`)));
   const environment={...process.env};delete environment.ELECTRON_RUN_AS_NODE;
-  const result=spawnSync(path.resolve('node_modules/electron/dist/electron'),['--no-sandbox',path.join(directory,'check.cjs')],{env:environment,encoding:'utf8',timeout:60000});
+  const result=spawnSync(path.resolve('node_modules/electron/dist/electron'),['--no-sandbox',path.join(directory,'check.cjs')],{env:environment,encoding:'utf8',timeout:60000,windowsHide:true});
   assert.equal(result.status,0,result.stdout+'\n'+result.stderr+(result.error?'\n'+result.error.message:''));
  }finally{rmSync(directory,{recursive:true,force:true});}
 });
