@@ -128,10 +128,11 @@ async function verifyScreen(config,projectId){
  }
  await check('tool-menu',screen,async()=>{
   await evaluate("document.querySelector('.tools-menu summary').click()");await settled();
-  const menu=await evaluate(`(()=>{const menu=document.querySelector('.tools-menu-items');menu.scrollTop=100000;const r=menu.getBoundingClientRect(),last=menu.querySelector('button:last-child'),b=last.getBoundingClientRect(),hit=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,lastHittable:!!hit&&(hit===last||last.contains(hit))};})()`);
+  const menu=await evaluate(`(()=>{const menu=document.querySelector('.tools-menu-items');menu.scrollTop=100000;const r=menu.getBoundingClientRect(),last=menu.querySelector('button:last-child'),b=last.getBoundingClientRect(),hit=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,modeTop:document.querySelector('.mobile-workspace-mode').getBoundingClientRect().top,lastHittable:!!hit&&(hit===last||last.contains(hit))};})()`);
   await evaluate("document.querySelector('.tools-menu').open=false");
   assert.ok(menu.top>=-1&&menu.bottom<=screen.viewport.height+1&&menu.left>=-1&&menu.right<=screen.viewport.width+1,'Tool menu leaves viewport: '+JSON.stringify(menu));
   assert.ok(menu.lastHittable,'Last tool is clipped or covered: '+JSON.stringify(menu));
+  if(compact)assert.ok(menu.bottom<=menu.modeTop,'Tool menu overlaps the bottom mode bar: '+JSON.stringify(menu));
  });
  console.log(`${config.name}: ${screen.passed.length} checks passed`);
 }
@@ -190,6 +191,79 @@ async function verifyLiveResize(projectId){
  console.log('Live reflow: draft retained across landscape, desktop breakpoint, and portrait');
 }
 
+async function verifyLocalProjectActions(){
+ const created=await service.request('create',{name:'Project lifecycle QA',source:'{"title":"Lifecycle QA"}'});
+ const draft={type:'draft',path:['title'],text:'"Unapplied local title"',baseHash:require('node:crypto').createHash('sha256').update(created.project.activeSource).digest('hex')};
+ await service.request('command',{id:created.project.id,command:draft});
+ await applyViewport({width:390,height:844,touch:true});
+ await evaluate("localStorage.removeItem('voyage-project')");
+ await window.loadFile(path.resolve('dist/index.html'));
+ await waitFor("document.querySelector('.projects-page')");
+ await waitFor("document.querySelector('.local-project-card[aria-label=\"Project lifecycle QA\"] button:not([disabled])')");
+ await evaluate(`(()=>{const card=[...document.querySelectorAll('.local-project-card')].find(card=>card.getAttribute('aria-label')==='Project lifecycle QA');card.querySelector('.project-card').click();})()`);
+ await waitFor("document.querySelector('.world-editor')");
+ await waitFor("document.querySelector('.header-actions .mobile-menu button:not([disabled])')");
+ await evaluate("document.querySelector('.header-actions .mobile-menu summary').click()");
+ await evaluate("[...document.querySelectorAll('.mobile-menu-items button')].find(button=>button.textContent==='Close project').click()");
+ await waitFor("document.querySelector('.projects-page')");
+ await waitFor("document.querySelector('.local-project-card[aria-label=\"Project lifecycle QA\"] button:not([disabled])')");
+ assert.equal(await evaluate("localStorage.getItem('voyage-project')"),null,'Closing must clear automatic reopening');
+ assert.equal(service.store.project(created.project.id).activeSource,created.project.activeSource,'Closing must preserve the local world');
+ assert.equal(service.store.project(created.project.id).draft.text,draft.text,'Closing must preserve unapplied local edits');
+ await evaluate("(()=>{const card=[...document.querySelectorAll('.local-project-card')].find(card=>card.getAttribute('aria-label')==='Project lifecycle QA');[...card.querySelectorAll('button')].find(button=>button.textContent==='Move to trash').click();})()");
+ await waitFor("!document.querySelector('.local-project-card[aria-label=\"Project lifecycle QA\"]')");
+ await evaluate("(()=>{const filter=document.querySelector('[aria-label=\"Project status filter\"]');filter.value='trashed';filter.dispatchEvent(new Event('change',{bubbles:true}));})()");
+ await waitFor("document.querySelector('.local-project-card[aria-label=\"Project lifecycle QA\"]')");
+ await waitFor("document.querySelector('.local-project-card[aria-label=\"Project lifecycle QA\"] button:not([disabled])')");
+ await evaluate("(()=>{window.confirm=()=>false;const card=document.querySelector('.local-project-card[aria-label=\"Project lifecycle QA\"]');[...card.querySelectorAll('button')].find(button=>button.textContent==='Delete permanently').click();})()");
+ await settled();
+ assert.equal(service.store.project(created.project.id).status,'trashed','Canceling permanent deletion must preserve the project');
+ await waitFor("document.querySelector('.local-project-card[aria-label=\"Project lifecycle QA\"] button:not([disabled])')");
+ await evaluate("(()=>{window.confirm=()=>true;const card=document.querySelector('.local-project-card[aria-label=\"Project lifecycle QA\"]');[...card.querySelectorAll('button')].find(button=>button.textContent==='Delete permanently').click();})()");
+ await waitFor("!document.querySelector('.local-project-card[aria-label=\"Project lifecycle QA\"]')");
+ assert.ok(!(await service.request('projects')).some(project=>project.id===created.project.id),'Deletion must remove the local project');
+ console.log('Local project actions: close, trash, and confirmed permanent deletion passed');
+}
+
+async function verifyVoyageProjectActions(){
+ const originalVoyage=service.voyage,originalSecrets=service.secrets,reads=[];
+ try{
+  await evaluate("(()=>{const filter=document.querySelector('[aria-label=\"Project status filter\"]');filter.value='active';filter.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await evaluate("[...document.querySelectorAll('.project-sources button')].find(button=>button.textContent==='Voyage worlds').click()");
+  await waitFor("[...document.querySelectorAll('.voyage-project-browser button')].some(button=>button.textContent==='Connect Voyage')");
+  await evaluate("[...document.querySelectorAll('.voyage-project-browser button')].find(button=>button.textContent==='Connect Voyage').click()");
+  await waitFor("document.querySelector('[aria-label=\"Voyage API key\"]')");
+  await evaluate("document.querySelector('.project-switch').click()");
+  await waitFor("document.querySelector('.projects-page')");
+  service.secrets={durable:false,get:()=> 'fixture-key',set:()=>{}};
+  service.voyage=async(method,endpoint)=>{
+   assert.equal(method,'GET');reads.push(endpoint);
+   if(endpoint.startsWith('/worlds?')){const type=endpoint.includes('type=mod')?'mod':'world';return {text:JSON.stringify({data:{worlds:[{shortId:'owned-'+type,title:'Owned '+type}]}}),etag:''};}
+   const mod=endpoint.endsWith('owned-mod');return {text:'{"data":{"world":{"title":"Owned '+(mod?'mod':'world')+'","isMod":'+mod+',"initialGameState":{"counter":9007199254740993}}}}',etag:'fixture-v1'};
+  };
+  for(const kind of ['world','mod']){
+   await evaluate(`[...document.querySelectorAll('.project-sources button')].find(button=>button.textContent==='${kind==='mod'?'Voyage mods':'Local projects'}').click()`);
+   if(kind==='world')await evaluate("[...document.querySelectorAll('.project-sources button')].find(button=>button.textContent==='Voyage worlds').click()");
+   await waitFor(`[...document.querySelectorAll('.voyage-project-browser button')].some(button=>button.textContent==='Open ${kind}'&&!button.disabled)`);
+   await evaluate(`[...document.querySelectorAll('.voyage-project-browser button')].find(button=>button.textContent==='Open ${kind}').click()`);
+   await waitFor("document.querySelector('.world-editor')");
+   await waitFor("[...document.querySelectorAll('.mobile-menu-items button')].some(button=>button.textContent==='Close project'&&!button.disabled)");
+   const id=await evaluate("localStorage.getItem('voyage-project')"),opened=service.store.project(id);
+   assert.equal(opened.remote.worldId,'owned-'+kind);assert.match(opened.activeSource,/9007199254740993/);assert.equal(JSON.parse(opened.activeSource).isMod,kind==='mod');
+   assert.equal(await evaluate("document.querySelector('.project-switch .workspace-world-title').textContent"),'Owned '+kind);
+   assert.equal(await evaluate("document.querySelector('.project-switch .project-short-id').textContent"),'owned-'+kind);
+   await evaluate("document.querySelector('.header-actions .mobile-menu summary').click()");
+   await evaluate("[...document.querySelectorAll('.mobile-menu-items button')].find(button=>button.textContent==='Close project').click()");
+   await waitFor("document.querySelector('.projects-page')");
+   await waitFor("!document.querySelector('.project-sources button[disabled]')");
+   await waitFor(`document.querySelector('.local-project-card[aria-label="Owned ${kind}"] .project-short-id')`);
+   assert.equal(await evaluate(`document.querySelector('.local-project-card[aria-label="Owned ${kind}"] .project-short-id').textContent`),'owned-'+kind);
+  }
+  assert.ok(reads.includes('/worlds?page=0&type=world'));assert.ok(reads.includes('/worlds?page=0&type=mod'));
+  console.log('Voyage project picker: connection setup, owned worlds, and owned mods passed');
+ }finally{service.voyage=originalVoyage;service.secrets=originalSecrets;}
+}
+
 app.whenReady().then(async()=>{
  try{
   service=new Service(path.join(runDirectory,'workspace'),path.resolve('apps/workbench/public/references'),{durable:false,get:()=>'',set:()=>{}});
@@ -200,7 +274,7 @@ app.whenReady().then(async()=>{
   const created=await service.request('create',{name:'A world title long enough to exceed any phone header width',source});
   window=new BrowserWindow({show:false,frame:false,width:412,height:915,webPreferences:{preload:path.resolve('build/desktop/preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
   window.webContents.session.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_details,callback)=>callback({cancel:true}));
-  const localMethods=new Set(['projects','project','references','featureGet','featureSet','assetKeys','command','history','localEditingSettings','providerSettings','connection']);
+  const localMethods=new Set(['projects','project','references','featureGet','featureSet','assetKeys','command','history','localEditingSettings','providerSettings','connection','deleteProject','remoteWorlds','downloadWorld']);
   ipcMain.handle('workbench',async(event,method,payload)=>{
    if(event.sender!==window.webContents)throw Error('Unknown test frame');
    if(method==='auth')return {available:false};
@@ -211,6 +285,8 @@ app.whenReady().then(async()=>{
   await window.loadFile(path.resolve('dist/index.html'));
   await waitFor("document.querySelector('.workspace-tools')");
   for(const config of screens.filter(config=>!process.env.VOYAGE_LAYOUT_CASES||process.env.VOYAGE_LAYOUT_CASES.split(',').includes(config.name)))await verifyScreen(config,created.project.id);
+  await verifyLocalProjectActions();
+  await verifyVoyageProjectActions();
   await verifyMapGestures(created.project.id);
   if(!process.env.VOYAGE_LAYOUT_CASES)await verifyLiveResize(created.project.id);
   fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));
