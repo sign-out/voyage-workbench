@@ -330,7 +330,7 @@ async function verifyArtworkDefaults(window){
  await verifyArtworkDestinations(window);
  await window.webContents.executeJavaScript(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent==='Artwork').click()`);
  await new Promise(resolve=>setTimeout(resolve,150));await window.webContents.executeJavaScript(`[...document.querySelectorAll('.artwork-purpose button')].find(button=>button.textContent==='Map artwork').click()`);
- await new Promise(resolve=>setTimeout(resolve,150));
+ await new Promise(resolve=>setTimeout(resolve,150));await window.webContents.executeJavaScript(`document.querySelectorAll('.map-artwork-tool')[1].open=true`);
  const before=await window.webContents.executeJavaScript(`({detail:document.querySelector('[aria-label="Artwork detail"]').value,columns:document.querySelector('[aria-label="Artwork columns"]').value,rows:document.querySelector('[aria-label="Artwork rows"]').value})`);assert.deepEqual(before,{detail:'medium',columns:'2',rows:'2'});
  await window.webContents.executeJavaScript(`(()=>{const detail=document.querySelector('[aria-label="Artwork detail"]');detail.value='high';detail.dispatchEvent(new Event('change',{bubbles:true}));})()`);
  assert.equal(await window.webContents.executeJavaScript(`document.querySelector('[aria-label="Artwork columns"]').value`),'2');assert.equal(await window.webContents.executeJavaScript(`document.querySelector('[aria-label="Artwork rows"]').value`),'2');
@@ -509,8 +509,8 @@ async function verifyCoverStudio(window){
  try{
   const before=await window.webContents.executeJavaScript(`(async()=>{const status=await window.voyage.invoke('providerSettings');status.settings.profiles.push({id:'cover-test',name:'Cover test provider',protocol:'openai',baseUrl:'https://cover-test.example/v1',model:'vision-text',imageModel:'image-test'});status.settings.routes.artwork={profileId:'cover-test',model:'image-test'};status.settings.routes.building={profileId:'cover-test',model:'building-vision-override'};await window.voyage.invoke('saveProviderSettings',{settings:status.settings});await window.voyage.invoke('providerKey',{profileId:'cover-test',key:'cover-test-key'});window.confirm=()=>true;return (await window.voyage.invoke('project',{id:localStorage.getItem('voyage-project')})).project.activeSource;})()`);
   await window.webContents.executeJavaScript(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent==='Artwork').click()`);
-  await waitFor(`!![...document.querySelectorAll('.artwork-purpose button')].find(button=>button.textContent==='Cover art & grading')`);
-  await window.webContents.executeJavaScript(`[...document.querySelectorAll('.artwork-purpose button')].find(button=>button.textContent==='Cover art & grading').click()`);
+  await waitFor(`!![...document.querySelectorAll('.artwork-purpose button')].find(button=>button.textContent==='Covers')`);
+  await window.webContents.executeJavaScript(`[...document.querySelectorAll('.artwork-purpose button')].find(button=>button.textContent==='Covers').click()`);
   await waitFor(`!!document.querySelector('select[aria-label="Cover grader profile"] option[value="cover-test"]')`);
   await window.webContents.executeJavaScript(`(()=>{if(document.querySelector('[aria-label="Cover grader profile"]').value!=='cover-test'||document.querySelector('[aria-label="Cover grader model"]').value!=='building-vision-override')throw Error('Grader must default to the effective Building route');const direction=[...document.querySelectorAll('.cover-studio label')].find(label=>label.textContent.startsWith('Cover art direction')).querySelector('textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(direction,'One iconic landmark and a dominant traveler');direction.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   await new Promise(resolve=>setTimeout(resolve,100));

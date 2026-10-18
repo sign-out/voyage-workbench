@@ -7,9 +7,10 @@ import {RegionImageAssignment} from './RegionImageAssignment';
 import {RegionMapSlicer} from './RegionMapSlicer';
 import {ImageFileImport} from './AssetLibrary';
 const project=create('fixture','World','{"initialGameState":{"realms":{"Earth":{}},"regions":{"Coast":{"name":"Coast","realm":"Earth","x":0,"y":0}},"locations":{}}}',1);
-test('region assignment exposes mobile selection, desktop drop targets, and explicit library imports',()=>{
+test('region assignment starts with a destination and keeps advanced choices out of the first step',()=>{
  const html=renderToStaticMarkup(<RegionImageAssignment project={project} apply={async()=>{throw new Error('Rendering cannot change a world');}}/>);
- assert.match(html,/Region assignment image/);assert.match(html,/Artwork region/);assert.match(html,/Apply image to region/);assert.match(html,/Assign image to Coast/);assert.match(html,/Browse library or add file/);
+ assert.match(html,/Artwork region/);assert.match(html,/1\. Choose a region/);assert.match(html,/Select a region to see its current artwork/);assert.match(html,/Coast/);
+ assert.doesNotMatch(html,/Region assignment image|Apply image to region|Browse library or add file/);
  const sidebar=renderToStaticMarkup(<RegionImageAssignment sidebar project={project} apply={async()=>{}}/>);assert.match(sidebar,/region-image-sidebar/);assert.doesNotMatch(sidebar,/region-image-drop-list/);
 });
 test('master slicing explains north-up mapping, local-first crops and explicit uploads',()=>{
