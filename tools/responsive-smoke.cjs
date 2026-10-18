@@ -137,6 +137,68 @@ async function verifyScreen(config,projectId){
  console.log(`${config.name}: ${screen.passed.length} checks passed`);
 }
 
+async function verifyMapArtwork(projectId){
+ await evaluate(`localStorage.setItem('voyage-project',${JSON.stringify(projectId)});location.reload()`);
+ await waitFor("document.querySelector('.content-group-other')");
+ // Local canvas fixtures exercise actual thumbnail loading without network or model calls.
+ const images=await evaluate(`(()=>{return ['Forest map','Coastal map','Mountain map'].map((name,index)=>{const canvas=document.createElement('canvas');canvas.width=600;canvas.height=600;const ctx=canvas.getContext('2d');ctx.fillStyle=['#213e35','#304d61','#514439'][index];ctx.fillRect(0,0,600,600);ctx.strokeStyle='#a9bca2';ctx.lineWidth=12;ctx.beginPath();ctx.moveTo(0,450);ctx.bezierCurveTo(220,160,320,520,600,100);ctx.stroke();ctx.fillStyle='#dce5d0';ctx.font='36px sans-serif';ctx.fillText(name,40,75);return {id:'artwork-layout-'+index,name,dataUrl:canvas.toDataURL('image/png'),created:1,prompt:'Layout fixture'};});})()`);
+ for(const image of images)await service.request('featureSet',{key:'asset:'+image.id,value:JSON.stringify(image)});
+ const records=images.map(image=>({id:image.id,name:image.name,aliases:[],created:1,kind:'image',mime:'image/png',storageId:image.id,remote:[],tags:[]}));
+ await service.request('featureSet',{key:'asset-library',value:JSON.stringify(records)});
+ const original=(await service.request('project',{id:projectId})).project.activeSource;
+ report.artwork=[];
+ for(const config of [{width:320,height:568,touch:true},{width:412,height:915,touch:true},{width:1280,height:900,touch:false},{width:844,height:390,touch:true}]){
+  await applyViewport(config);
+  await navigate('Artwork',"document.querySelector('.artwork-purpose')");
+  await evaluate("[...document.querySelectorAll('.artwork-purpose button')].find(button=>button.textContent==='Map artwork').click()");
+  await waitFor("document.querySelector('[aria-label=\"Artwork region\"]')");
+  assert.equal(await evaluate("[...document.querySelectorAll('.map-artwork-tool')].every(tool=>!tool.open)"),true,'Advanced tools must start collapsed');
+  assert.equal(await evaluate("!!document.querySelector('.region-image-target .primary')"),false,'Do not show a disabled image action before a region is selected');
+  const tabs=await evaluate("[...document.querySelectorAll('.artwork-purpose button')].map(button=>{const r=button.getBoundingClientRect();return {left:r.left,right:r.right};})");
+  assert.ok(tabs.every(tab=>tab.left>=0&&tab.right<=config.width),'Artwork navigation is clipped');
+  await evaluate("(()=>{const select=document.querySelector('[aria-label=\"Artwork region\"]');select.value='QA region';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await waitFor("document.querySelectorAll('.region-image-tile img').length===3");
+  await evaluate("document.querySelector('.region-image-thumbnails').scrollIntoView({block:'start'})");await settled();
+  await waitFor("[...document.querySelectorAll('.region-image-tile img')].every(img=>img.complete&&img.naturalWidth===600)");
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.region-image-thumbnails')).display"),'grid','Phone thumbnails must remain visible');
+  const layout=await bounds();assert.ok(layout.rootWidth<=config.width+1,'Artwork workspace overflows: '+JSON.stringify(layout));
+  await evaluate("document.querySelector('.map-artwork-workspace').scrollTop=0");await settled();
+  if(config.width===412)await captureEvidence('artwork-phone.png');
+  if(config.width===1280)await captureEvidence('artwork-desktop.png');
+  await evaluate("document.querySelector('.region-image-tile').scrollIntoView({block:'center'})");await settled();
+  const tile=await evaluate("(()=>{const tile=document.querySelector('.region-image-tile'),r=tile.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {x:r.x+r.width/2,y:r.y+r.height/2,hittable:!!hit&&(hit===tile||tile.contains(hit))};})()");
+  assert.ok(tile.hittable,'Artwork tile is covered');
+  await window.webContents.debugger.sendCommand('Input.dispatchMouseEvent',{type:'mousePressed',x:tile.x,y:tile.y,button:'left',clickCount:1});
+  await window.webContents.debugger.sendCommand('Input.dispatchMouseEvent',{type:'mouseReleased',x:tile.x,y:tile.y,button:'left',clickCount:1});
+  await waitFor("document.querySelector('.media-dialog[open] .library-picker-list [aria-pressed=true]')");
+  assert.equal(await evaluate("document.querySelector('.media-dialog [aria-pressed=true] strong').textContent"),'Forest map','Thumbnail selection must carry into review');
+  assert.equal(await evaluate("!!document.querySelector('.library-image-picker img')"),true,'Picker must also show thumbnails');
+  assert.equal(await evaluate("!!document.querySelector('.library-picker-list button button')"),false,'Image tiles cannot contain nested buttons');
+  assert.equal((await service.request('project',{id:projectId})).project.activeSource,original,'Browsing must not change world data');
+  if(config.width===412)await captureEvidence('artwork-picker-phone.png');
+  await evaluate("document.querySelector('.media-dialog header button').click()");
+  await waitFor("!document.querySelector('.media-dialog')");
+  report.artwork.push({...config,thumbnails:true,reviewSelection:true,sourceUnchanged:true});
+  await navigate('Map',"document.querySelector('.map-viewport')");
+ }
+ // Reusing a hosted URL still requires an explicit review action, without an upload.
+ records[0].remote=[{url:'https://artwork-qa.invalid/forest.png',state:'existing',created:1,target:'REGION_MAP_IMAGE'}];
+ await service.request('featureSet',{key:'asset-library',value:JSON.stringify(records)});
+ await navigate('Artwork',"document.querySelector('.artwork-purpose')");
+ await evaluate("[...document.querySelectorAll('.artwork-purpose button')].find(button=>button.textContent==='Map artwork').click()");
+ await waitFor("document.querySelector('[aria-label=\"Artwork region\"]')");
+ await evaluate("(()=>{const select=document.querySelector('[aria-label=\"Artwork region\"]');select.value='QA region';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+ await waitFor("document.querySelector('.region-image-tile')");
+ await evaluate("document.querySelector('.region-image-tile').click()");
+ await waitFor("document.querySelector('.media-dialog .primary')");
+ assert.equal((await service.request('project',{id:projectId})).project.activeSource,original);
+ await evaluate("document.querySelector('.media-dialog .primary').click()");
+ await waitFor("!document.querySelector('.media-dialog')&&document.querySelector('.region-image-assignment [role=status]')");
+ const assigned=(await service.request('project',{id:projectId})).project.activeSource;
+ assert.equal(mapEdit(original,'set-field',{kind:'region',key:'QA region',field:'imageUrl',value:records[0].remote[0].url}),assigned,'Review must update only the chosen region');
+ console.log('Map artwork: phone/desktop thumbnails, review, cancel, and explicit hosted assignment passed');
+}
+
 async function verifyMapGestures(projectId){
  await applyViewport({width:412,height:915,touch:true});
  await evaluate(`localStorage.setItem('voyage-project',${JSON.stringify(projectId)});location.reload()`);
@@ -287,10 +349,11 @@ app.whenReady().then(async()=>{
   for(const config of screens.filter(config=>!process.env.VOYAGE_LAYOUT_CASES||process.env.VOYAGE_LAYOUT_CASES.split(',').includes(config.name)))await verifyScreen(config,created.project.id);
   await verifyLocalProjectActions();
   await verifyVoyageProjectActions();
+  await verifyMapArtwork(created.project.id);
   await verifyMapGestures(created.project.id);
   if(!process.env.VOYAGE_LAYOUT_CASES)await verifyLiveResize(created.project.id);
   fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));
   console.log(`${report.cases.length} viewports; ${report.failures.length} failed checks. Report: ${path.join(output,'report.json')}`);
   clearTimeout(timeout);app.exit(report.failures.length?1:0);
- }catch(error){console.error(error);fs.writeFileSync(path.join(output,'report.json'),JSON.stringify({...report,fatal:error.message},null,2));clearTimeout(timeout);app.exit(1);}
+ }catch(error){console.error(error);if(window)await captureEvidence('fatal.png').catch(()=>{});fs.writeFileSync(path.join(output,'report.json'),JSON.stringify({...report,fatal:error.message},null,2));clearTimeout(timeout);app.exit(1);}
 });
