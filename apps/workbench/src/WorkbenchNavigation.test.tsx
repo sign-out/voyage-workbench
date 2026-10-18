@@ -3,7 +3,7 @@ import test from 'node:test';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {Compass} from 'lucide-react';
-import {WorkbenchNavigation} from './WorkbenchNavigation';
+import {WorkbenchNavigation,MobileWorkspaceMode} from './WorkbenchNavigation';
 
 const toolIds=['editor','map','characters','mods','changes','validation','plan','review','artwork','publish','base','history','providers','voyage','connection'];
 const tabs=toolIds.map(id=>[id,id,Compass] as const);
@@ -13,15 +13,37 @@ test('all fifteen tools remain available in the adaptive navigation',()=>{
  const menu=markup.slice(markup.indexOf('tools-menu-items'));
  for(const id of toolIds)assert.ok(menu.includes('<span>'+id+'</span>'),id+' is missing');
  assert.equal((menu.match(/<button(?:\s|>)/g)||[]).length,15);
- assert.equal((markup.match(/class="tool-button /g)||[]).length,6);
+ assert.equal((markup.match(/class="tool-button /g)||[]).length,8);
  assert.equal((markup.match(/mobile-primary/g)||[]).length,4);
+});
+
+test('mobile mode returns to the previous editor tool and keeps navigation guards in control',()=>{
+ const calls:string[]=[];
+ const mode=MobileWorkspaceMode({activeTab:'plan',editorTab:'map',onNavigate:next=>{calls.push(next);return false;}});
+ const [chat,editor]=mode.props.children;
+ assert.equal(chat.props['aria-pressed'],true);
+ assert.equal(editor.props['aria-pressed'],false);
+ assert.equal(editor.props.onClick(),false);
+ assert.deepEqual(calls,['map']);
+ assert.equal(chat.props.onClick(),false);
+ assert.deepEqual(calls,['map','plan']);
+});
+
+test('mobile Editor mode falls back to content if passed the chat route',()=>{
+ let target='';
+ const mode=MobileWorkspaceMode({activeTab:'mods',editorTab:'plan',onNavigate:next=>{target=next;return true;}});
+ const [chat,editor]=mode.props.children;
+ assert.equal(chat.props['aria-pressed'],false);
+ assert.equal(editor.props['aria-pressed'],true);
+ editor.props.onClick();
+ assert.equal(target,'editor');
 });
 
 test('supplementary tools expose the active selection without losing the primary tools',()=>{
  for(const id of ['mods','validation','publish','providers','voyage','connection']){
   const markup=renderToStaticMarkup(<WorkbenchNavigation tabs={tabs} activeTab={id} proposalCount={0} onNavigate={()=>true}/>);
   assert.ok(markup.includes('<strong class="current-tool">'+id+'</strong>'));
-  assert.equal((markup.match(/aria-current="page"/g)||[]).length,1);
+  assert.equal((markup.match(/aria-current="page"/g)||[]).length,['mods','publish'].includes(id)?2:1);
  }
 });
 

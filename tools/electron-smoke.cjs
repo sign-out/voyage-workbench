@@ -65,17 +65,17 @@ async function verifyAppearance(window){
  assert.equal(await window.webContents.executeJavaScript(`!!document.querySelector('header [aria-label="Color theme"]')`),false);
  await window.webContents.executeJavaScript(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.querySelector('span').textContent==='Settings').click()`);
  for(let attempt=0;attempt<40;attempt++){if(await window.webContents.executeJavaScript(`!!document.querySelector('.workspace-settings [aria-label="Color theme"]')`))break;await new Promise(resolve=>setTimeout(resolve,100));}
- await window.webContents.executeJavaScript(`document.querySelector('[aria-label="Publish mobile shortcut"]').click()`);
+ await window.webContents.executeJavaScript(`document.querySelector('[aria-label="Characters mobile shortcut"]').click()`);
  await new Promise(resolve=>setTimeout(resolve,100));
- const limit=await window.webContents.executeJavaScript(`({notice:document.querySelector('.settings-shortcut-status [role="status"]')?.textContent,checked:document.querySelector('[aria-label="Publish mobile shortcut"]').checked,count:document.querySelector('#shortcut-limit-mobile').textContent})`);
+ const limit=await window.webContents.executeJavaScript(`({notice:document.querySelector('.settings-shortcut-status [role="status"]')?.textContent,checked:document.querySelector('[aria-label="Characters mobile shortcut"]').checked,count:document.querySelector('#shortcut-limit-mobile').textContent})`);
  assert.ok(limit.notice.includes('4/4'));assert.ok(limit.count.includes('4 / 4 selected'));assert.equal(limit.checked,false);
- for(const label of ['Proposals mobile shortcut','Publish mobile shortcut','Artwork desktop shortcut','History desktop shortcut','Move World down']){
+ for(const label of ['Mods mobile shortcut','Characters mobile shortcut','Artwork desktop shortcut','History desktop shortcut','Move Content down']){
   await window.webContents.executeJavaScript(`document.querySelector('[aria-label="'+${JSON.stringify(label)}+'"]').click()`);
   await new Promise(resolve=>setTimeout(resolve,100));
  }
  const layout=await window.webContents.executeJavaScript(`({saved:JSON.parse(localStorage.getItem('voyage-navigation-v1')),menu:[...document.querySelectorAll('.tools-menu-items button')].map(button=>button.querySelector('span').textContent),desktop:[...document.querySelectorAll('.desktop-primary span')].map(element=>element.textContent),mobile:[...document.querySelectorAll('.mobile-primary span')].map(element=>element.textContent)})`);
  assert.equal(layout.saved.order[0],'map');assert.equal(layout.menu[0],'Map');
- assert.deepEqual(layout.mobile,['Map','World','Characters','Publish']);assert.ok(layout.desktop.includes('History'));assert.ok(!layout.desktop.includes('Artwork'));
+ assert.deepEqual(layout.mobile,['Map','Content','Characters','Publish']);assert.ok(layout.desktop.includes('History'));assert.ok(!layout.desktop.includes('Artwork'));
  await new Promise(resolve=>{window.webContents.once('did-finish-load',resolve);window.webContents.reload();});
  for(let attempt=0;attempt<40;attempt++){if(await window.webContents.executeJavaScript(`!!document.querySelector('.desktop-primary')`))break;await new Promise(resolve=>setTimeout(resolve,100));}
  assert.deepEqual(await window.webContents.executeJavaScript(`[...document.querySelectorAll('.mobile-primary span')].map(element=>element.textContent)`),layout.mobile,'Tool choices and ordering must survive restarting the UI');

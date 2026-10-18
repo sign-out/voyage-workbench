@@ -1,3 +1,4 @@
+import {compactLayoutQuery} from './responsive-layout';
 import React,{useMemo,useRef,useState} from 'react';
 import {Image as ImageIcon,Play} from 'lucide-react';
 import {publicationInspect} from '../../../packages/core/features';
@@ -12,7 +13,7 @@ function Cover({url,title}:{url:string;title:string}){
 
 export function PublicationPreview({source,saveName,onNavigate}:{source:string;saveName:string;onNavigate?:(path:Path)=>void}){
  const world=useMemo(()=>publicationInspect(source,saveName),[source,saveName]);
- const [view,setView]=useState(()=>matchMedia('(max-width:760px)').matches?'mobile':'desktop');
+ const [view,setView]=useState(()=>matchMedia(compactLayoutQuery).matches?'mobile':'desktop');
  const [previewOpen,setPreviewOpen]=useState(false);
  const previewLauncher=useRef<HTMLButtonElement|null>(null);
  function edit(field:string){onNavigate?.(world.fields.includes(field)?world.path.concat(field):world.path);}

@@ -13,7 +13,7 @@ const tabs=ids.map(id=>[id,id,Compass] as const);
 test('defaults keep six desktop and four mobile shortcuts, and every tool in the menu',()=>{
  const preferences=normalizeNavigation(null,ids);
  assert.deepEqual(preferences.desktop,['editor','map','characters','plan','review','artwork']);
- assert.deepEqual(preferences.mobile,['editor','map','characters','review']);
+ assert.deepEqual(preferences.mobile,['editor','map','mods','publish']);
  assert.deepEqual(preferences.order,ids);
 });
 
@@ -23,13 +23,15 @@ test('stored preferences handle unknown tools, duplicates, future tools and malf
  assert.deepEqual(readNavigation({getItem:()=>{throw Error('unavailable');}},ids),normalizeNavigation(null,ids));
  assert.equal(normalizeNavigation({desktop:ids,mobile:ids},ids).desktop.length,6);
  assert.equal(normalizeNavigation({desktop:ids,mobile:ids},ids).mobile.length,4);
+ const previousMobile=['editor','map','characters','review'];
+ assert.deepEqual(readNavigation({getItem:()=>JSON.stringify({mobile:previousMobile})},ids).mobile,previousMobile);
 });
 
 test('any available tool can replace a shortcut without affecting the other surface',()=>{
  const defaults=normalizeNavigation(null,ids);
- assert.equal(toggleShortcut(defaults,'mobile','publish'),defaults);
- const changed=toggleShortcut(toggleShortcut(defaults,'mobile','review'),'mobile','publish');
- assert.deepEqual(changed.mobile,['editor','map','characters','publish']);
+ assert.equal(toggleShortcut(defaults,'mobile','characters'),defaults);
+ const changed=toggleShortcut(toggleShortcut(defaults,'mobile','mods'),'mobile','characters');
+ assert.deepEqual(changed.mobile,['editor','map','publish','characters']);
  assert.deepEqual(changed.desktop,defaults.desktop);
  assert.equal(toggleShortcut(changed,'mobile','missing'),changed);
  assert.deepEqual(readNavigation({getItem:()=>JSON.stringify(changed)},ids),changed);
