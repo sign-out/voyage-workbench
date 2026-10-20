@@ -20,6 +20,18 @@ The proposed Windows/Android successor architecture and the successful Android C
 
 A local Voyage world builder with exact-source JSON editing, nested record controls, durable projects, checkpoints, validation, reviewable Codex proposals and optional official Creator API integration.
 
+## Map content coverage
+
+In **World map**, choose a **Content coverage** layer to reveal concentrations of
+locations, NPCs, faction presence, quests, story starts, authored detail, areas,
+and other explicitly placed content. Realm cells show region totals; region maps
+show soft hotspots at placed locations. **Combined density** has adjustable metric
+weights, and **Missing descriptions** highlights unfinished records.
+Open **Coverage breakdown & unmapped content** for contributing records, unplaced
+content, and broken spatial links. Opacity and layer controls are local display
+choices. Counts use the current working copy and explicit references; empty space
+may be intentional. See [counting rules and feature plan](docs/map-content-coverage.md).
+
 ## Install and run
 
 The editor uses Python’s standard library. Local artwork slicing uses **Pillow**, prepared automatically in the project’s `.venv` by both installers; ImageMagick is an alternative for manual installs. It needs **Python 3.10+**, **Git**, and **Codex CLI** for the agent. **Tailscale** is needed for private remote access. Installer scripts run from the project folder and keep project data in `.workbench/` beside the app. Launchers prefer `.venv` when present; recreate it with the installer after moving between operating systems. A Docker daemon is not required.
