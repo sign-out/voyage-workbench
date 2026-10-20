@@ -32,13 +32,13 @@ def _records(state, key):
 
 
 def inspect(text):
-    state, _ = _state(text)
+    state, state_path = _state(text)
     realms, regions, locations = (_records(state, key) for key in ('realms', 'regions', 'locations'))
     size = _number(state.get('locationSettings', {}).get('regionSize')) if isinstance(state.get('locationSettings'), dict) else None
     size = size if size and size > 0 else 100
     settings = state.get('locationSettings', {})
     feather = settings.get('regionMapBorderFeatheringEnabled', True) if isinstance(settings, dict) else True
-    output = {'regionSize': size, 'regionMapBorderFeatheringEnabled': feather if type(feather) is bool else True,
+    output = {'statePath': state_path, 'regionSize': size, 'regionMapBorderFeatheringEnabled': feather if type(feather) is bool else True,
               'realms': [], 'regions': [], 'locations': [], 'warnings': []}
     travel = _number(settings.get('avgTravelDistance')) if isinstance(settings, dict) else None
     if travel is not None and travel > size:

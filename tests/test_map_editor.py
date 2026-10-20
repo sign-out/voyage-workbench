@@ -13,6 +13,10 @@ WORLD = ('{"world":{"initialGameState":{'
 
 
 class MapEditorTests(unittest.TestCase):
+    def test_inspect_provides_game_state_path_for_coverage(self):
+        self.assertEqual(map_editor.inspect(WORLD)['statePath'], ['world', 'initialGameState'])
+        self.assertEqual(map_editor.inspect('{"heroesVersion":36}')['statePath'], [])
+
     def test_authored_map_settings_preserve_other_source_and_envelope(self):
         from workbench import document
         source='{"shortId":"world","initialGameState":{"heroesVersion":36,"locationSettings":{"regionSize":100,"simpleRadius":2.000,"future":9007199254740993},"locations":{"L":{"x":12.3400,"y":-4,"region":"R"}},"unknown":1.2300}}'

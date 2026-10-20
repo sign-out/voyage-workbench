@@ -6,6 +6,8 @@ const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const js=await readFile(new URL('../web/map-editor.js',import.meta.url),'utf8');
 const imageUploadJs=await readFile(new URL('../web/image-upload.js',import.meta.url),'utf8');
+const coverageJs=await readFile(new URL('../web/map-coverage.js',import.meta.url),'utf8');
+const coverageViewJs=await readFile(new URL('../web/map-coverage-view.js',import.meta.url),'utf8');
 const css=await readFile(new URL('../web/map-editor.css',import.meta.url),'utf8');
 const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox']});
 try{
@@ -17,6 +19,8 @@ try{
   if(path==='/image-upload.js')return route.fulfill({contentType:'text/javascript',body:imageUploadJs});
   if(path==='/image-upload.css')return route.fulfill({contentType:'text/css',body:''});
   if(path==='/map-editor.js')return route.fulfill({contentType:'text/javascript',body:js});
+  if(path==='/map-coverage.js')return route.fulfill({contentType:'text/javascript',body:coverageJs});
+  if(path==='/map-coverage-view.js')return route.fulfill({contentType:'text/javascript',body:coverageViewJs});
   if(path==='/map-editor.css')return route.fulfill({contentType:'text/css',body:css});
   return route.fulfill({contentType:'text/html',body:`<style>*{box-sizing:border-box}body{margin:16px;background:#10202a;color:white;--line:#456;--mint:#7dc;--text:white;--muted:#abc}button{padding:8px}#mapWorkbench{width:100%}</style><link rel="stylesheet" href="/map-editor.css"><div id="mapWorkbench"></div><script type="module">
    import {initMapEditor} from '/map-editor.js';
@@ -62,6 +66,8 @@ try{
  await page.waitForFunction(()=>Number(document.querySelector('.map-viewport').dataset.centerX)===0);
  await page.locator('.map-region-tile').dragTo(page.locator('.map-cell[data-x="1"][data-y="0"]'));
  const edits=await page.evaluate(()=>window.edits);assert.equal(edits.length,1);assert.equal(edits[0].action,'move-region');assert.equal(edits[0].data.x,1);assert.equal(edits[0].data.y,0);
+ await page.setViewportSize({width:1280,height:900});
+ await page.locator('.map-settings').evaluate(element=>{element.open=true;});
  const feather=page.getByRole('checkbox',{name:'Feather region image edges'});
  assert.equal(await feather.isChecked(),true);await feather.uncheck();
  await page.waitForFunction(()=>!document.querySelector('.map-viewport').classList.contains('feather-edges'));
