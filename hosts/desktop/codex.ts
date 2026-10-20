@@ -57,7 +57,7 @@ export class AgentHost {
     const cwd=path.join(this.store.directory,'tasks',task.id);mkdirSync(cwd,{recursive:true});writeFileSync(path.join(cwd,'world.json'),task.baseSource);
     let rpc:Rpc;try{rpc=new Rpc(this.home,cwd);}catch(e){this.store.dispatch(projectId,{type:'taskStop',taskId,state:'FAILED',error:(e as Error).message});return;}
     this.running.set(task.id,{rpc,task});this.store.dispatch(projectId,{type:'taskRunning',taskId,attempt:task.attempt});let reply='',lastFlush=0,done=false;
-    const finish=(error?:string)=>{if(done)return;done=true;try{this.store.dispatch(projectId,error?{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error}:{type:'taskDone',taskId,attempt:task.attempt,text:reply});}catch{}this.running.delete(task.id);rpc.close();};
+    const finish=(error?:string)=>{if(done)return;done=true;try{this.store.dispatch(projectId,error?{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error}:{type:'taskDone',taskId,attempt:task.attempt,text:reply});}catch(failure){try{this.store.dispatch(projectId,{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error:(failure as Error).message});}catch{}}this.running.delete(task.id);rpc.close();};
     const ensureRunning=()=>{const current=this.store.project(projectId).tasks.find(current=>current.id===taskId);if(done||this.running.get(taskId)?.rpc!==rpc||current?.state!=='RUNNING'||current.attempt!==task.attempt)throw new Error('Task was stopped.');};
     const timeout=setTimeout(()=>finish('The task exceeded its 30-minute limit. Restart explicitly if needed.'),30*60*1000);timeout.unref();
     rpc.onEvent=(method,p)=>{
@@ -65,7 +65,7 @@ export class AgentHost {
       if(method==='turn/completed'){clearTimeout(timeout);finish(p.turn?.status==='completed'?undefined:p.turn?.error?.message||'The provider interrupted this task.');}
       if(method==='host/exited'){clearTimeout(timeout);finish('Codex stopped before finishing.');}
     };
-    rpc.onTool=async(name,args)=>{const current=this.store.project(projectId).tasks.find(t=>t.id===task.id)!;if(current.state!=='RUNNING')throw new Error('Task was stopped.');const source=current.kind==='work'?current.stagedSource:current.baseSource;
+    rpc.onTool=async(name,args)=>{const current=this.store.project(projectId).tasks.find(t=>t.id===task.id)!;if(current.state!=='RUNNING')throw new Error('Task was stopped.');if((current.grading||current.fieldFill)&&!toolDefinitions(false,!!current.grading,!!current.fieldFill).some(tool=>tool.name===name))throw new Error('Tool is unavailable for this read-only task.');const source=current.kind==='work'?current.stagedSource:current.baseSource;
       if(name==='world_read'){const s=doc.read(source,args.path);if(s.length>100000)throw new Error('This section is too large for a single read. Use world_children and read smaller paths.');return {source:s};}
       if(name==='world_children'){const result=doc.describe(source,args.path);return {kind:result.kind,children:result.children.slice(0,500),truncated:result.children.length>500};}
       if(name==='world_search')return doc.search(source,args.query);
@@ -80,7 +80,7 @@ export class AgentHost {
     };
     try{await rpc.init();const account=await readCodexAccount(rpc);if(!account.account)throw new Error('Sign into Codex in Connection first.');
       ensureRunning();
-      const result=await rpc.request('thread/start',{cwd,...(task.route?.model?{model:task.route.model}:{}),approvalPolicy:'never',sandbox:'read-only',dynamicTools:toolDefinitions(task.kind==='work'),environments:[],developerInstructions:agentSystem(task.kind==='work')});
+      const result=await rpc.request('thread/start',{cwd,...(task.route?.model?{model:task.route.model}:{}),approvalPolicy:'never',sandbox:'read-only',dynamicTools:toolDefinitions(task.kind==='work',!!task.grading,!!task.fieldFill),environments:[],developerInstructions:agentSystem(task.kind==='work',!!task.grading,!!task.fieldFill)});
       ensureRunning();
       this.running.get(task.id)!.threadId=result.thread.id;this.store.dispatch(projectId,{type:'taskSession',taskId,attempt:task.attempt,sessionId:result.thread.id});
       const packet=assistantPacket(project,task);
