@@ -8,9 +8,10 @@ const output=path.resolve('.build-tools/responsive-qa');
 fs.mkdirSync(output,{recursive:true});
 const runDirectory=fs.mkdtempSync(path.join(output,'run-'));
 app.setPath('userData',path.join(runDirectory,'user-data'));
-buildSync({entryPoints:{service:'hosts/desktop/service.ts',features:'packages/core/features.ts'},bundle:true,platform:'node',format:'cjs',outdir:runDirectory,outExtension:{'.js':'.cjs'},logLevel:'silent'});
+buildSync({entryPoints:{service:'hosts/desktop/service.ts',features:'packages/core/features.ts',grading:'packages/core/world-grading.ts'},bundle:true,platform:'node',format:'cjs',outdir:runDirectory,outExtension:{'.js':'.cjs'},logLevel:'silent'});
 const {Service}=require(path.join(runDirectory,'service.cjs'));
 const {mapEdit}=require(path.join(runDirectory,'features.cjs'));
+const {bundledRubric}=require(path.join(runDirectory,'grading.cjs'));
 const screens=[
  [280,600],[320,568],[359,640],[360,640],[361,640],[375,667],
  [390,844],[411,915],[412,915],[413,915],[430,932],[480,960],
@@ -118,10 +119,14 @@ async function verifyScreen(config,projectId){
   assert.ok(layout.width<=screen.viewport.width+1,'Chat overflows horizontally: '+JSON.stringify(layout));
   assert.ok(layout.top>=-1&&layout.bottom<=layout.limit+1,'Chat composer is unreachable: '+JSON.stringify(layout));
  });
- for(const [name,selector] of [['Mods','.mod-row'],['Publish','.publication-workspace'],['Map','.map-viewport']]){
+ for(const [name,selector] of [['World grading','.grading-page'],['Mods','.mod-row'],['Publish','.publication-workspace'],['Map','.map-viewport']]){
   await navigate(name,`document.querySelector(${JSON.stringify(selector)})`);
   await check(name.toLowerCase(),screen,async()=>{
    const layout=await bounds();assert.ok(layout.rootWidth<=layout.width+1,name+' overflows horizontally: '+JSON.stringify(layout));
+   if(name==='World grading'){
+    const control=await evaluate(`(()=>{const button=document.querySelector('.grading-page button[type=submit]');button.scrollIntoView({block:'center'});const rect=button.getBoundingClientRect(),mode=document.querySelector('.mobile-workspace-mode');return {top:rect.top,bottom:rect.bottom,limit:getComputedStyle(mode).display==='none'?innerHeight:mode.getBoundingClientRect().top};})()`);
+    assert.ok(control.top>=-1&&control.bottom<=control.limit+1,'Grading action is unreachable: '+JSON.stringify(control));
+   }
    if(name==='Publish'&&compact)assert.equal(await evaluate("document.querySelector('.publication-checks').open"),false,'Publishing checks should start collapsed in phone mode');
    if(compact){const selected=await evaluate(`(()=>{const button=document.querySelector('.workspace-shortcuts .mobile-primary[aria-current="page"]');if(!button)return null;const r=button.getBoundingClientRect(),list=button.parentElement.getBoundingClientRect();return {left:r.left,right:r.right,listLeft:list.left,listRight:list.right};})()`);if(selected)assert.ok(selected.left>=selected.listLeft-1&&selected.right<=selected.listRight+1,'Active shortcut is outside the scroll area: '+JSON.stringify(selected));}
   });
@@ -197,6 +202,88 @@ async function verifyMapArtwork(projectId){
  const assigned=(await service.request('project',{id:projectId})).project.activeSource;
  assert.equal(mapEdit(original,'set-field',{kind:'region',key:'QA region',field:'imageUrl',value:records[0].remote[0].url}),assigned,'Review must update only the chosen region');
  console.log('Map artwork: phone/desktop thumbnails, review, cancel, and explicit hosted assignment passed');
+}
+
+async function verifyWorldGrading(){
+ const source=JSON.stringify({title:'Grading layout fixture',storyStarts:{opening:'Open the gate.'}});
+ const project=(await service.request('create',{name:'Grading layout fixture',source})).project;
+ const reportInput={
+  summary:'The opening is concrete, but the source needs traceable design contracts before its quality can be bounded.',strengths:['A concrete opening is named.'],
+  criteria:bundledRubric.criteria.map(criterion=>({id:criterion.id,grade:'NE',feedback:'Required source evidence is incomplete.',evidence:[],improvement:'Specify this design in the source.'})),
+  gates:bundledRubric.gates.map(gate=>({id:gate.id,status:'NE',explanation:'Static gate evidence is incomplete.'})),
+  diagnostics:Object.fromEntries(['cover','title','blurb','storyStart','characterCreator'].map(key=>[key,{score:'NE',explanation:'Required diagnostic evidence is missing.'}])),
+  fixes:[{id:'opening',criterionIds:['A1'],priority:'high',title:'Make the opening actionable',why:'Name a decision and consequence.',requirements:['Add an immediately usable affordance.'],allowedPaths:[['storyStarts']]}],
+  missingEvidence:['Cover pixels and complete design contracts are missing.'],promises:['Open the gate.'],intent:'Original world.'
+ };
+ service.store.dispatch(project.id,{type:'prepareTask',id:'grading-layout',attempt:'one',kind:'plan',grading:{path:'universal',overlay:'standard',rationale:'Cross-genre layout verification.'}});
+ service.store.dispatch(project.id,{type:'taskRunning',taskId:'grading-layout',attempt:'one'});
+ service.store.dispatch(project.id,{type:'taskDone',taskId:'grading-layout',attempt:'one',text:JSON.stringify(reportInput)});
+ for(const config of [{width:320,height:568,touch:true},{width:412,height:915,touch:true},{width:1280,height:900,touch:false}]){
+  await applyViewport(config);
+  await evaluate(`localStorage.setItem('voyage-project',${JSON.stringify(project.id)});location.reload()`);
+  await waitFor("document.querySelector('.workspace-tools')");
+  await navigate('World grading',"document.querySelector('.grading-report')");
+  assert.equal(await evaluate("document.querySelectorAll('.grading-score').length"),2);
+  assert.ok((await bounds()).rootWidth<=config.width+1,'Grading report overflows at '+config.width);
+  await evaluate("document.querySelector('.grading-score').scrollIntoView({block:'start',behavior:'instant'})");
+  const scoreBounds=await evaluate("(()=>{const rect=document.querySelector('.grading-score').getBoundingClientRect();return {top:rect.top,bottom:rect.bottom};})()");
+  assert.ok(scoreBounds.top>=0&&scoreBounds.top<config.height-100,'Score cannot be reached at '+config.width+': '+JSON.stringify(scoreBounds));
+  await captureEvidence(`grading-report-${config.width}.png`);
+ }
+ const importFile=async contents=>{
+  await evaluate(`(()=>{const field=document.querySelector('.grading-page input[type=file]'),transfer=new DataTransfer();transfer.items.add(new File([${JSON.stringify(contents)}],'rubric.json',{type:'application/json'}));field.files=transfer.files;field.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+ };
+ await importFile('{"version":"broken"}');
+ await waitFor("document.querySelector('.grading-error')");
+ assert.equal(service.store.project(project.id).grading.rubric,undefined,'Invalid import replaced rubric');
+ const updated={...bundledRubric,title:'Updated layout rubric',version:'1.6-layout'};
+ await importFile(JSON.stringify(updated));
+ await waitFor("document.querySelector('.grading-page').textContent.includes('Rubric changed · stale report')");
+ assert.equal(await evaluate("[...document.querySelectorAll('.grading-page button')].find(button=>button.textContent==='Suggest Work Order').disabled"),true);
+ await evaluate("[...document.querySelectorAll('.grading-page button')].find(button=>button.textContent==='Reset to built-in').click()");
+ await waitFor("document.querySelector('.grading-page').textContent.includes('Rubric matches current rubric')");
+ await evaluate("[...document.querySelectorAll('.grading-page button')].find(button=>button.textContent==='Suggest Work Order').click()");
+ await waitFor("document.querySelector('.planning-layout')");
+ assert.equal(service.store.project(project.id).workOrderProposals.length,1);
+ assert.equal(service.store.project(project.id).activeSource,source);
+ assert.equal(service.store.project(project.id).workOrder.objective,'');
+ console.log('World grading: responsive reports, invalid/updated rubric imports, reset, stale fixes, and optional unapproved Work Order passed');
+}
+
+async function verifyMagicWand(){
+ for(const config of [{width:320,height:568,touch:true},{width:1280,height:900,touch:false}]){
+  const source=JSON.stringify({worldBackground:'',title:'Authored world title',exact:9007199254740991});
+  const project=(await service.request('create',{name:'Magic wand fixture',source})).project;
+  await applyViewport(config);
+  await evaluate(`localStorage.setItem('voyage-project',${JSON.stringify(project.id)});location.reload()`);
+  await waitFor("document.querySelector('[aria-label=\"World Background\"]')");
+  await evaluate("[...document.querySelectorAll('.field-fill-wand')].find(button=>/Generate missing text for World Background/i.test(button.getAttribute('aria-label'))).click()");
+  await waitFor("document.querySelector('.field-fill-dialog[open]')");
+  const dialog=await evaluate("(()=>{const rect=document.querySelector('.field-fill-dialog').getBoundingClientRect();return {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom};})()");
+  assert.ok(dialog.left>=-1&&dialog.right<=config.width+1&&dialog.top>=-1&&dialog.bottom<=config.height+1,'Magic wand dialog leaves viewport: '+JSON.stringify(dialog));
+  await evaluate("(()=>{const field=document.querySelector('.field-fill-dialog textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,'Write a concise coastal setting.');field.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await waitFor("!document.querySelector('.field-fill-dialog button[type=submit]').disabled");
+  await evaluate("document.querySelector('.field-fill-dialog button[type=submit]').click()");
+  await waitFor("document.querySelector('[aria-label=\"World Background\"]').value==='Generated coastal context.'");
+  assert.equal(service.store.project(project.id).activeSource,source,'Generation modified applied world');
+  assert.equal(await evaluate("document.querySelector('[aria-label=\"Title\"]').value"),'Authored world title');
+  assert.equal(await evaluate("!!document.querySelector('.field-fill-completed')"),true,'Completed field is not highlighted');
+  await evaluate("document.querySelector('.field-fill-completed').scrollIntoView({block:'center'})");
+  await captureEvidence(`magic-wand-${config.width}.png`);
+  await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent==='Undo generated text').click()");
+  await waitFor("document.querySelector('[aria-label=\"World Background\"]').value===''");
+  await evaluate("[...document.querySelectorAll('.field-fill-wand')].find(button=>/Generate missing text for World Background/i.test(button.getAttribute('aria-label'))).click()");
+  await waitFor("document.querySelector('.field-fill-dialog[open]')");
+  await evaluate("(()=>{const field=document.querySelector('.field-fill-dialog textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,'fixture delayed completion');field.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await evaluate("document.querySelector('.field-fill-dialog button[type=submit]').click()");
+  await waitFor("[...document.querySelectorAll('button')].some(button=>button.textContent==='Cancel generation')");
+  await evaluate("(()=>{const field=document.querySelector('[aria-label=\"World Background\"]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,'Authored while generation runs');field.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await waitFor("document.querySelector('.field-fill-status').textContent.includes('0 filled')");
+  assert.equal(await evaluate("document.querySelector('[aria-label=\"World Background\"]').value"),'Authored while generation runs','Async completion overwrote a manual edit');
+  assert.equal(service.store.project(project.id).chat.length,0,'Completion leaked into Planning');
+  assert.equal(service.store.project(project.id).activeSource,source);
+ }
+ console.log('Magic wand: phone/desktop generation, highlight, authored preservation, draft-only changes, Undo, and asynchronous manual-edit preservation passed');
 }
 
 async function verifyMapGestures(projectId){
@@ -340,6 +427,15 @@ app.whenReady().then(async()=>{
   ipcMain.handle('workbench',async(event,method,payload)=>{
    if(event.sender!==window.webContents)throw Error('Unknown test frame');
    if(method==='auth')return {available:false};
+   if(method==='startAgent'&&payload.fieldFill){
+    const id='field-fill-'+Date.now(),attempt='fixture';
+    service.store.dispatch(payload.id,{type:'prepareTask',id,attempt,kind:'plan',fieldFill:payload.fieldFill});
+    service.store.dispatch(payload.id,{type:'taskRunning',taskId:id,attempt});
+    const snapshot=service.store.project(payload.id).tasks[0].fieldFill;
+    const complete=()=>service.store.dispatch(payload.id,{type:'taskDone',taskId:id,attempt,text:JSON.stringify(snapshot.fields.map(field=>({path:field.path,value:'Generated coastal context.'})))});
+    if(payload.fieldFill.instructions==='fixture delayed completion')setTimeout(complete,500);else complete();
+    return service.store.get(payload.id);
+   }
    if(!localMethods.has(method))throw Error('External action blocked by responsive layout test: '+method);
    return service.request(method,payload);
   });
@@ -352,6 +448,8 @@ app.whenReady().then(async()=>{
   await verifyMapArtwork(created.project.id);
   await verifyMapGestures(created.project.id);
   if(!process.env.VOYAGE_LAYOUT_CASES)await verifyLiveResize(created.project.id);
+  await verifyWorldGrading();
+  await verifyMagicWand();
   fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));
   console.log(`${report.cases.length} viewports; ${report.failures.length} failed checks. Report: ${path.join(output,'report.json')}`);
   clearTimeout(timeout);app.exit(report.failures.length?1:0);

@@ -1,0 +1,1925 @@
+{
+  "title": "Voyage Static World Rubric v1.6 — Universal Anchor + Adaptive Genre Paths",
+  "version": "1.6",
+  "date": "2026-10-15",
+  "claim": "100% source-only static design rubric with precommitted specialist weight paths. Predictive validity is not established; no gameplay, narrator generations, published metrics, reader panels or competitor dashboards are required.",
+  "grading": {
+    "grades": {
+      "0": "absent or contradicted by source",
+      "1": "named/asserted with no traceable design",
+      "2": "partly specified; key source gaps",
+      "3": "substantially specified with concrete field links and minor gaps",
+      "4": "coherently and comprehensively specified, source-traceable, internally consistent",
+      "NE": "required source evidence missing; no playtest request",
+      "NA": "genuinely inapplicable with denominator adjustment only where explicitly permitted"
+    },
+    "formula": "Universal uses original v1.5 criterion weights; specialist uses preregistered path weights, optional entry overlay, shared 0..4 static grades. Round final total only, to nearest 0.25.",
+    "unknown_policy": "NE = necessary artifact missing or feature owner/contract undisclosed; NEVER require playtesting. Do not award 4 for a mere assertion. Mark uncertain engine features unverified.",
+    "overrides": {
+      "P3": "path_weight_P3*(0.75*adjusted_cover_diagnostic/100+0.25*adjusted_title_diagnostic/100)",
+      "P4": "path_weight_P4*adjusted_blurb_diagnostic/100",
+      "other_criteria": "path_weight_i*grade_i/4",
+      "NE": "report interval and evidence gap; never normalize missing weights away"
+    },
+    "evidence_strength_caps": {
+      "missing_feature_owner": "For claimed signature mechanics, D1 grade <= 1 unless explicit host, engine, mod or model-guided specification with input/output and limits exists.",
+      "persistence_without_owner": "D2 grade <= 1 if advertised durability lacks authoritative data/contract owner; check G4/G11 truthfulness.",
+      "unactionable_opening": "A1 grade <= 2 if no named immediately usable affordance is authored.",
+      "creator_conflict": "K-C <= 50% if unresolved compatible field precedence; fail G13 for critical false status/authority."
+    }
+  },
+  "sections": [
+    {
+      "id": "Discover",
+      "max_points": 30,
+      "description": "Acquisition potential: does the listing generate a desirable and accurate expectation?"
+    },
+    {
+      "id": "Activate",
+      "max_points": 25,
+      "description": "First-use activation: does the opening fulfill the promise quickly and without friction?"
+    },
+    {
+      "id": "Sustain",
+      "max_points": 30,
+      "description": "Engagement potential: does the world generate rewarding decisions over time?"
+    },
+    {
+      "id": "Deliver",
+      "max_points": 15,
+      "description": "Execution: do the systems and continuity reliably honor what was promised?"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "P1",
+      "section": "Discover",
+      "name": "Desirable, specific player fantasy",
+      "max_points": 10,
+      "full_credit": "The player can name who they are, what makes that life interesting, and why they want to experience it in one sentence.",
+      "test": "S03: identify specific player position, desired action and compelling constraint in the listing and authored start.",
+      "evidence_codes": [
+        "E1",
+        "E2",
+        "E4",
+        "E5",
+        "E6"
+      ],
+      "tradeoff": "A specific promise attracts curiosity; overly narrow identity may reduce audience, but a generic \"do anything\" promise puts all imagination work on the player."
+    },
+    {
+      "id": "P2",
+      "section": "Discover",
+      "name": "Distinctive but comprehensible hook",
+      "max_points": 7,
+      "full_credit": "A recognizable genre template plus one memorable differentiation; unusual bodies, social roles, special powers, predicaments, or concrete local culture all qualify.",
+      "test": "S03/S10: identify distinctive action/identity compared with static genre-neighbor listings.",
+      "evidence_codes": [
+        "E2",
+        "E7",
+        "E8"
+      ],
+      "tradeoff": "Extreme novelty can narrow appeal or raise onboarding costs; pure familiarity can become forgettable. No bonus for novelty without action consequences."
+    },
+    {
+      "id": "P3",
+      "section": "Discover",
+      "name": "Cover and title deliver the fantasy",
+      "max_points": 8,
+      "full_credit": "Cover scores up to 6 points from the 100-point Cover Diagnostic; public listing title scores up to 2 points from its independent 100-point Title Diagnostic. Paired card communicates the accurate player fantasy.",
+      "test": "S10: offline cover crop, thumbnail hierarchy, title fit and C-A…C-J/T-A…T-H grading; source truth check.",
+      "evidence_codes": [
+        "E5",
+        "E8",
+        "E11",
+        "E13"
+      ],
+      "tradeoff": "Do not optimize for polish, keyword density, or hype over genuine click-relevant expectation. Complementary evocative/informative title–cover pairs are valid; deception is not.",
+      "world_scoring_formula": "round_to_nearest_quarter(6*cover_diagnostic_score/100 + 2*title_diagnostic_score/100)"
+    },
+    {
+      "id": "P4",
+      "section": "Discover",
+      "name": "Discover-page blurb converts promise into playable expectations",
+      "max_points": 5,
+      "full_credit": "Blurb /100 diagnostic demonstrates playable role, distinctive first action and loop; major claims verified; meaningful choices and audience fit clear.",
+      "test": "S11: excerpt at 160/300/600 characters; trace top three advertised features to source owners.",
+      "evidence_codes": [
+        "E1",
+        "E5",
+        "E6",
+        "E8",
+        "E11",
+        "E15"
+      ],
+      "tradeoff": "Short hooks convert attention into interest; longer descriptions may add depth but must not bury the first action or substitute feature counts for play. Grade via blurb diagnostic only, not a separate 0–4 grade.",
+      "scoring_override": "P4 = round_to_nearest_quarter(5*adjusted_blurb_score/100); no additional world points"
+    },
+    {
+      "id": "A1",
+      "section": "Activate",
+      "name": "Concrete opening with a real decision",
+      "max_points": 7,
+      "full_credit": "The default start establishes place, situation, relevant constraints and one or more meaningful next actions without scripting the player’s response.",
+      "test": "S04: enumerate immediate written affordances in every start without generating narration.",
+      "evidence_codes": [
+        "E2",
+        "E5",
+        "E8"
+      ],
+      "tradeoff": "A directed opening aids activation; an intrusive opening that chooses feelings, speech or a quest for the player undermines agency."
+    },
+    {
+      "id": "A2",
+      "section": "Activate",
+      "name": "Signature fantasy pays off promptly",
+      "max_points": 8,
+      "full_credit": "The authored opening or immediate source-defined transition makes the signature role/power/activity tangible and specifies a plausible consequence; actual timing unknown.",
+      "test": "S04: trace visible signature experience from authored first scene/defined immediate situation and consequence.",
+      "evidence_codes": [
+        "E1",
+        "E2",
+        "E8"
+      ],
+      "tradeoff": "Too-early total power can trivialize play; too much setup can make the world feel like false advertising. Payoff can be discovery or bond, not only power."
+    },
+    {
+      "id": "A3",
+      "section": "Activate",
+      "name": "Player has a concrete place in the world",
+      "max_points": 6,
+      "full_credit": "A believable initial relationship, responsibility, opportunity, resource need, geographical situation, institutional membership, or rival ecology creates context without compulsory destiny.",
+      "test": "S04: identify existing belonging, need, relationship or place independent of a forced main quest.",
+      "evidence_codes": [
+        "E2",
+        "E3",
+        "E5"
+      ],
+      "tradeoff": "Social anchoring is helpful in social worlds; solitary monster/ship settings can use physical needs and responsibilities instead. Do not demand a romance interest."
+    },
+    {
+      "id": "A4",
+      "section": "Activate",
+      "name": "Creation and onboarding are low-friction",
+      "max_points": 4,
+      "full_credit": "Authored/default entry path, question burden and optional depth are clear in source; undocumented platform UI behavior remains NE.",
+      "test": "S05/S06: review authored mandatory fields, defaults, quickstart contract and word burden; do not time a UI.",
+      "evidence_codes": [
+        "E1",
+        "E4",
+        "E12"
+      ],
+      "tradeoff": "Deep custom creation is a bonus only when skippable or staged. Making new players read every faction, stat and species first imposes a cost."
+    },
+    {
+      "id": "L1",
+      "section": "Sustain",
+      "name": "Repeatable, genre-specific core loop",
+      "max_points": 9,
+      "full_credit": "A fully documented repeatable action → condition → effect → new opportunity loop exists, with at least one coherent variation where appropriate.",
+      "test": "S07: construct source-backed loop graph activity → condition → effect → altered affordance; no turns.",
+      "evidence_codes": [
+        "E3",
+        "E4",
+        "E5",
+        "E7"
+      ],
+      "tradeoff": "A genre-specific loop is more valuable than dozens of labeled game modes that change only difficulty or tone."
+    },
+    {
+      "id": "L2",
+      "section": "Sustain",
+      "name": "Compounding and legible progression",
+      "max_points": 7,
+      "full_credit": "Progression rules define changed options, prerequisites and authorized effects; no test sessions are implied.",
+      "test": "S07: map progression prerequisites and at least three source-defined transitions.",
+      "evidence_codes": [
+        "E3",
+        "E4",
+        "E5",
+        "E8"
+      ],
+      "tradeoff": "Not every world needs levels or upward power; social/knowledge/moral progression counts. Unbounded escalation may erase meaningful decisions."
+    },
+    {
+      "id": "L3",
+      "section": "Sustain",
+      "name": "Real player agency and viable variation",
+      "max_points": 6,
+      "full_credit": "The player can pursue, decline, pause, switch or fail the central path; alternate goals operate within coherent rules instead of reverting to the author’s expected plot.",
+      "test": "S09: inspect authored refusal, delay, decline, alternate-activity and failure outcomes.",
+      "evidence_codes": [
+        "E2",
+        "E3",
+        "E5",
+        "E12"
+      ],
+      "tradeoff": "Freedom without constraints is directionless; constraints without credible alternatives feel railroaded. Genre-respecting variation matters more than every world supporting everything."
+    },
+    {
+      "id": "L4",
+      "section": "Sustain",
+      "name": "Responsive cast OR active environment",
+      "max_points": 5,
+      "full_credit": "NPC goals/schedules/knowledge boundaries or equivalent environment/faction dynamics are concretely specified.",
+      "test": "S08/S12: trace NPC/ecology active-state goals, schedules, bounded knowledge and source contradictions.",
+      "evidence_codes": [
+        "E3",
+        "E5",
+        "E7",
+        "E8"
+      ],
+      "tradeoff": "Do not reward NPC count by itself. A smaller recurring cast can be more useful than hundreds of silent entries; high-quality isolation is valid when deliberate."
+    },
+    {
+      "id": "L5",
+      "section": "Sustain",
+      "name": "Enjoyable downtime, pacing and tonal consistency",
+      "max_points": 3,
+      "full_credit": "The game allows recovery, work, friendship, routine, craft, solitude and aftermath without forced threats; its typical dialogue and consequences consistently feel like the promised genre.",
+      "test": "S09/S12: inspect authored downtime activities and guidance against forced tone/romance/hazard.",
+      "evidence_codes": [
+        "E3",
+        "E5",
+        "E12"
+      ],
+      "tradeoff": "Constant escalation can exhaust players; excessive low-stakes wandering can become empty if there is no compelling latent loop."
+    },
+    {
+      "id": "D1",
+      "section": "Deliver",
+      "name": "Signature mechanics: source contract traceability",
+      "max_points": 6,
+      "full_credit": "Top three advertised mechanics have explicit owner, inputs, relevant state/condition, outputs, limits and promises aligned with source; runtime efficacy not asserted.",
+      "test": "S03: source trace of three strongest feature promises to owners, inputs, outputs and limits; no execution claims.",
+      "evidence_codes": [
+        "E8",
+        "E9"
+      ],
+      "tradeoff": "Do not equate zero native triggers with failure: mods or generation may own behavior. Also do not equate long instructions with reliable execution."
+    },
+    {
+      "id": "D2",
+      "section": "Deliver",
+      "name": "Continuity and consequence integrity",
+      "max_points": 5,
+      "full_credit": "Authoritative state identities, reads/writes/merges/one-shot guards or documented external continuity contracts support advertised durability without contradictory ownership.",
+      "test": "S08: inspect authoritative continuity fields/contracts, one-shot guards and reconciliation.",
+      "evidence_codes": [
+        "E3",
+        "E5",
+        "E8"
+      ],
+      "tradeoff": "Overtracking every minor event wastes context; retain consequential facts and compress noise. LC can own reusable continuity as a separate mod."
+    },
+    {
+      "id": "D3",
+      "section": "Deliver",
+      "name": "Believable world, calibrated friction and voice",
+      "max_points": 4,
+      "full_credit": "World logic and narrator contracts are consistent across starts, locations, abilities, economies, ecology and permitted unusual goals.",
+      "test": "S12: static consistency review of society, material needs, travel, risk, narration and NPC knowledge.",
+      "evidence_codes": [
+        "E3",
+        "E5",
+        "E7",
+        "E12"
+      ],
+      "tradeoff": "Tight world focus can beat broad maps. Genre-specific danger is fine; arbitrary punishments and mechanical contradictions break the promise."
+    }
+  ],
+  "readiness": {
+    "overall_min": 85,
+    "section_minimums": {
+      "Discover": 23,
+      "Activate": 19,
+      "Sustain": 22,
+      "Deliver": 11
+    },
+    "all_gates_must_pass": true,
+    "is_statistical_probability": false
+  },
+  "gates": [
+    {
+      "id": "G1",
+      "name": "Engine/schema safety",
+      "description": "Offline JSON/schema parse with fields, types, IDs, references and conditions; schema coverage marked NE if unavailable.",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G2",
+      "name": "Player agency",
+      "description": "Authored starts and narrator guidance never prescribe unchosen PC speech, assent, romantic intent, emotions or unauthorized status.",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G3",
+      "name": "Signature promise integrity",
+      "description": "Top three claims link to declared source owner, starting affordance, input/output contract and limits, or are explicitly labeled as narrative intent.",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G4",
+      "name": "Continuity and causal memory",
+      "description": "Source states authoritative identity/state, update, merge and restoration ownership; no critical contradiction of advertised persistence.",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G5",
+      "name": "Viable scope/alternatives",
+      "description": "Authored choice/refusal or disclosed linear scope agrees with listing.",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G6",
+      "name": "Honest listing and audience fit",
+      "description": "Title, cover, blurb, ratings, IP claims, tags and mechanics accurately reflect source.",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G7",
+      "name": "Mechanics agreement",
+      "description": "Stats, economy, combat, permissions, biology and other state systems are internally coherent.",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G8",
+      "name": "External mod ownership",
+      "description": "Declared external module dependency/version/contract is traceable and no duplicate conflicting owner; mandatory absent evidence prevents verified readiness.",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G9",
+      "name": "Cover integrity / visual promise",
+      "description": "Offline visual crop/reduction, C-A..C-J floors, accurate depicted genre/role; no human panel.",
+      "action_on_fail": "revise_cover_before_release",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G10",
+      "name": "Listing title integrity",
+      "description": "Correct title, no placeholders, dishonest IP or feature claims; offline title truncation/card match and source premise check.",
+      "action_on_fail": "block_if_deceptive_or_false_affiliation_else_revise_title",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G11",
+      "name": "Discover blurb integrity and first-action comprehension",
+      "description": "Opening 160/300/600-character excerpts, source-backed key promises, readable layout and truth against cover/title/starts; no reader survey.",
+      "action_on_fail": "block_if_false_core_claim_or_unsafe_misrepresentation_else_revise_blurb",
+      "assessment": "static_only"
+    },
+    {
+      "id": "G12",
+      "name": "Start coherence and playable agency",
+      "description": "All offered authored starts define available action/handoff/status, respect creator compatibility and consent, and match genre.",
+      "fail_response": "BLOCK broken start/critical contradiction; otherwise REVIEW weak first scene",
+      "rubric_links": [
+        "S-A",
+        "S-C",
+        "S-G",
+        "S-H"
+      ],
+      "assessment": "static_only"
+    },
+    {
+      "id": "G13",
+      "name": "Creator truth and compatibility",
+      "description": "Authored questions/options/defaults are distinct and factual, with role/start/mode precedence and legitimate effect ownership.",
+      "fail_response": "BLOCK critical contradiction or false mandatory choice; otherwise REVISE wording/source wording",
+      "rubric_links": [
+        "K-A",
+        "K-B",
+        "K-C",
+        "K-D"
+      ],
+      "assessment": "static_only"
+    }
+  ],
+  "tests": [
+    "S01 package/hash and source coverage",
+    "S02 schema/IDs/references offline lint",
+    "S03 claim-to-owner map",
+    "S04 all authored start affordances",
+    "S05 creator semantics and option distinctions",
+    "S06 bounded static role/start/trait/mode compatibility matrix",
+    "S07 repeatable loop/source graph",
+    "S08 state/continuity ownership",
+    "S09 refusal/agency paths",
+    "S10 cover/title offline crop and genre-neighbor comparison",
+    "S11 blurb excerpts and claim truth",
+    "S12 static contradictions and edge-case policy register",
+    "SS1–SS8 static story-start checks",
+    "CC1–CC8 static character-creation checks"
+  ],
+  "evidence_index": {
+    "E1": "Change Note vs Live a Life",
+    "E2": "Familiar vs Monster",
+    "E3": "Rotten Boroughs vs Globe",
+    "E4": "Compact vs large comparisons",
+    "E5": "Jinasticpo shared creator triad",
+    "E6": "Life Simulator: 2026 broad life-sim counterexample",
+    "E7": "Original sci-fi ship premises",
+    "E8": "The Book vs Change Note",
+    "E9": "Ten-world weak volume correlations",
+    "E10": "IP familiarity confound",
+    "E11": "Discovery rank measurement limitations",
+    "E12": "General game motivation research",
+    "E13": "Discover-cover art study and supplied tiled Discover images; weighted cover diagnostic is heuristic and not a validated click-through probability.",
+    "E14": {
+      "name": "Listing title/premise comparisons from supplied discovery screenshots and world exports",
+      "source_files": [
+        "Voyage_Discovery_Rankings_11_Screens_Research.md",
+        "Voyage_New_Collection_Batch_2026-10-09_Research_Addendum.md",
+        "Voyage_5v5_JSON_Comparative_Study.md"
+      ],
+      "qualification": "Observational examples and matched creator/foundation contrasts. No title-only experiments; no causal attribution or empirical title-weight estimates."
+    },
+    "E15": "2026-10-09 screenshot page blurbs and collected exports: Accidental Roommates, Familiar, I STARSHIP, The Book, Life Simulator 2026; interesting comparative cases but no blurb-only controlled CTR evidence.",
+    "E16": "October 2026 new-world Discover cohort screenshots (convenience sample; age and filter confounds)",
+    "E17": "alpha.voyage.io(33).zip full world-page screenshot counters (aggregate actions, plays, bookmarks)",
+    "E18": "New World(37).zip and stored Final Boss Wanted host export; start, creator, system complexity comparison",
+    "E19": "Final Boss Wanted saved v1.3 host used as unchanged observational control; published equivalence not independently verified"
+  },
+  "sources": [
+    "Voyage_Popularity_Theory_Evidence_Synthesis.md",
+    "Voyage_5v5_JSON_Comparative_Study.md",
+    "Voyage_Popularity_Study_Expanded_11_Worlds.md",
+    "Voyage_Discovery_Rankings_11_Screens_Research.md",
+    "Voyage_New_Collection_Batch_2026-10-09_Research_Addendum.md",
+    "New World(26)(1).json",
+    "New World(33)(1).json",
+    "New World(30)(1).json",
+    "New World(32)(1).json",
+    "New World(34)(1).json",
+    "Voyage_Discover_Cover_Weighted_Rubric.md",
+    "Voyage title case comparisons: screenshot listings including Familiar, Monster, Accidental Roommates, The Book, I STARSHIP, Life Simulator 2026, Change Note, Lindor, and Terravast",
+    "Voyage_Blurb_Quick_Scorecard.md",
+    "User-provided 2026-10-09 screenshots of Voyage world details pages (blurbs and public metrics)",
+    "October 2026 Discover release-cohort screenshots supplied in conversation",
+    "alpha.voyage.io(33).zip (world-page screenshots)",
+    "New World(37).zip (world JSON exports)",
+    "Final_Boss_Wanted_V37_HOST_v1_3_MAP_ALIGNED.json (saved library export)"
+  ],
+  "reporting": {
+    "required_scores": [
+      "Discover",
+      "Activate",
+      "Sustain",
+      "Deliver",
+      "Acquisition=Discover+Activate",
+      "Durability=Sustain+Deliver",
+      "Cover diagnostic /100",
+      "Public listing title diagnostic /100",
+      "P3 integrated cover+title /8",
+      "Public listing blurb diagnostic /100",
+      "P4 integrated blurb /5",
+      "Story-start diagnostic /100, default and worst supported start (non-additive)",
+      "Character creator diagnostic /100 or NA/NT with applicability (non-additive)"
+    ],
+    "required_notes": [
+      "Artifacts included, provenance and file hash",
+      "STATIC DESIGN ASSESSMENT — NOT PLAYTESTED",
+      "Evidence grade and NE/NA sources",
+      "All G1–G13 PASS/FAIL/NE statuses",
+      "Top three claims mapped to source owner/inputs/outputs",
+      "S01–S12 source audit result",
+      "P3 cover/title image/crop and title fit notes",
+      "P4 blurb 160/300/600-character excerpts",
+      "Default/worst/median authored story start",
+      "Creator pairwise conflict/precedence table",
+      "Known runtime/engine/mod uncertainty",
+      "Top scoring bottlenecks, exact source pointers, recommended edits"
+    ]
+  },
+  "cover_rubric": {
+    "name": "Voyage Discover Cover Diagnostic",
+    "source": "Voyage_Discover_Cover_Weighted_Rubric.md (prior source-derived design study)",
+    "status": "heuristic_not_validated_probability",
+    "grade_range": [
+      0,
+      10
+    ],
+    "scoring_formula": "sum((grade / 10) * weight) for each category",
+    "max_points": 100,
+    "dimensions": [
+      {
+        "id": "C-A",
+        "name": "Thumbnail readability",
+        "weight": 18,
+        "full_credit": "Main subject/idea readable at Discover size",
+        "bad_cover": "Blurred clutter, invisible tiny focal subject"
+      },
+      {
+        "id": "C-B",
+        "name": "Player fantasy / premise communication",
+        "weight": 17,
+        "full_credit": "Visualizes the player role/relationship/power/activity",
+        "bad_cover": "Generic atmosphere unrelated to actual fantasy"
+      },
+      {
+        "id": "C-C",
+        "name": "Focal hierarchy & composition",
+        "weight": 15,
+        "full_credit": "One dominant focal mass with subordinated support",
+        "bad_cover": "Equal weight everywhere"
+      },
+      {
+        "id": "C-D",
+        "name": "Distinctiveness / stopping power",
+        "weight": 13,
+        "full_credit": "Memorable world-specific silhouette/motif beside rivals",
+        "bad_cover": "Stock generic poster"
+      },
+      {
+        "id": "C-E",
+        "name": "Emotional / genre signal",
+        "weight": 10,
+        "full_credit": "Honest and desirable tone",
+        "bad_cover": "Wrong genre or inert emotion"
+      },
+      {
+        "id": "C-F",
+        "name": "Value / lighting separation",
+        "weight": 9,
+        "full_credit": "Main subject reads in grayscale",
+        "bad_cover": "Muddy dark forms or overblown flats"
+      },
+      {
+        "id": "C-G",
+        "name": "Color organization",
+        "weight": 6,
+        "full_credit": "Coherent palette with selective accent",
+        "bad_cover": "Competing saturation/no identity"
+      },
+      {
+        "id": "C-H",
+        "name": "Subject choice & scale",
+        "weight": 5,
+        "full_credit": "Subject is right vehicle for player fantasy",
+        "bad_cover": "Tiny/irrelevant/generic scene"
+      },
+      {
+        "id": "C-I",
+        "name": "Typography / branding",
+        "weight": 4,
+        "full_credit": "Optional accurate short title/wordmark",
+        "bad_cover": "Garbled small text/duplication/covering subject"
+      },
+      {
+        "id": "C-J",
+        "name": "Polish / artifact control",
+        "weight": 3,
+        "full_credit": "Finished focal subject without artifacts",
+        "bad_cover": "Wrong anatomy, seams, misspellings"
+      }
+    ],
+    "interpretation": [
+      {
+        "min": 90,
+        "max": 100,
+        "meaning": "Exceptional"
+      },
+      {
+        "min": 82,
+        "max": 89.999,
+        "meaning": "Very strong"
+      },
+      {
+        "min": 74,
+        "max": 81.999,
+        "meaning": "Good; targeted improvements"
+      },
+      {
+        "min": 65,
+        "max": 73.999,
+        "meaning": "Serviceable; at risk of disappearing in Discover"
+      },
+      {
+        "min": 50,
+        "max": 64.999,
+        "meaning": "Weak; recompose"
+      },
+      {
+        "min": 0,
+        "max": 49.999,
+        "meaning": "Redesign concept"
+      }
+    ],
+    "hard_floors": {
+      "C-A": 7,
+      "C-B": 7,
+      "C-C": 7,
+      "C-D": 6,
+      "C-F": 6
+    },
+    "caps": [
+      {
+        "condition": {
+          "C-A": {
+            "lt": 5
+          }
+        },
+        "cover_score_cap": 69
+      },
+      {
+        "condition": {
+          "C-B": {
+            "lt": 5
+          }
+        },
+        "cover_score_cap": 72
+      },
+      {
+        "condition": {
+          "C-C": {
+            "lt": 5
+          }
+        },
+        "cover_score_cap": 69
+      },
+      {
+        "condition": {
+          "C-A": {
+            "lt": 4
+          },
+          "C-B": {
+            "lt": 4
+          }
+        },
+        "cover_score_cap": 59
+      }
+    ],
+    "redesign_if": "at least three categories among C-A to C-F score below 5",
+    "world_score_integration": {
+      "criterion": "P3",
+      "max_points": 8,
+      "cover_diagnostic_points": 6,
+      "listing_title_points": 2,
+      "formula": "round_to_nearest_quarter((cover_score / 100) * 6 + (title_score / 100) * 2)",
+      "independent_gate": "G9",
+      "no_additional_world_points": true,
+      "title_diagnostic_points": 2,
+      "title_diagnostic_ref": "title_rubric"
+    },
+    "cover_art_styles": [
+      {
+        "archetype": "Hero portrait",
+        "for": "identity, villainess, power, transformation",
+        "risk": "generic character image"
+      },
+      {
+        "archetype": "Relationship/dual character",
+        "for": "bond, roommates, romance, rivalry",
+        "risk": "unremarkable generic pair"
+      },
+      {
+        "archetype": "Ensemble",
+        "for": "academy, party, social sandbox",
+        "risk": "tiny equal-priority faces"
+      },
+      {
+        "archetype": "Concept/unnatural object",
+        "for": "reality rewriting, anomalies, powers",
+        "risk": "effect without role"
+      },
+      {
+        "archetype": "Iconic environment",
+        "for": "exploration, kingdom, settlement",
+        "risk": "wallpaper without hook"
+      },
+      {
+        "archetype": "Ship/monster embodiment",
+        "for": "nonhuman identity, starship Mind",
+        "risk": "subject presented as generic setting prop"
+      },
+      {
+        "archetype": "Graphic/logo-led",
+        "for": "recognizable concise brands",
+        "risk": "unknown title communicates little"
+      }
+    ],
+    "bad_cover_patterns": [
+      "generic wallpaper",
+      "equal visual hierarchy",
+      "tiny protagonist or prop",
+      "unclear crowded ensemble",
+      "dark-on-dark with no anchor",
+      "effects everywhere",
+      "garbled or too much in-image type",
+      "critical AI anatomy artifacts",
+      "wrong emotional genre",
+      "unrelated attractive portrait",
+      "only readable at full-size",
+      "UI/crop colliding with important art",
+      "looks identical to nearby genre cards",
+      "misleading fanservice/spectacle",
+      "pure mood without a playable action"
+    ],
+    "safe_area_heuristic": "Keep essential image meaning in central approximately 70–80%; inspect offline mock crop from supplied screenshots without launching Voyage.",
+    "tests": [
+      "offline crop and overlay template",
+      "image reduced to mobile/grid dimensions",
+      "grayscale and blur value hierarchy",
+      "auditor description of observable genre/subject against source",
+      "static 12–20 neighbor-grid comparison when supplied, else note source gap",
+      "implied feature/relationship and species trace to world export"
+    ],
+    "release_gate": "G9"
+  },
+  "title_rubric": {
+    "name": "Voyage Discover public listing title diagnostic",
+    "version": "1.0",
+    "source": "Case examples in E1,E2,E5,E6,E8,E11,E14; designed as heuristics, not conversion coefficients",
+    "status": "hypothesis_based_not_empirically_calibrated",
+    "graded_item": "exported public listing title string",
+    "grade_range": [
+      0,
+      10
+    ],
+    "max_points": 100,
+    "scoring_formula": "sum(dimension_grade/10*dimension.weight) with title-only caps; round for display",
+    "dimensions": [
+      {
+        "id": "T-A",
+        "name": "Playable fantasy / premise signal",
+        "weight": 20,
+        "full_credit": "Specific role, situation, ability or supported evocative identity"
+      },
+      {
+        "id": "T-B",
+        "name": "Distinctiveness and specificity",
+        "weight": 17,
+        "full_credit": "Unique hook beside competing titles, beyond generic genre label"
+      },
+      {
+        "id": "T-C",
+        "name": "Curiosity, desire and emotional pull",
+        "weight": 15,
+        "full_credit": "Inspires a meaningful question or desired experience"
+      },
+      {
+        "id": "T-D",
+        "name": "Immediate comprehension and audience/genre fit",
+        "weight": 12,
+        "full_credit": "Directional genre/tone is understood without bait-and-switch"
+      },
+      {
+        "id": "T-E",
+        "name": "Brevity, card-size scannability",
+        "weight": 12,
+        "full_credit": "Core name/hook survives truncation on offline card reference"
+      },
+      {
+        "id": "T-F",
+        "name": "Truthfulness and expectation accuracy",
+        "weight": 12,
+        "full_credit": "Does not promise unsupported feature, fake IP/creator connection or wrong role"
+      },
+      {
+        "id": "T-G",
+        "name": "Cover–title complementarity",
+        "weight": 8,
+        "full_credit": "With cover, accurately communicates playable promise; no contradiction"
+      },
+      {
+        "id": "T-H",
+        "name": "Verbal craft and reliability",
+        "weight": 4,
+        "full_credit": "Stable, polished, correct spelling/punctuation and recognizable words"
+      }
+    ],
+    "interpretation": {
+      "90-100": "exceptional",
+      "82-89": "strong release candidate",
+      "74-81": "good; targeted improvement",
+      "65-73": "serviceable",
+      "50-64": "weak; restructure",
+      "0-49": "redesign the title concept"
+    },
+    "hard_floors": {
+      "T-A": 6,
+      "T-B": 6,
+      "T-E": 6,
+      "T-F": 8,
+      "T-G": 6
+    },
+    "floor_exception": "T-A/T-B can be waived for a mystery/proper noun only when an offline title+cover+start source review still specifies a plausible player experience; document rationale. T-F honesty cannot be waived.",
+    "caps": [
+      {
+        "condition": "T-F < 6",
+        "title_score_max": 49,
+        "fail_gate": "G10"
+      },
+      {
+        "condition": "T-E < 4 at real card size",
+        "title_score_max": 69
+      },
+      {
+        "condition": "T-A < 4 and T-G < 5",
+        "title_score_max": 64
+      },
+      {
+        "condition": "placeholder or false affiliation or material false feature",
+        "fail_gate": "G10 regardless of numeric score"
+      }
+    ],
+    "world_score_integration": {
+      "criterion": "P3",
+      "max_points": 8,
+      "cover_diagnostic_points": 6,
+      "title_diagnostic_points": 2,
+      "formula": "round_to_nearest_quarter(6*cover_score/100+2*title_score/100)",
+      "no_additional_world_points": true,
+      "legacy_0_to_10_conversion": "legacy_title_score_10*10; label provisional"
+    },
+    "anti_fail_patterns": [
+      "generic category-only name",
+      "opaque invented noun with unhelpful cover",
+      "overlong multi-clause title or redundant subtitles",
+      "unsupported or misleading feature claims",
+      "false IP/creator association",
+      "keyword stuffing and generic hype",
+      "punctuation/emoji/caps clutter",
+      "spoiler-heavy title",
+      "title-cover mismatch",
+      "version/placeholder leakage",
+      "competitor-clone naming",
+      "forced menu of genres in title",
+      "unpronounceable invented phrase",
+      "accidental truncation of sole distinguishing word"
+    ],
+    "length_advice": {
+      "default_words": "often 2–6, not a hard threshold",
+      "avoid": "leading generic word salad, redundant subtitle, development version suffix",
+      "show_on_device": true,
+      "make_first_words_informative": true
+    },
+    "candidate_generation": [
+      "identity-forward",
+      "situation/action-forward",
+      "evocative/brand-forward"
+    ],
+    "graded_tests": [
+      "static role/genre signal review of title",
+      "paired cover+title static premise audit",
+      "12–20 static competitor names when available",
+      "offline card-width truncation and ambiguity estimation",
+      "top implied title claims traced to source owner",
+      "tone/rating/IP alignment with assets and start",
+      "lexical distinctiveness/searchability/near-duplicate check",
+      "static comparison of identity/situation/evocative candidate titles"
+    ],
+    "release_gate": "G10",
+    "requires_three_unfamiliar_readers_for_fully_tested_gate": false,
+    "paired_card_correct_threshold": null,
+    "safe_area_heuristic": "Estimate text fit using supplied screenshots and offline card geometry; no UI session required."
+  },
+  "blurb_rubric": {
+    "name": "Voyage Discover public world listing blurb diagnostic",
+    "version": "1.0",
+    "source": "Observed world listing blurbs and exports, including E1,E2,E5,E6,E7,E8,E11,E15; no tested causal coefficients.",
+    "status": "hypothesis_based_not_empirically_calibrated",
+    "graded_item": "public world details-page description and first visible excerpt (not narrator instruction or story start)",
+    "grade_range": [
+      0,
+      10
+    ],
+    "max_points": 100,
+    "scoring_formula": "sum(dimension_grade/10 * dimension.weight), then apply caps; preserve NT for unverified claims",
+    "dimensions": [
+      {
+        "id": "B-A",
+        "name": "Opening hook / first-screen impact",
+        "weight": 15,
+        "full_credit": "Immediately interesting player situation, question or power; no generic lore intro."
+      },
+      {
+        "id": "B-B",
+        "name": "Playable identity and position",
+        "weight": 14,
+        "full_credit": "What the player controls, where they begin and how their role fits the world."
+      },
+      {
+        "id": "B-C",
+        "name": "Concrete first-action clarity",
+        "weight": 14,
+        "full_credit": "At least one possible valid first action/decision is apparent without guessing."
+      },
+      {
+        "id": "B-D",
+        "name": "Specific differentiator",
+        "weight": 12,
+        "full_credit": "World-specific lived experience rather than generic genre nouns or volume claims."
+      },
+      {
+        "id": "B-E",
+        "name": "Repeatable activity and longer arc",
+        "weight": 10,
+        "full_credit": "At least one appealing loop and how choices can lead to further opportunities."
+      },
+      {
+        "id": "B-F",
+        "name": "Honest claims / verified scope",
+        "weight": 12,
+        "full_credit": "All flagship claims, optionality, IP/rating and WIP labels reflect playable reality."
+      },
+      {
+        "id": "B-G",
+        "name": "Agency and actual alternatives",
+        "weight": 8,
+        "full_credit": "Clearly describes real choices in declared scope without promising impossible freedom."
+      },
+      {
+        "id": "B-H",
+        "name": "Scannability and hierarchy",
+        "weight": 8,
+        "full_credit": "Effective first 160 characters, short paragraphs and details in descending priority."
+      },
+      {
+        "id": "B-I",
+        "name": "Genre/tone/audience agreement",
+        "weight": 5,
+        "full_credit": "Language matches cover/title/rating and authored mood."
+      },
+      {
+        "id": "B-J",
+        "name": "Closing invitation",
+        "weight": 2,
+        "full_credit": "Specific natural invitation or engaging finish; no obligatory generic questions."
+      }
+    ],
+    "interpretation": {
+      "90-100": "exceptional release candidate",
+      "82-89": "strong",
+      "74-81": "good; targeted revision",
+      "65-73": "serviceable",
+      "50-64": "weak",
+      "0-49": "rewrite"
+    },
+    "hard_floors": {
+      "B-A": 7,
+      "B-B": 7,
+      "B-C": 7,
+      "B-D": 6,
+      "B-F": 8,
+      "B-H": 6
+    },
+    "floor_exception": "B-B may have a documented mystery exception only when role and first action remain reasonably identifiable from static blurb+card+start source; B-F truthfulness is not waivable.",
+    "caps": [
+      {
+        "condition": "B-F < 6 or materially false flagship claim",
+        "score_max": 49,
+        "fail_gate": "G11"
+      },
+      {
+        "condition": "B-C < 4 and no plausible first action in lead",
+        "score_max": 69
+      },
+      {
+        "condition": "B-A < 4 and B-H < 5",
+        "score_max": 64
+      },
+      {
+        "condition": "B-B < 4 and B-D < 4",
+        "score_max": 69,
+        "exception": "documented mystery + static source clarity audit"
+      },
+      {
+        "condition": "3 or more of B-A..B-F < 5",
+        "action": "structural rewrite"
+      },
+      {
+        "condition": "misleading IP, genre, rating, player agency or false ownership",
+        "fail_gate": "G11"
+      }
+    ],
+    "world_score_integration": {
+      "criterion": "P4",
+      "max_points": 5,
+      "formula": "round_to_nearest_quarter(5*adjusted_blurb_score/100)",
+      "no_additional_world_points": true,
+      "P3_unchanged": "6*cover/100 + 2*title/100 rounded to quarter"
+    },
+    "anti_fail_patterns": [
+      "generic do-anything hook",
+      "lore avalanche",
+      "feature-count dump",
+      "mechanic claims without tests",
+      "vague starting role",
+      "false sandbox freedom",
+      "many equal competing promises",
+      "hyperbolic superlatives",
+      "false IP association",
+      "age/genre mismatch",
+      "forced romance masquerading as optional",
+      "wall of text/emoji saturation",
+      "title repetition",
+      "unexplained lore jargon",
+      "spoilers/prescribed player emotions",
+      "WIP passed off as complete",
+      "no first action",
+      "starting scene contradicts pitch",
+      "patch-note-first layout",
+      "generic AI promotional filler"
+    ],
+    "text_preview_lengths_chars": [
+      160,
+      300,
+      600
+    ],
+    "first_screen_words_range": [
+      100,
+      200
+    ],
+    "length_policy": "Heuristics for review, not asserted platform limits; obey current field cap when known.",
+    "graded_tests": [
+      "160/300/600-character excerpt analysis",
+      "role/first affordance/repeatable-appeal phrase extraction",
+      "listing-only and cover-title alignment static meaning audit",
+      "top 3 claim-to-source map",
+      "unsupported-implied-feature red-team audit",
+      "offline competitor/blurb length and viewport study"
+    ],
+    "release_gate": "G11",
+    "reader_threshold": null,
+    "presentation_alignment": [
+      "public title",
+      "cover art",
+      "blurb first 160/300/600 characters",
+      "full public blurb",
+      "default authored start",
+      "rating and source-backed tone"
+    ],
+    "candidate_generation": [
+      "specific playable hook first",
+      "situated relational premise",
+      "genre-emotion-forward but action-clear"
+    ],
+    "example_worlds": [
+      "Accidental Roommates",
+      "I’m a Familiar?!",
+      "I, STARSHIP",
+      "The Book",
+      "Life Simulator: 2026"
+    ]
+  },
+  "change_log": [
+    {
+      "version": "1.4",
+      "changes": [
+        "Add non-additive 100-point Story Start diagnostic S-A..S-I; crosswalk to A1/A2/A3",
+        "Add non-additive 100-point Character Creator diagnostic K-A..K-H; crosswalk to A3/A4",
+        "Add G12 and G13 functional integrity checks",
+        "Retain unchanged P1..D3 weights and existing cover/title/blurb scoring; total=100",
+        "Define unchanged Final Boss Wanted as observational baseline; experiment tags, cohort controls and capture schedule",
+        "Add E16..E19 evidence and uncertainty rules"
+      ]
+    },
+    {
+      "version": "1.3",
+      "changes": [
+        "Original cover/title/blurb integrated diagnostics retained"
+      ]
+    },
+    {
+      "version": "1.5",
+      "change": "Removed all play-session, generated-scene, reader-panel, conversion, runtime-persistence and UI-interaction testing dependencies; substituted offline source traceability, determinacy, pairwise checking and static asset QA. Kept 100-point weights and diagnostics."
+    },
+    "v1.6: Added precommitted adaptive genre weights, limited entry overlays, hybrid rules, provenance gates, mismatch checks and historical-cohort guardrails. Universal anchor weights and all diagnostic dimension maxima preserved; no playtesting prerequisites."
+  ],
+  "story_start_rubric": {
+    "name": "Voyage Story-Start Static Design Diagnostic",
+    "version": "1.6",
+    "max_points": 100,
+    "additive_to_world_total": false,
+    "rubric": [
+      {
+        "id": "S-A",
+        "name": "Playable scene / situation",
+        "max_points": 18,
+        "full_credit": "Concrete first-scene prose OR narrator instruction specifying place, actors, accessible props and handoff; no generated scene required."
+      },
+      {
+        "id": "S-B",
+        "name": "Character position and constraints",
+        "max_points": 12,
+        "full_credit": "Player knows where they are, their relevant role, what is already true, and which important things are NOT already granted."
+      },
+      {
+        "id": "S-C",
+        "name": "Actionable affordances",
+        "max_points": 16,
+        "full_credit": "At least one meaningful next action exists now; people/objects/routes/questions can be engaged without asking the narrator to invent the premise."
+      },
+      {
+        "id": "S-D",
+        "name": "First-scene signature payoff",
+        "max_points": 16,
+        "full_credit": "Opening visibly delivers a distinctive aspect of the promised fantasy; payoffs can be social, contemplative, comedic, exploratory, survival-related, or mechanical."
+      },
+      {
+        "id": "S-E",
+        "name": "Tone, pacing and ordinary-life validity",
+        "max_points": 8,
+        "full_credit": "Experience matches advertised tone; neither forced threat nor forced tranquility is imposed against the intended genre."
+      },
+      {
+        "id": "S-F",
+        "name": "Distinctness of each authored start",
+        "max_points": 8,
+        "full_credit": "Alternative starts change initial situation, role, stakes, resources, or social position—not just names or scenery."
+      },
+      {
+        "id": "S-G",
+        "name": "Agency, consent and optionality",
+        "max_points": 10,
+        "full_credit": "No fabricated player dialogue, feelings, decisions, coercive jobs, romance or irreversible authority. NPCs/environment can act independently."
+      },
+      {
+        "id": "S-H",
+        "name": "Character-creator compatibility",
+        "max_points": 7,
+        "full_credit": "Start honors selected species, status, history, abilities, goals and mode; conflicts have explicit precedence or are flagged/resolved."
+      },
+      {
+        "id": "S-I",
+        "name": "Scene determinacy and instruction hygiene",
+        "max_points": 5,
+        "full_credit": "Explicit source facts, actor behaviors, action affordances, precedence and handoff; reusable guidance not duplicated. Runtime consistency not assumed."
+      }
+    ],
+    "grade_levels": {
+      "0": "absent or contradicted by source",
+      "1": "named/asserted with no traceable design",
+      "2": "partly specified; key source gaps",
+      "3": "substantially specified with concrete field links and minor gaps",
+      "4": "coherently and comprehensively specified, source-traceable, internally consistent",
+      "NE": "required source evidence missing; no playtest request",
+      "NA": "genuinely inapplicable with denominator adjustment only where explicitly permitted"
+    },
+    "integration": {
+      "A1": [
+        "S-A",
+        "S-C",
+        "S-G",
+        "S-I"
+      ],
+      "A2": [
+        "S-D",
+        "S-E"
+      ],
+      "A3": [
+        "S-B",
+        "S-F",
+        "S-H"
+      ],
+      "world_total_unchanged": true,
+      "direct_world_score_formula": null
+    },
+    "assessments": [
+      "authored_text_only",
+      "declared default",
+      "worst_supported_start",
+      "median_of_authored_starts",
+      "unknown narrator rendering explicitly labeled"
+    ],
+    "provisional_review_floors": {
+      "S-A": 9,
+      "S-C": 8,
+      "S-D": 8,
+      "S-G": 5
+    },
+    "tests": [
+      "SS1 source default opening",
+      "SS2 scene determinacy and player handoff",
+      "SS3 first-action affordance inventory",
+      "SS4 refusal and ordinary-life contract",
+      "SS5 cross-start differentiation",
+      "SS6 deterministic creator matrix",
+      "SS7 authored tone contract",
+      "SS8 initial signature-payoff specification"
+    ],
+    "format_neutral": true,
+    "strong_patterns": [
+      "specific immediate situation",
+      "one or more actionable affordances",
+      "distinctive promise visible in opening",
+      "explicit character and start compatibility",
+      "agency retained",
+      "clear scene-generation contract in source"
+    ],
+    "anti_patterns": [
+      "opening only explains lore",
+      "all starts cosmetic copies",
+      "author decides player thoughts/consent",
+      "contradictory role grants",
+      "forced stakes inconsistent with pitch",
+      "generic narrator contract without specific scene information"
+    ],
+    "not_required": [
+      "fiction prose in every start",
+      "violence",
+      "urgency",
+      "quest acceptance",
+      "long word count",
+      "pre-existing romance"
+    ]
+  },
+  "character_creator_rubric": {
+    "name": "Voyage Character-Creation Static Clarity Diagnostic",
+    "version": "1.6",
+    "max_points": 100,
+    "additive_to_world_total": false,
+    "rubric": [
+      {
+        "id": "K-A",
+        "name": "Player-facing question clarity",
+        "max_points": 16,
+        "full_credit": "Each prompt tells the player what they are deciding in natural second-person language; avoid boilerplate about how the engine respects choices."
+      },
+      {
+        "id": "K-B",
+        "name": "Distinct choices and consequences",
+        "max_points": 18,
+        "full_credit": "Each option gives specific starting knowledge, affordance, skill, contact, constraint, tone or recurring opportunity; mechanics are not required for every option."
+      },
+      {
+        "id": "K-C",
+        "name": "Internal coherence and precedence",
+        "max_points": 16,
+        "full_credit": "Story start, role, species, background, mode and goal cannot silently contradict or override one another; precedence and compatibility are explicit."
+      },
+      {
+        "id": "K-D",
+        "name": "Low-friction path to first action",
+        "max_points": 14,
+        "full_credit": "Source specifies sensible defaults/skipping/quickstart and avoids unnecessary mandatory lore decisions; no timed taps required."
+      },
+      {
+        "id": "K-E",
+        "name": "Signature-fantasy relevance",
+        "max_points": 14,
+        "full_credit": "Core decisions shape what the player gets to do or be in the promised world rather than collecting generic biography trivia."
+      },
+      {
+        "id": "K-F",
+        "name": "Scope, agency and reversibility",
+        "max_points": 8,
+        "full_credit": "Distinguish fixed starting facts from aspirations and tone preferences; allow goals to evolve; do not assign mental states."
+      },
+      {
+        "id": "K-G",
+        "name": "Readable options and accessible UI",
+        "max_points": 8,
+        "full_credit": "Labels and option text are concise, distinguishable and plausibly fit mobile text layouts; static proxy only."
+      },
+      {
+        "id": "K-H",
+        "name": "Fast-entry alternatives",
+        "max_points": 6,
+        "full_credit": "Quickstart/default/premade/example character when appropriate; no requirement for premades if a simple creator already provides fast entry."
+      }
+    ],
+    "grade_levels": {
+      "0": "absent or contradicted by source",
+      "1": "named/asserted with no traceable design",
+      "2": "partly specified; key source gaps",
+      "3": "substantially specified with concrete field links and minor gaps",
+      "4": "coherently and comprehensively specified, source-traceable, internally consistent",
+      "NE": "required source evidence missing; no playtest request",
+      "NA": "genuinely inapplicable with denominator adjustment only where explicitly permitted"
+    },
+    "integration": {
+      "A3": [
+        "K-B",
+        "K-C",
+        "K-E",
+        "K-F"
+      ],
+      "A4": [
+        "K-A",
+        "K-C",
+        "K-D",
+        "K-G",
+        "K-H"
+      ],
+      "D3": [
+        "K-C"
+      ],
+      "world_total_unchanged": true,
+      "direct_world_score_formula": null
+    },
+    "no_custom_categories_policy": "Do not assign zero for no custom groups. Use declared platform schema or known exported defaults to assess relevant creator contract; unknown platform UI is NE and not a request to test. NA for non-applicable custom categories.",
+    "provisional_review_floors": {
+      "K-A": 8,
+      "K-B": 9,
+      "K-C": 8,
+      "K-D": 7
+    },
+    "tests": [
+      "CC1 question clarity from source",
+      "CC2 authored default/quickstart contract",
+      "CC3 unique option consequences",
+      "CC4 bounded deterministic pairwise compatibility",
+      "CC5 grant legitimacy/source ownership",
+      "CC6 goals and personality remain revisable by policy",
+      "CC7 mobile label length and mandatory-field burden estimate",
+      "CC8 trait impact/source trace"
+    ],
+    "option_template": "Identity/fact -> concrete affordance or opportunity -> real boundary -> what remains player-chosen",
+    "question_guidance": [
+      "say what is being chosen",
+      "describe consequences not design safeguards",
+      "differentiate facts from preferences",
+      "set clear precedence for incompatible selections",
+      "avoid redundant tone selectors",
+      "inspect declared schema fields and default/optional status for entry burden; unknown UI marked NE"
+    ],
+    "not_required": [
+      "mechanical bonus on every choice",
+      "preset characters",
+      "fewest possible questions",
+      "maximal question depth"
+    ]
+  },
+  "control_and_experiments": {
+    "status": "OPTIONAL HISTORICAL CONTEXT — excluded from all scoring and gates",
+    "baseline": "Final Boss Wanted remains unchanged as the historical observational control",
+    "requires_gameplay": false,
+    "requires_public_metrics": false,
+    "requires_publishing": false,
+    "interpretation": "Not a randomized trial. Existing public counters are not part of v1.5 evaluation; no future test or publication is necessary.",
+    "allowed_if_provided": [
+      "existing frozen exports",
+      "historical screenshots",
+      "release chronology as optional research context"
+    ]
+  },
+  "assessment_mode": "offline_static_source_only",
+  "permitted_inputs": [
+    "world export JSON and declared schema",
+    "supplied host/mod source or documented versioned contract",
+    "static game modes/stories/quests/rules",
+    "cover image/title/tags/listing blurb",
+    "supplied comparative static listings (optional)"
+  ],
+  "prohibited_scoring_dependencies": [
+    "live play session or simulated turns",
+    "AI-generated narrator run",
+    "player/user interview or blind panel",
+    "timed onboarding session",
+    "live state persistence test",
+    "Voyage publish/action/play/bookmark data",
+    "A/B experiments",
+    "unavailable external behavior assumed true"
+  ],
+  "static_verification_protocol": [
+    {
+      "id": "S01",
+      "name": "package inventory/hash"
+    },
+    {
+      "id": "S02",
+      "name": "offline schema/reference validation"
+    },
+    {
+      "id": "S03",
+      "name": "claim-to-owner map"
+    },
+    {
+      "id": "S04",
+      "name": "authored opening affordances"
+    },
+    {
+      "id": "S05",
+      "name": "creator wording and semantic check"
+    },
+    {
+      "id": "S06",
+      "name": "deterministic compatibility matrix"
+    },
+    {
+      "id": "S07",
+      "name": "repeatable loop and progression graph"
+    },
+    {
+      "id": "S08",
+      "name": "continuity authority and state-path check"
+    },
+    {
+      "id": "S09",
+      "name": "agency/refusal contract"
+    },
+    {
+      "id": "S10",
+      "name": "offline cover/title crop and neighbor-grid audit"
+    },
+    {
+      "id": "S11",
+      "name": "blurb 160/300/600 preview and promise audit"
+    },
+    {
+      "id": "S12",
+      "name": "contradiction and edge-case policy register"
+    }
+  ],
+  "quality_scope": {
+    "type": "static_design_readiness",
+    "no_play_testing_required": true,
+    "real_runtime_behavior_verified": false,
+    "actual_engagement_verified": false,
+    "evidence_fields": [
+      "source pointer",
+      "assessment rationale",
+      "scope/ownership",
+      "PASS/FAIL/NE",
+      "exact recommended edit"
+    ]
+  },
+  "evidence_index_status": "Historical research background only; no evidence_index items are required inputs for static scoring.",
+  "require_play_testing": false,
+  "require_human_reader_panel": false,
+  "require_live_UI": false,
+  "require_published_metrics": false,
+  "require_narrator_generation": false,
+  "static_rubric_release_gates": "All gates G1–G13 apply only to source and asset quality, not observed outcomes.",
+  "adaptive_paths": {
+    "selection": {
+      "precommit": "Select path and optional entry overlay BEFORE assigning any grades or examining popularity results for this candidate. Record immutable path-selection rationale and artifact hash.",
+      "signal_sources": [
+        "Public blurb first-screen promise",
+        "Default story-start player activity",
+        "Source-backed repeatable loop or progression contract"
+      ],
+      "rule": "Choose the single specialist path if at least two of the three source signals support it. Otherwise use universal or documented hybrid. Path choice must not be based on which score is higher.",
+      "hybrid": "If two paths are genuinely co-primary, preregister primary + secondary BEFORE scoring, and blend their criterion weights at 0.70/0.30. No more than two paths. Universal anchor always retained.",
+      "overlay_rule": "Entry overlay is optional; select exactly one of standard, creator_first, fixed_identity from source evidence, never from score optimization. Apply delta to each path/blend before scoring; section totals unchanged.",
+      "edition_policy": "Mods, patches, engines and frameworks are not standalone playable worlds; route them to a mod-system quality assessment. Do not force a world score on a mod listing.",
+      "ip_policy": "Original, licensed and fan-inspired IP are reported as audience/attribution/confound metadata; award no automatic points for established fandom; enforce truthful IP/public package framing and accessible source-specific context.",
+      "maturity_policy": "Concept, design draft, full exported world have different evidence coverage. All are statically inspectable; incomplete stage is scored as an interval and never certified release ready."
+    },
+    "profiles": {
+      "universal": {
+        "name": "Universal / Open-ended Sandbox",
+        "trigger": "No single primary loop is demonstrably dominant, or use as cross-genre comparison anchor.",
+        "static_probes": [
+          "Two meaningfully different documented repeatable activities",
+          "Both a default and at least one alternative player approach are coherent",
+          "World breadth does not substitute for traceable consequences"
+        ],
+        "note": "Always calculate this score, even when another specialist path is selected.",
+        "criterion_weights": {
+          "P1": 10,
+          "P2": 7,
+          "P3": 8,
+          "P4": 5,
+          "A1": 7,
+          "A2": 8,
+          "A3": 6,
+          "A4": 4,
+          "L1": 9,
+          "L2": 7,
+          "L3": 6,
+          "L4": 5,
+          "L5": 3,
+          "D1": 6,
+          "D2": 5,
+          "D3": 4
+        },
+        "section_weights": {
+          "Discover": 30,
+          "Activate": 25,
+          "Sustain": 30,
+          "Deliver": 15
+        },
+        "total": 100,
+        "path_version": "1.6"
+      },
+      "progression": {
+        "name": "Progression / Power Growth",
+        "trigger": "Primary repeatable reward is acquiring, transforming, combining or advancing powers, status or capabilities.",
+        "static_probes": [
+          "At least three concrete source-defined progression transitions with prerequisites",
+          "Costs, bounds and failure/alternative paths stated where material",
+          "First authored scene exposes meaningful agency around the signature capability"
+        ],
+        "note": "L2 and A2 gain weight; pure complexity and giant ability lists do not.",
+        "criterion_weights": {
+          "P1": 10,
+          "P2": 7,
+          "P3": 8,
+          "P4": 5,
+          "A1": 7,
+          "A2": 9,
+          "A3": 5,
+          "A4": 4,
+          "L1": 9,
+          "L2": 9,
+          "L3": 6,
+          "L4": 4,
+          "L5": 2,
+          "D1": 7,
+          "D2": 5,
+          "D3": 3
+        },
+        "section_weights": {
+          "Discover": 30,
+          "Activate": 25,
+          "Sustain": 30,
+          "Deliver": 15
+        },
+        "total": 100,
+        "path_version": "1.6"
+      },
+      "social": {
+        "name": "Social / Relationship Sandbox",
+        "trigger": "Primary repeated activity is interaction, relationship building, conflict, reputation or social negotiation.",
+        "static_probes": [
+          "At least two differentiated independent NPC goals or social situations",
+          "Written knowledge boundaries and consequence updates for key relationships",
+          "Actionable social setting exists without mandatory romance or forced protagonist speech"
+        ],
+        "note": "L3/L4 gain weight; number of NPCs and romance availability are not proxies.",
+        "criterion_weights": {
+          "P1": 9,
+          "P2": 6,
+          "P3": 8,
+          "P4": 5,
+          "A1": 7,
+          "A2": 8,
+          "A3": 5,
+          "A4": 4,
+          "L1": 8,
+          "L2": 5,
+          "L3": 8,
+          "L4": 8,
+          "L5": 4,
+          "D1": 5,
+          "D2": 6,
+          "D3": 4
+        },
+        "section_weights": {
+          "Discover": 28,
+          "Activate": 24,
+          "Sustain": 33,
+          "Deliver": 15
+        },
+        "total": 100,
+        "path_version": "1.6"
+      },
+      "survival": {
+        "name": "Survival / Environmental Exploration",
+        "trigger": "Primary repeatable activity is navigating material constraints, threats, ecology, transport or exploration.",
+        "static_probes": [
+          "Source-backed danger/resource/route feedback and recovery",
+          "At least two distinct actions with different survival consequences",
+          "Consistent body, equipment, hazard and resource limits"
+        ],
+        "note": "A1 and L1 gain weight; survival worlds need not force combat.",
+        "criterion_weights": {
+          "P1": 9,
+          "P2": 6,
+          "P3": 8,
+          "P4": 4,
+          "A1": 9,
+          "A2": 8,
+          "A3": 6,
+          "A4": 4,
+          "L1": 10,
+          "L2": 6,
+          "L3": 7,
+          "L4": 6,
+          "L5": 1,
+          "D1": 6,
+          "D2": 6,
+          "D3": 4
+        },
+        "section_weights": {
+          "Discover": 27,
+          "Activate": 27,
+          "Sustain": 30,
+          "Deliver": 16
+        },
+        "total": 100,
+        "path_version": "1.6"
+      },
+      "management": {
+        "name": "Management / Craft / Institution",
+        "trigger": "Primary repeatable activity is operating systems, businesses, organizations, workshops or settlements.",
+        "static_probes": [
+          "At least one resource-input → work → output → trade-off loop",
+          "Decisions alter feasible subsequent operations and NPC/institution state",
+          "Player role, contractual authority and refusal paths are consistent"
+        ],
+        "note": "L1/L2 and D1 gain weight; a detailed economy table alone does not score well.",
+        "criterion_weights": {
+          "P1": 9,
+          "P2": 7,
+          "P3": 8,
+          "P4": 4,
+          "A1": 7,
+          "A2": 7,
+          "A3": 6,
+          "A4": 4,
+          "L1": 11,
+          "L2": 8,
+          "L3": 5,
+          "L4": 5,
+          "L5": 3,
+          "D1": 7,
+          "D2": 5,
+          "D3": 4
+        },
+        "section_weights": {
+          "Discover": 28,
+          "Activate": 24,
+          "Sustain": 32,
+          "Deliver": 16
+        },
+        "total": 100,
+        "path_version": "1.6"
+      },
+      "mystery": {
+        "name": "Mystery / Investigation",
+        "trigger": "Primary repeated activity is obtaining, interpreting, testing and acting on information.",
+        "static_probes": [
+          "Clue-and-inference graph with multiple independent evidence routes",
+          "No essential solution depends on an unprompted narrator invention",
+          "False leads, privacy/knowledge limits and resolution alternatives stated"
+        ],
+        "note": "A1/A3 and D2 gain importance; not every secret needs to be exposed at the start.",
+        "criterion_weights": {
+          "P1": 9,
+          "P2": 7,
+          "P3": 8,
+          "P4": 5,
+          "A1": 9,
+          "A2": 7,
+          "A3": 7,
+          "A4": 4,
+          "L1": 8,
+          "L2": 6,
+          "L3": 7,
+          "L4": 6,
+          "L5": 2,
+          "D1": 5,
+          "D2": 6,
+          "D3": 4
+        },
+        "section_weights": {
+          "Discover": 29,
+          "Activate": 27,
+          "Sustain": 29,
+          "Deliver": 15
+        },
+        "total": 100,
+        "path_version": "1.6"
+      },
+      "cozy_life": {
+        "name": "Cozy / Life Simulation",
+        "trigger": "Primary repeatable activity is everyday relationships, work, care, routines, exploration or self-directed life.",
+        "static_probes": [
+          "At least two sustainable low-stakes agency loops",
+          "Ordinary choices have concrete social/material consequences without forced crises",
+          "Routines, time and NPC autonomy are specified consistently"
+        ],
+        "note": "L3/L4/L5 gain weight; absence of urgency is not a defect.",
+        "criterion_weights": {
+          "P1": 9,
+          "P2": 6,
+          "P3": 8,
+          "P4": 5,
+          "A1": 7,
+          "A2": 7,
+          "A3": 6,
+          "A4": 4,
+          "L1": 8,
+          "L2": 5,
+          "L3": 8,
+          "L4": 7,
+          "L5": 5,
+          "D1": 5,
+          "D2": 6,
+          "D3": 4
+        },
+        "section_weights": {
+          "Discover": 28,
+          "Activate": 24,
+          "Sustain": 33,
+          "Deliver": 15
+        },
+        "total": 100,
+        "path_version": "1.6"
+      },
+      "identity_transformation": {
+        "name": "Identity / Transformation / Rebirth",
+        "trigger": "Primary appeal is becoming or inhabiting a distinct identity, creature, role, unusual embodiment or life change.",
+        "static_probes": [
+          "Form/status/power choice has distinct source-backed situational implications",
+          "First situation respects the selected identity without unearned authority",
+          "Creator options are coherent with starts, biology, status and actual limits"
+        ],
+        "note": "P1 and A4 gain weight; species count and creator size earn no automatic points.",
+        "criterion_weights": {
+          "P1": 11,
+          "P2": 7,
+          "P3": 8,
+          "P4": 5,
+          "A1": 8,
+          "A2": 7,
+          "A3": 6,
+          "A4": 5,
+          "L1": 8,
+          "L2": 5,
+          "L3": 7,
+          "L4": 6,
+          "L5": 3,
+          "D1": 5,
+          "D2": 5,
+          "D3": 4
+        },
+        "section_weights": {
+          "Discover": 31,
+          "Activate": 26,
+          "Sustain": 29,
+          "Deliver": 14
+        },
+        "total": 100,
+        "path_version": "1.6"
+      }
+    },
+    "entry_overlays": {
+      "standard": {
+        "name": "Standard entry",
+        "trigger": "Default; no entry-specific evidence path.",
+        "weight_delta": {}
+      },
+      "creator_first": {
+        "name": "Creator-first entry",
+        "trigger": "Role-defining choices are explicitly part of the advertised primary fantasy, and source-backed creator semantics are supplied.",
+        "weight_delta": {
+          "A2": -1,
+          "A3": -1,
+          "A4": 2
+        }
+      },
+      "fixed_identity": {
+        "name": "Fixed identity / immediate scene",
+        "trigger": "The offered default character is strongly authored or explicitly premade with meaningful immediately available actions; creator depth is not a promised differentiator.",
+        "weight_delta": {
+          "A1": 1,
+          "A3": 1,
+          "A4": -2
+        }
+      }
+    },
+    "scoring": {
+      "scale": "Criterion grades from 0 through 4 based solely on verifiable static artifacts. The original v1.5 category diagnostics and caps continue to apply.",
+      "general_formula": "For 0..4 integer-graded ordinary criteria: w_i * g_i/4. UNIVERSAL baseline retains v1.5 per-criterion quarter rounding (including adjusted P3/P4); specialist/adaptive uses unrounded contributions, rounds only final total to nearest 0.25. Never round weight matrices before grading.",
+      "p3_formula": "weight_P3 * (0.75 * adjusted_cover_diagnostic/100 + 0.25 * adjusted_title_diagnostic/100)",
+      "p4_formula": "weight_P4 * adjusted_blurb_diagnostic/100",
+      "score_comparability": "Rank different genres on universal /100 only. Within the same preregistered specialist path, adaptive /100 can guide trade-offs. Never choose the larger of universal/adaptive as a winner score.",
+      "report_both_scores": true,
+      "missing_data": "For each NE criterion, lower bound assumes zero and upper bound assumes four. For partially missing presentation diagnostics, keep that entire criterion NE. Never rescale observed points to 100. Label missing art/source honestly.",
+      "release_standard": "Only a fully evidenced 100-point score, all applicable gates PASS, universal >=85, specialist >=85, and section floors reached can earn STATIC READY; this is not a runtime certification or probability.",
+      "section_floor_ratios": {
+        "Discover": 0.76,
+        "Activate": 0.76,
+        "Sustain": 0.73,
+        "Deliver": 0.73
+      },
+      "section_floor_rounding": "ceil(weighted_section_max*floor_ratio*4)/4",
+      "uncertainty": "Report evidence completeness (weighted fraction of fully scored criteria), 0..100 score interval, missing static artifacts, source/version discrepancies, and all gate statuses.",
+      "hypothesis_policy": "Historical public actions/bookmarks, last-update dates, observed creator dashboards, and rollout age MUST NOT enter candidate scoring. Retrospective analytics are strictly separate exploratory evidence.",
+      "universal_rounding": "Preserve v1.5 exact score convention: each individual criterion contribution rounded to nearest 0.25, then summed.",
+      "specialist_rounding": "Compute contributions at full precision then round final score to nearest 0.25."
+    },
+    "output_contract": [
+      "world/artifact hash",
+      "date/version",
+      "published intent (original/franchise-inspired)",
+      "universal and selected specialist score or intervals",
+      "genre path and justification",
+      "optional overlay and justification",
+      "static evidence coverage",
+      "all G1-G13 statuses",
+      "start and creator diagnostics (non-additive)",
+      "three primary traceable promises",
+      "evidence-based change opportunities",
+      "historical metrics segregated from grade"
+    ]
+  },
+  "new_static_probes": {
+    "story_start": [
+      {
+        "id": "SS9",
+        "name": "Promise-to-entry trace",
+        "requirement": "Map the main listing promise to the default authored situation, an immediately available action and its source-defined consequence."
+      },
+      {
+        "id": "SS10",
+        "name": "Entry-path coverage",
+        "requirement": "For every offered start, verify selected role/form/status is not silently contradicted, even if the start is shorter or deliberately open-ended."
+      },
+      {
+        "id": "SS11",
+        "name": "Affordance diversity, not quantity",
+        "requirement": "Confirm meaningful alternatives that differ in objective or consequence; do not reward choice menus purely by count."
+      },
+      {
+        "id": "SS12",
+        "name": "Format neutrality",
+        "requirement": "Prose and instructional starts may both qualify if first situation, interactable elements, handoff, rules and source consequences are explicit."
+      }
+    ],
+    "character_creator": [
+      {
+        "id": "CC9",
+        "name": "Choice value vs verbosity",
+        "requirement": "Flag options whose text differs only by substituted label, unless clearly marked cosmetic."
+      },
+      {
+        "id": "CC10",
+        "name": "Progressive disclosure",
+        "requirement": "Inspect documented default/quickstart or simple path, then optional advanced depth; no tap-time claims."
+      },
+      {
+        "id": "CC11",
+        "name": "Player-status consistency",
+        "requirement": "Map factual status, aspirational goal, preexisting relationships and starting authority across every creator/start/mode conflict class."
+      },
+      {
+        "id": "CC12",
+        "name": "Identity fantasy bridge",
+        "requirement": "Trace creator-defining choices to authored first-situation affordances and later source-defined world responses."
+      }
+    ]
+  },
+  "catalogue_research_guardrails": [
+    {
+      "cohort": "over_one_year",
+      "window": "published more than one year before Oct 2026",
+      "scope": "separate mature sample",
+      "guardrail": "Do not normalize cumulative actions by last-updated age. Franchise-rich selection and survivorship bias."
+    },
+    {
+      "cohort": "before_2026",
+      "window": "originally published before January 2026",
+      "scope": "distinct named publication cohort",
+      "guardrail": "Deduplicate editions and reconcile any overlaps with the more-than-one-year cohort."
+    },
+    {
+      "cohort": "jul_aug_2026",
+      "window": "July–August 2026 as user-supplied batch labels",
+      "scope": "named cohort, coverage not fully independently verified",
+      "guardrail": "Do not infer dates from screenshot filenames alone; cross-check intersections."
+    },
+    {
+      "cohort": "aug_sep_2026",
+      "window": "August–September 2026",
+      "scope": "9 screenshots, first of two numbered alphabetical sections",
+      "guardrail": "Incomplete alphabetical coverage; September overlaps next cohort."
+    },
+    {
+      "cohort": "sep_oct_2026",
+      "window": "September 2026–October 15 2026",
+      "scope": "30 screenshots, four numbered sections",
+      "guardrail": "Last updated age is not publish date; overlaps August–September in September."
+    },
+    {
+      "cohort": "all_alphabetical_scan",
+      "window": "All ages mixed",
+      "scope": "43 images over nine numbered alphabetical captures, approximately 2k visible listing positions",
+      "guardrail": "Population size approximate; no verified census, canonical IDs or per-listing dates. Avoid pretending full titles/counters were machine validated."
+    }
+  ],
+  "optional_new_hard_checks": [
+    {
+      "id": "G14",
+      "name": "Path and scoring provenance",
+      "test": "World type, primary genre and optional overlay preregistered before grades; source version/hash documented. If unknown, universal only; never optimize path for score.",
+      "effect": "Blocks specialized certification when omitted; not an extra weighted criterion."
+    },
+    {
+      "id": "G15",
+      "name": "Claim-to-start/creator alignment",
+      "test": "Static trace of the first-screen listing promise to a start affordance, meaningful creator option/default and governed follow-on activity; document intentional exceptions.",
+      "effect": "Blocks material contradictions; not a requirement for custom creator categories."
+    }
+  ],
+  "scoring_status": "universal_anchor_comparable_across_worlds__adaptive_score_compare_within_path_only",
+  "readiness_v1_6_superseding": {
+    "universal_threshold": 85,
+    "adaptive_threshold": 85,
+    "G1_to_G13": "all applicable PASS",
+    "G14_and_G15": "PASS for a specialist-certified world",
+    "section_floor_ratios": {
+      "Discover": 0.76,
+      "Activate": 0.76,
+      "Sustain": 0.73,
+      "Deliver": 0.73
+    },
+    "note": "Do not confuse design readiness with demonstrated success. Old v1.5 fixed section floors apply to universal anchor; v1.6 derived floors apply to adaptive paths."
+  }
+}

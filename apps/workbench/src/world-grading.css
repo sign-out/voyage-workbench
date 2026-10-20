@@ -1,0 +1,55 @@
+.grading-page{--grading-accent:#286753;display:grid;align-content:start;gap:1.25rem;width:100%;max-width:1120px;margin-inline:auto;min-width:0;padding-bottom:2rem}
+[data-theme=dark] .grading-page{--grading-accent:#80d0c3}
+.grading-page *{box-sizing:border-box}
+.grading-page h2{font-size:clamp(1.65rem,4vw,2.25rem);letter-spacing:-.035em;margin:.2rem 0 .5rem}
+.grading-page h3{font-size:1.2rem;margin:0 0 .6rem}
+.grading-page h4{font-size:1.05rem;margin:0 0 .65rem}
+.grading-page h5{font-size:1rem;margin:0;line-height:1.5}
+.grading-page p,.grading-page li{line-height:1.65;overflow-wrap:anywhere}
+.grading-page p{margin:.55rem 0}
+.grading-page ul{padding-left:1.4rem}
+.grading-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;min-width:0}
+.grading-heading>div{min-width:0;flex:1 1 240px}
+.grading-eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;color:var(--grading-accent);font-weight:700}
+.grading-badge{display:inline-block;max-width:100%;border:1px solid #668d8a66;border-radius:999px;padding:.35rem .7rem;font-size:.8rem;line-height:1.5;overflow-wrap:anywhere;background:#668d8a12}
+.grading-badge-warning{border-color:#bb914a;color:inherit;background:#bb914a15}
+.grading-panel,.grading-criterion,.grading-score{border:1px solid var(--border,#71809644);border-radius:14px;padding:1.2rem;min-width:0;background:var(--panel-bg,#8298aa08)}
+.grading-safety{padding:1.1rem 1.25rem;border-inline-start:3px solid var(--grading-accent);background:#66c9bb0a;border-radius:0 12px 12px 0}
+.grading-muted,.grading-file span{opacity:.75;font-size:.9rem}
+.grading-actions{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-top:.8rem}
+.grading-page button,.grading-page select,.grading-page input,.grading-page textarea{font:inherit;max-width:100%}
+.grading-page button{min-height:44px;white-space:normal;line-height:1.4;padding:.65rem .95rem}
+.grading-page button:disabled{opacity:.5;cursor:not-allowed}
+.grading-page label{display:grid;gap:.5rem;font-size:.95rem;min-width:0}
+.grading-file{flex:1 1 270px}
+.grading-file input{display:block;width:100%;padding:.5rem 0;min-height:44px}
+.grading-file input::file-selector-button{min-height:44px;cursor:pointer;margin-right:.5rem}
+.grading-page select,.grading-page textarea{display:block;width:100%;min-height:44px;padding:.7rem;border:1px solid var(--border,#71809666);border-radius:8px;background:var(--input-bg,#8298aa0c);color:inherit}
+.grading-page select option{color:CanvasText;background:Canvas}
+.grading-page textarea{resize:vertical;line-height:1.6}
+.grading-page fieldset{border:0;margin:1rem 0;padding:0;min-width:0}
+.grading-page legend{font-weight:600;margin-bottom:.8rem}
+.grading-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+.grading-score-grid,.grading-criteria{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin:1rem 0}
+.grading-score{border-top:3px solid var(--grading-accent)}
+.grading-score-value{font-size:clamp(1.8rem,5vw,2.6rem);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+.grading-score-value span{font-size:1rem;font-weight:400;letter-spacing:0;opacity:.7}
+.grading-sections{list-style:none;padding:0!important;margin:1rem 0 0}
+.grading-sections li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.5rem;padding:.55rem 0;border-top:1px solid var(--border,#71809633);font-size:.9rem}
+.grading-empty{border:1px dashed var(--border,#71809666);padding:2rem;border-radius:14px;text-align:center}
+.grading-report{display:grid;gap:1rem;min-width:0}
+.grading-report-summary{font-size:1.08rem}
+.grading-report>.grading-heading label{max-width:100%;flex:1 1 290px}
+.grading-page details{min-width:0}
+.grading-page summary{cursor:pointer;min-height:44px;padding:.65rem 0;line-height:1.5;overflow-wrap:anywhere}
+.grading-page :is(button,select,input,textarea,summary):focus-visible{outline:3px solid var(--grading-accent);outline-offset:3px}
+.grading-page code{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem}
+.grading-evidence{margin:.6rem 0;padding:.8rem;border-left:2px solid var(--grading-accent);background:#8298aa0a}
+.grading-evidence blockquote{margin:.65rem 0 0;white-space:pre-wrap;line-height:1.65;overflow-wrap:anywhere}
+.grading-criterion>button{margin-top:.8rem}
+.grading-warning,.grading-error{border:1px solid #bb914a88;border-radius:8px;padding:1rem;background:#bb914a0b}
+.grading-error{border-color:#d77474;background:#d7747410}
+.grading-status{line-height:1.6;font-size:.95rem}
+.grading-provenance{opacity:.8}
+@media(max-width:760px){.grading-form-grid{grid-template-columns:1fr}.grading-score-grid,.grading-criteria{grid-template-columns:1fr}.grading-panel,.grading-criterion,.grading-score{padding:1rem}.grading-actions{align-items:stretch}.grading-actions>button{flex:1 1 180px}.grading-report>.grading-heading label{flex-basis:100%}.grading-heading{gap:.7rem}.grading-empty{padding:1.25rem}.grading-page{gap:1rem}}
+@media(prefers-reduced-motion:reduce){.grading-page *{scroll-behavior:auto;transition:none}}

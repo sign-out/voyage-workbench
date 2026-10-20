@@ -7,7 +7,7 @@ for(const name of ['blank-world','lantern-coast','living-continuity'])copyFileSy
 await viteBuild();
 const desktop=await bundle({entryPoints:{main:'hosts/desktop/main.ts',preload:'hosts/desktop/preload.ts'},bundle:true,platform:'node',format:'cjs',outdir:'build/desktop',outExtension:{'.js':'.cjs'},external:['electron'],sourcemap:true,metafile:true});
 for(const output of Object.values(desktop.metafile.outputs))for(const dependency of output.imports)if(dependency.external&&dependency.path!=='electron'&&!builtinModules.includes(dependency.path)&&!builtinModules.includes(dependency.path.replace(/^node:/,'')))throw new Error('Desktop runtime dependency must be bundled before packaging: '+dependency.path);
-execFileSync(process.execPath,['node_modules/typescript/bin/tsc','packages/core/document.ts','packages/core/project.ts','--outDir','build/native-ts','--target','ES5','--module','CommonJS','--lib','ES2022,DOM','--esModuleInterop','--skipLibCheck'],{stdio:'inherit'});
+execFileSync(process.execPath,['node_modules/typescript/bin/tsc','packages/core/document.ts','packages/core/project.ts','--outDir','build/native-ts','--target','ES5','--module','CommonJS','--lib','ES2022,DOM','--esModuleInterop','--skipLibCheck','--resolveJsonModule'],{stdio:'inherit'});
 writeFileSync('build/native-ts/package.json','{"type":"commonjs"}');
 await bundle({entryPoints:['build/native-ts/project.js'],bundle:true,platform:'browser',target:'es5',format:'iife',globalName:'VoyageCore',outfile:'build/core-native.js'});
 mkdirSync('android/app/src/main/assets',{recursive:true});copyFileSync('build/core-native.js','android/app/src/main/assets/core-native.js');
