@@ -24,7 +24,7 @@ signer_digest = hashlib.sha256(certificate).hexdigest()
 for source in (root / 'dist').rglob('*'):
     if source.is_file():
         expected['assets/public/' + source.relative_to(root / 'dist').as_posix()] = source
-for name in ['core-native.js', 'tools-plan.json', 'tools-work.json', 'cursor-sdk.cjs', 'cursor-runner.cjs']:
+for name in ['core-native.js', 'tools-plan.json', 'tools-work.json', 'tools-grade.json', 'cursor-sdk.cjs', 'cursor-runner.cjs']:
     expected['assets/' + name] = root / 'android/app/src/main/assets' / name
 for source in (root / 'android/app/src/main/assets').glob('cursor-sdk-*.zip'):
     expected['assets/' + source.name] = source

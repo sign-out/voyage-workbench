@@ -7,6 +7,7 @@ import * as doc from '../../../packages/core/document';
 import {put} from '../../../packages/core/features';
 import {musicInspect,musicCreate,musicRemove,musicSelect,musicPath,musicCues,mediaUrl,publicationEdit,publicationFields} from '../../../packages/core/studio';
 import {hash,type Project} from '../../../packages/core/project';
+import type {FieldFillOptions} from './FieldFill';
 
 type Props={onContextChange?:(selection:{path?:doc.Path;section?:string;label?:string})=>void;project:Project;command:(command:any)=>Promise<any>;receive:(result:any)=>void;onReview:()=>void;onDirtyChange?:(dirty:boolean)=>void;references?:any[]};
 function SectionDraft({project,path,title,schema,receive,onReview,onDirtyChange,validate,children}:{project:Project;path:doc.Path;title:string;schema?:any;receive:Props['receive'];onReview:()=>void;onDirtyChange?:Props['onDirtyChange'];validate?:(text:string)=>void;children?:(text:string,edit:(value:string)=>void)=>React.ReactNode}){
@@ -17,6 +18,19 @@ function SectionDraft({project,path,title,schema,receive,onReview,onDirtyChange,
  useEffect(()=>()=>{mounted.current=false;},[]);
  useEffect(()=>{if(!pending.current)setText(initial());},[project.activeSource,JSON.stringify(path),project.draft?.text]);
  const blocked=!!project.draft&&!same;
+ const fillTask=useRef('');
+ const fieldFill:FieldFillOptions={project,onStart:async input=>{
+  await serial.current;
+  if(!mounted.current)throw new Error('This editor is closed.');
+  if(pending.current)throw new Error('Save the draft successfully before generating text.');
+  const saved=await request('command',{id:project.id,command:{type:'draft',path,text,baseHash:hash(project.activeSource)}});
+  if(!mounted.current)throw new Error('This editor is closed.');
+  receive(saved);
+  const result=await request('startAgent',{id:project.id,kind:'plan',fieldFill:input});
+  const task=(result.project as Project).tasks.find(item=>item.fieldFill&&item.fieldFill.sourceHash===hash(input.source)&&!project.tasks.some(previous=>previous.id===item.id));
+  if(!task)throw new Error('The generation task was not returned.');
+  fillTask.current=task.id;if(mounted.current)receive(result);return task;
+ },onStop:async()=>{if(fillTask.current){const result=await request('stopAgent',{id:project.id,taskId:fillTask.current});if(mounted.current)receive(result);}}};
  function edit(value:string){
   if(blocked)return;setText(value);setSaving(true);setError('');pending.current=true;onDirtyChange?.(true);const version=++sequence.current;
   serial.current=serial.current.catch(()=>{}).then(async()=>{
@@ -26,7 +40,7 @@ function SectionDraft({project,path,title,schema,receive,onReview,onDirtyChange,
  }
  async function review(){setBusy(true);setError('');try{await serial.current;if(pending.current)throw new Error('Save the draft successfully before reviewing.');const latest=(await request('project',{id:project.id})).project as Project;if(!latest.draft||JSON.stringify(latest.draft.path)!==JSON.stringify(path)||latest.draft.text!==text)throw new Error('Draft changed. Reopen this editor before reviewing.');validate?.(text);const source=doc.edit(latest.activeSource,path,text);doc.assertPackageMetadataUnchanged(latest.activeSource,source);receive(await request('command',{id:project.id,command:{type:'stage',kind:'studio edit',id:crypto.randomUUID(),title,baseHash:hash(latest.activeSource),source}}));receive(await request('command',{id:project.id,command:{type:'discardDraft'}}));onReview();}catch(reason){setError((reason as Error).message);}finally{setBusy(false);}}
  if(blocked)return <p role="status">Another entry has an editing draft. Apply or discard it in Content before editing this section.</p>;
- return <section className="studio-section"><p className="muted">Editing drafts save locally. Review changes before applying them to the world.</p>{saving&&<p role="status">Saving editing draft…</p>}{error&&<p role="alert" className="alert">{error}<button onClick={()=>edit(text)}>Retry draft save</button></p>}{children?children(text,edit):<ValueEditor text={text} onChange={edit} schema={schema} worldSource={project.activeSource} basePath={path} section={String(path[path.length-1])} onCopy={value=>request('copyText',{text:value})} onExport={value=>request('export',{source:value,name:title+'.json'})}/>}<div className="button-row"><button className="primary" disabled={busy||saving||!same} onClick={()=>void review()}>Review changes</button><button disabled={busy||saving||!project.draft} onClick={()=>{if(window.confirm('Discard this editing draft?'))void request('command',{id:project.id,command:{type:'discardDraft'}}).then(result=>{receive(result);pending.current=false;setText(doc.read(project.activeSource,path));onDirtyChange?.(false);}).catch(reason=>setError(reason.message));}}>Discard editing draft</button></div></section>;
+ return <section className="studio-section"><p className="muted">Editing drafts save locally. Review changes before applying them to the world.</p>{saving&&<p role="status">Saving editing draft…</p>}{error&&<p role="alert" className="alert">{error}<button onClick={()=>edit(text)}>Retry draft save</button></p>}{children?children(text,edit):<ValueEditor text={text} onChange={edit} schema={schema} worldSource={project.activeSource} basePath={path} section={String(path[path.length-1])} fieldFill={fieldFill} onCopy={value=>request('copyText',{text:value})} onExport={value=>request('export',{source:value,name:title+'.json'})}/>}<div className="button-row"><button className="primary" disabled={busy||saving||!same} onClick={()=>void review()}>Review changes</button><button disabled={busy||saving||!project.draft} onClick={()=>{if(window.confirm('Discard this editing draft?'))void request('command',{id:project.id,command:{type:'discardDraft'}}).then(result=>{receive(result);pending.current=false;setText(doc.read(project.activeSource,path));onDirtyChange?.(false);}).catch(reason=>setError(reason.message));}}>Discard editing draft</button></div></section>;
 }
 
 function MusicTracks({text,edit,project,reference,onContextChange}:{text:string;edit:(text:string)=>void;project:Project;reference?:any;onContextChange?:Props['onContextChange']}){

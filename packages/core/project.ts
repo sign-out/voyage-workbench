@@ -1,4 +1,6 @@
 import {sha256} from 'js-sha256';
+import * as fieldFill from './field-fill';
+import {fieldFillSnapshot,fieldFillPrompt,parseFieldFill,type FieldFillSnapshot} from './field-fill';
 import * as doc from './document';
 import {editorSnapshot,type EditorSnapshot} from './assistant-context';
 import * as assistantContext from './assistant-context';
@@ -14,6 +16,7 @@ export {readBuilderNotes} from './builder-notes';
 import {proposedOrder,type WorkOrder} from './work-orders';
 import * as authoring from './authoring';
 import {proposedArtwork,type ArtworkProposal} from './artwork-requests';
+import {gradingSnapshot,gradingPrompt,parseRubric,parseGradeReport,type Rubric,type GradingSnapshot,type GradeReport} from './world-grading';
 export type {WorkOrder} from './work-orders';
 export interface WorkOrderProposal {id:string;taskId:string;baseHash:string;order:WorkOrder;created:number;noteIds?:string[]}
 export type LocalEditMode='automatic'|'proposal-only';
@@ -22,6 +25,8 @@ export interface Task {editorContext?:EditorSnapshot;localEditMode?:LocalEditMod
 export interface NoteChangeReceipt {id:string;taskId:string;proposalId:string;noteIds:string[];title:string;beforeHash:string;afterHash:string;beforeCheckpointId:string;afterCheckpointId:string;created:number}
 export interface Candidate {id:string;title:string;source:string;baseHash:string;created:number;kind:string;sourceProposalId?:string;noteIds?:string[];importNote?:string;rejectedChanges?:doc.ChangeChoice[]}
 export interface Project {artworkProposals?:ArtworkProposal[];bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string;editorContext?:Pick<EditorSnapshot,'screen'|'label'|'focusPaths'>}[];workOrder:WorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
+export interface Project {grading?:{rubric?:Rubric;reports:GradeReport[]}}
+export interface Task {grading?:GradingSnapshot;fieldFill?:FieldFillSnapshot}
 let nativeHasher:((source:string)=>string)|undefined;
 export function setHasher(fn:(source:string)=>string){nativeHasher=fn;}
 export const hash=(source:string)=>nativeHasher?nativeHasher(source):sha256(source);
@@ -43,6 +48,21 @@ export function reduce(project:Project,c:any):Project {
   }
   if(p.draft&&['edit','insert','remove','accept'].indexOf(c.type)>=0)throw new Error('Apply or discard the editor draft first.');
   switch(c.type){
+    case 'gradingRubric':{
+      if(p.tasks.some(t=>t.grading&&['PREPARED','RUNNING'].includes(t.state)))throw new Error('Stop or finish grading before changing the rubric.');
+      const rubric=c.rubric===undefined?undefined:parseRubric(c.rubric);
+      p.grading={rubric,reports:p.grading?.reports||[]};break;
+    }
+    case 'gradingFixOrder':{
+      requireCurrent(p,c.baseHash);if(p.draft)throw new Error('Apply or discard the editor draft before suggesting fixes.');
+      const report=p.grading?.reports.find(report=>report.id===c.reportId),fix=report?.fixes.find(fix=>fix.id===c.fixId);
+      if(!report||!fix)throw new Error('This grading fix no longer exists.');
+      if(report.sourceHash!==hash(p.activeSource))throw new Error('The world changed. Regrade before creating a fix order.');
+      if(report.rubricHash!==gradingSnapshot(p.grading?.rubric,report.selection).rubricHash)throw new Error('The rubric changed. Regrade before creating a fix order.');
+      if(typeof c.id!=='string'||!c.id||p.workOrderProposals?.some(proposal=>proposal.id===c.id))throw new Error('Provide a unique proposal ID.');
+      const order=proposedOrder(p.activeSource,{objective:fix.title,requirements:fix.requirements,allowedPaths:fix.wholeWorld?[]:fix.allowedPaths,wholeWorld:fix.wholeWorld===true});
+      p.workOrderProposals=[...(p.workOrderProposals||[]),{id:c.id,taskId:report.taskId,baseHash:report.sourceHash,order,created:p.updated}];break;
+    }
     case 'bookmark':{
       requireCurrent(p,c.baseHash);authoring.authoredPath(p.activeSource,c.path,true);
       if(typeof c.id!=='string'||!c.id||typeof c.name!=='string'||!c.name.trim()||c.name.length>200)throw new Error('Provide a bookmark name of 1–200 characters.');
@@ -104,6 +124,8 @@ export function reduce(project:Project,c:any):Project {
     case 'accept':{const candidate=p.candidates.filter(value=>value.id===c.id)[0];if(!candidate)throw new Error('Proposal no longer exists.');acceptCandidate(candidate);break;}
     case 'proposeArtwork':{
       const t=task();if(t.kind!=='plan'||t.state!=='RUNNING'||c.attempt!==t.attempt)throw new Error('Only the current running planning attempt can propose artwork.');
+      if(t.fieldFill)throw new Error('Field fill is read only.');
+      if(t.grading)throw new Error('Grading is read only. Suggest fixes explicitly from the grading report.');
       requireCurrent(p,t.baseHash);
       if(typeof c.id!=='string'||!c.id||p.artworkProposals?.some(proposal=>proposal.id===c.id))throw new Error('Provide a unique artwork proposal ID.');
       if((p.artworkProposals||[]).length>=500)throw new Error('Review or dismiss existing artwork requests before adding more.');
@@ -114,6 +136,8 @@ export function reduce(project:Project,c:any):Project {
     case 'dismissArtworkProposal':p.artworkProposals=(p.artworkProposals||[]).filter(proposal=>proposal.id!==c.id);break;
     case 'proposeWorkOrder':{
       const t=task();if(t.kind!=='plan'||t.state!=='RUNNING'||c.attempt!==t.attempt)throw new Error('Only the current running planning attempt can propose a Work Order.');
+      if(t.fieldFill)throw new Error('Field fill is read only.');
+      if(t.grading)throw new Error('Grading is read only. Suggest fixes explicitly from the grading report.');
       requireCurrent(p,t.baseHash);
       if(typeof c.id!=='string'||!c.id||p.workOrderProposals?.some(proposal=>proposal.id===c.id))throw new Error('Provide a unique proposal ID.');
       const order=proposedOrder(t.baseSource,c.order);
@@ -132,6 +156,11 @@ export function reduce(project:Project,c:any):Project {
     case 'prepareTask':{
       if(p.tasks.some(t=>['PREPARED','RUNNING'].indexOf(t.state)>=0))throw new Error('Finish or stop the current task first.');
       if(!['plan','work'].includes(c.kind))throw new Error('Invalid task kind.');
+      if(c.grading!==undefined&&(c.kind!=='plan'||c.addressNotes||p.draft))throw new Error('Grading requires a read-only planning task without unapplied edits.');
+      if(c.fieldFill!==undefined&&(c.kind!=='plan'||c.grading!==undefined||c.addressNotes))throw new Error('Field fill requires an isolated read-only planning task.');
+      const fill=c.fieldFill===undefined?undefined:fieldFillSnapshot(c.fieldFill);
+      const baseSource=fill?c.fieldFill.source:p.activeSource;
+      const grading=c.grading===undefined?undefined:gradingSnapshot(p.grading?.rubric,c.grading);
       if(c.kind==='work'&&!p.workOrder.objective.trim())throw new Error('Write or approve a Work Order first.');
       if(c.kind==='work'&&p.workOrder.sourceProposalId&&!p.workOrderProposals?.some(proposal=>proposal.id===p.workOrder.sourceProposalId&&proposal.baseHash===hash(p.activeSource)))throw new Error('The originating Work Order suggestion is stale or missing. Refresh it or explicitly detach its link.');
       if(c.kind==='work'&&p.workOrder.reviewedScope){if(p.draft)throw new Error('Apply or discard the editor draft before approving work.');proposedOrder(p.activeSource,{objective:p.workOrder.objective,requirements:p.workOrder.requirements,allowedPaths:p.workOrder.wholeWorld?[]:p.workOrder.allowedPaths,wholeWorld:p.workOrder.wholeWorld===true});}
@@ -139,13 +168,15 @@ export function reduce(project:Project,c:any):Project {
       if(c.addressNotes&&c.kind!=='plan')throw new Error('Flagged notes can only start a planning task.');
       if(c.addressNotes&&p.draft)throw new Error('Apply or discard the editor draft before planning flagged notes.');
       const queuedNotes=c.addressNotes?noteQueue(p.builderNotes||[]):undefined;
-      const taskPrompt=queuedNotes?notePlanningPrompt(queuedNotes):c.prompt||p.workOrder.objective;
-      const includeNotes=c.addressNotes||(typeof c.includeBuilderNotes==='boolean'?c.includeBuilderNotes:p.builderContextDefault!==false);
+      const taskPrompt=fill?fieldFillPrompt(fill):grading?gradingPrompt(grading):queuedNotes?notePlanningPrompt(queuedNotes):c.prompt||p.workOrder.objective;
+      const includeNotes=!fill&&!grading&&(c.addressNotes||(typeof c.includeBuilderNotes==='boolean'?c.includeBuilderNotes:p.builderContextDefault!==false));
       const noteSnapshot=(includeNotes?p.builderNotes||[]:[]).map(note=>({...note,path:note.path.slice()}));
-      const editorContext=editorSnapshot(p.activeSource,c.editorContext);
+      const editorContext=fill||grading?undefined:editorSnapshot(p.activeSource,c.editorContext);
       const applyMode=c.localEditMode===undefined?'proposal-only':localEditMode(c.localEditMode);
-      p.tasks.unshift({localEditMode:applyMode,...(editorContext?{editorContext}:{}),id:c.id,attempt:c.attempt,kind:c.kind,state:'PREPARED',prompt:taskPrompt,builderNotes:noteSnapshot,sourceNoteIds:c.kind==='work'?(p.workOrderProposals?.find(proposal=>proposal.id===p.workOrder.sourceProposalId)?.noteIds?.slice()||[]):[],...(queuedNotes?{noteQueue:queuedNotes}:{}),reply:'',baseSource:p.activeSource,baseHash:hash(p.activeSource),stagedSource:p.activeSource,workOrder:p.workOrder,route:c.route,created:p.updated});
-      if(c.kind==='plan')p.chat.push({role:'user',...(editorContext?{editorContext:{screen:editorContext.screen,label:editorContext.label,focusPaths:editorContext.focusPaths}}:{}),text:queuedNotes?'Address project notes · '+queuedNotes.length+' flagged notes':c.prompt});break;
+      p.tasks.unshift({localEditMode:applyMode,...(editorContext?{editorContext}:{}),id:c.id,attempt:c.attempt,kind:c.kind,state:'PREPARED',prompt:taskPrompt,builderNotes:noteSnapshot,sourceNoteIds:c.kind==='work'?(p.workOrderProposals?.find(proposal=>proposal.id===p.workOrder.sourceProposalId)?.noteIds?.slice()||[]):[],...(queuedNotes?{noteQueue:queuedNotes}:{}),reply:'',baseSource,baseHash:hash(baseSource),stagedSource:baseSource,workOrder:fill?{objective:'',requirements:[],allowedPaths:[]}:p.workOrder,route:c.route,created:p.updated});
+      if(grading)p.tasks[0].grading=grading;
+      if(fill)p.tasks[0].fieldFill=fill;
+      if(c.kind==='plan'&&!grading&&!fill)p.chat.push({role:'user',...(editorContext?{editorContext:{screen:editorContext.screen,label:editorContext.label,focusPaths:editorContext.focusPaths}}:{}),text:queuedNotes?'Address project notes · '+queuedNotes.length+' flagged notes':c.prompt});break;
     }
     case 'taskRunning':{const t=task();if(t.state!=='PREPARED')throw new Error('Task is not prepared.');t.state='RUNNING';break;}
     case 'taskReply':{const t=task();if(t.state!=='RUNNING')throw new Error('Task is no longer running.');t.reply=c.text;break;}
@@ -156,7 +187,12 @@ export function reduce(project:Project,c:any):Project {
       const nextSource=c.action==='insert'?doc.insert(t.stagedSource,c.path,c.key,c.source):c.action==='remove'?doc.remove(t.stagedSource,c.path):doc.edit(t.stagedSource,c.path,c.source);doc.assertPackageMetadataUnchanged(t.stagedSource,nextSource);t.stagedSource=nextSource;break;
     }
     case 'taskDone':{const t=task();if(t.state!=='RUNNING')throw new Error('Task is no longer running.');t.reply=c.text||t.reply;
-      if(t.kind==='plan'){t.state='COMPLETED';p.chat.push({role:'assistant',text:t.reply});p.chat=p.chat.slice(-60);}
+      if(t.fieldFill){t.fieldFill={...t.fieldFill,result:parseFieldFill(t.reply,t.fieldFill)};t.state='COMPLETED';}
+      else if(t.grading){
+        const report=parseGradeReport(t.reply,t.grading,t.baseSource,{id:t.id,taskId:t.id,sourceHash:t.baseHash,created:p.updated});
+        p.grading={...p.grading,reports:[report,...(p.grading?.reports||[])].slice(0,20)};t.state='COMPLETED';
+      }
+      else if(t.kind==='plan'){t.state='COMPLETED';p.chat.push({role:'assistant',text:t.reply});p.chat=p.chat.slice(-60);}
       else {
         const candidate:Candidate={id:t.id,title:t.workOrder.objective.slice(0,100),source:t.stagedSource,baseHash:t.baseHash,created:p.updated,kind:'agent',...(t.workOrder.sourceProposalId?{sourceProposalId:t.workOrder.sourceProposalId,noteIds:t.sourceNoteIds?.slice()||[]}:{})};
         t.state='PROPOSAL_READY';p.candidates.unshift(candidate);
@@ -193,4 +229,4 @@ export function remotePayload(source:string,baseline?:string,worldId?:string):st
   if(!object.children.some(c=>c.key==='initialGameState'))throw new Error('Remote saves require the downloaded world envelope.');
   return '{"world":{'+fields.filter(k=>object.children.some(c=>c.key===k)).map(k=>JSON.stringify(k)+':'+doc.read(source,prefix.concat(k))).join(',')+'}}';
 }
-export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode,projectSummary} as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(harness as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}
+export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode,projectSummary} as any)[r.operation]||(fieldFill as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(harness as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}
