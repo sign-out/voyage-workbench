@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createServer} from 'node:http';
 import {Service} from './service';
+import {hash} from '../../packages/core/project';
 import {defaultSettings,type Protocol} from '../../packages/core/providers';
 
 const presets:[string,Protocol][]=[['OpenAI','openai-responses'],['Local endpoint','openai'],['xAI','openai'],['OpenRouter','openai'],['Anthropic','anthropic'],['Gemini','gemini']];
@@ -61,7 +62,7 @@ for(const [name,protocol] of presets)test(name+' connects, discovers models, pro
   const wait=async()=>{for(let attempt=0;attempt<200;attempt++){const current=service.store.project(project.id);if(!['PREPARED','RUNNING'].includes(current.tasks[0].state))return current;await new Promise(resolve=>setTimeout(resolve,15));}throw new Error('Task timed out');};
   await service.request('startAgent',{id:project.id,kind:'plan',prompt:'Discuss title'});
   assert.equal((await wait()).tasks[0].state,'COMPLETED');
-  await service.request('command',{id:project.id,command:{type:'workOrder',order:{objective:'Change title',requirements:[],allowedPaths:[['title']]}}});
+  await service.request('command',{id:project.id,command:{type:'workOrder',baseHash:hash(source),order:{reviewedScope:true,objective:'Change title',requirements:[],allowedPaths:[['title']]}}});
   await service.request('startAgent',{id:project.id,kind:'work'});
   const result=await wait();
   assert.equal(result.tasks[0].state,'APPLIED',result.tasks[0].error);

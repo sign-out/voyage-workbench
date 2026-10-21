@@ -65,7 +65,7 @@ test('queue start blocks drafts, empty selections, work stage and oversized cont
  assert.throws(()=>reduce(initial(),{type:'prepareTask',id:'t',attempt:'a',kind:'plan',addressNotes:true}),/Flag at least/);
  const project=add();const draft=reduce(project,{type:'draft',baseHash:hash(source),path:['initialGameState','combatSettings'],text:'{}'});
  assert.throws(()=>reduce(draft,{type:'prepareTask',id:'t',attempt:'a',kind:'plan',addressNotes:true}),/draft/);
- const work=reduce(project,{type:'workOrder',order:{objective:'Work',requirements:[],allowedPaths:[]}});assert.throws(()=>reduce(work,{type:'prepareTask',id:'t',attempt:'a',kind:'work',addressNotes:true}),/planning task/);
+ const work=reduce(project,{type:'workOrder',baseHash:hash(source),order:{reviewedScope:true,objective:'Work',requirements:[],allowedPaths:[],wholeWorld:true}});assert.throws(()=>reduce(work,{type:'prepareTask',id:'t',attempt:'a',kind:'work',addressNotes:true}),/planning task/);
  const large:Array<BuilderNote>=Array.from({length:11},(_,index)=>({id:String(index),path:[],text:'x'.repeat(20000),planning:true,revision:1,created:1,updated:1}));assert.throws(()=>noteQueue(large),/no notes were omitted/);assert.equal(large.length,11);
 });
 test('planner outcomes are task-scoped, proposal-backed, durable and never clear action flags',()=>{
@@ -101,7 +101,7 @@ test('note-linked work carries its provenance into staged and applied changes',(
  project=reduce(project,{type:'proposeWorkOrder',taskId:'plan',attempt:'plan-attempt',id:'suggestion',order:{objective:'Improve combat',requirements:[],allowedPaths:[['initialGameState','combatSettings']]}});
  project=reduce(project,{type:'recordNotePlan',taskId:'plan',attempt:'plan-attempt',noteId:'n',state:'proposed',explanation:'Ready for author review',proposalId:'suggestion'});
  project=reduce(project,{type:'taskDone',taskId:'plan',attempt:'plan-attempt'});
- project=reduce(project,{type:'workOrder',order:{...project.workOrderProposals![0].order,sourceProposalId:'suggestion'}});
+ project=reduce(project,{type:'workOrder',baseHash:hash(source),order:{...project.workOrderProposals![0].order,reviewedScope:true,sourceProposalId:'suggestion'}});
  project=reduce(reduce(project,{type:'prepareTask',id:'work',attempt:'work-attempt',kind:'work'}),{type:'taskRunning',taskId:'work',attempt:'work-attempt'});
  project=reduce(project,{type:'taskEdit',taskId:'work',attempt:'work-attempt',action:'insert',path:['initialGameState','combatSettings'],key:'fatigue',source:'true'});
  project=reduce(project,{type:'taskDone',taskId:'work',attempt:'work-attempt'});

@@ -47,3 +47,18 @@ Both map toolbars have a Show labels toggle. It hides region names, coordinate
 text, and location-name callouts while retaining interactive tiles and markers.
 Accessible names remain available. The preference is remembered on the device
 and does not edit exported world JSON or discard unsaved inspector input.
+
+## Upload isolation and interrupted uploads
+
+Image allowances, signed-byte uploads, and moderation are bound to the local
+project, linked world, and Voyage environment. Switching the Creator connection
+to another environment cannot retarget a pending upload. Reconnect to the
+recorded environment before resuming it. Older pending receipts without an
+environment binding require explicit investigation rather than a guessed target.
+
+An interrupted byte transfer may have succeeded remotely even if its response
+was lost. Recovery uses the same upload allowance and moderation operation to
+resolve that outcome; it does not silently request a replacement allowance.
+Unresolved outcomes stay blocked with their receipt retained. A completed upload
+whose local library write failed can repair the library on resume without
+uploading the bytes or requesting another allowance.

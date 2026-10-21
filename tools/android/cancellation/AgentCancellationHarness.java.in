@@ -1,0 +1,252 @@
+package dev.voyage.workbench;
+
+import java.util.*;
+
+public final class AgentCancellationHarness {
+    static int assertions;
+
+    static void check(boolean condition, String message) {
+        assertions++;
+        if (!condition) throw new AssertionError(message);
+    }
+
+    static JSONObject task(String id, String attempt, String state) {
+        return new JSONObject().put("id", id).put("attempt", attempt).put("state", state);
+    }
+
+    static Intent intent(String mode, String project, String task, String attempt) {
+        return new Intent().putExtra("mode", mode).putExtra("projectId", project)
+            .putExtra("taskId", task).putExtra("attempt", attempt);
+    }
+
+    static JSONObject request(String project, String task) {
+        return new JSONObject().put("id", project).put("taskId", task);
+    }
+
+    static void drain() {
+        while (!Thread.workers.isEmpty()) Thread.workers.remove().run();
+        while (!Handler.callbacks.isEmpty()) Handler.callbacks.remove().run();
+    }
+
+    public static void main(String[] args) throws Exception {
+        Store store = new Store();
+        store.add("project", task("A", "new", "PREPARED"), task("B", "done", "COMPLETED"));
+        store.add("other", task("A", "new", "RUNNING"));
+        HostHarness host = new HostHarness(store);
+        AgentService service = new AgentService(store);
+        host.start("run", "project", "A");
+        Intent start = host.app.intents.remove();
+        check("new".equals(start.getStringExtra("attempt")), "Host must snapshot the launch attempt");
+        service.onStartCommand(start, 0, 1);
+        Rpc activeRpc = new Rpc();
+        service.rpc = activeRpc;
+        host.stop(request("project", "B"));
+        check(host.app.intents.isEmpty(), "Completed B must not emit a stop while A runs");
+        check(store.dispatches == 0, "Completed B must not dispatch a task mutation");
+        service.onStartCommand(intent("stop", "project", "B", "done"), 0, 2);
+        service.onStartCommand(intent("stop", "other", "A", "new"), 0, 3);
+        service.onStartCommand(intent("stop", "project", "A", "old"), 0, 4);
+        service.onStartCommand(intent("stop", "project", "A", null), 0, 5);
+        service.onStartCommand(null, 0, 6);
+        check(!service.canceled && !activeRpc.closed && service.stoppedAt == 0,
+            "Wrong task/project/attempt or null redelivery must not cancel or destroy A");
+        host.stop(request("project", "A").put("attempt", "old"));
+        check(host.app.intents.isEmpty() && store.dispatches == 0, "Stale requested attempt must be ignored");
+        host.stop(request("other", "A"));
+        service.onStartCommand(host.app.intents.remove(), 0, 6);
+        check(!service.canceled && !activeRpc.closed, "Host stop in another project must not affect A");
+        check("PREPARED".equals(store.find("project", "A").getString("state")), "Other project stop must not mutate A");
+        drain();
+        check(service.workCalls == 1 && service.stoppedAt == 6 && !service.running,
+            "Ignored starts must not prevent worker cleanup from stopping the service");
+
+        store.find("project", "A").put("state", "PREPARED");
+        service.onStartCommand(start, 0, 7);
+        service.rpc = new Rpc();
+        activeRpc = service.rpc;
+        host.stop(request("project", "A"));
+        Intent stop = host.app.intents.remove();
+        check("new".equals(stop.getStringExtra("attempt")), "Host must attach the canceled attempt");
+        service.onStartCommand(stop, 0, 8);
+        check(service.canceled && activeRpc.closed && service.stoppedAt == 6,
+            "Matching startup stop must close RPC but retain service until worker exits");
+        drain();
+        check(service.workCalls == 1 && service.stoppedAt == 8 && !service.running,
+            "Canceled startup worker must not perform provider work");
+        check("CANCELED".equals(store.find("project", "A").getString("state")), "Matching stop must persist cancellation");
+
+        store.find("project", "A").put("state", "PREPARED").put("attempt", "newer");
+        host.start("run", "project", "A");
+        service.onStartCommand(host.app.intents.remove(), 0, 9);
+        service.rpc = new Rpc();
+        activeRpc = service.rpc;
+        service.onStartCommand(stop, 0, 10);
+        check(!service.canceled && !activeRpc.closed, "Old stop must not cancel newer attempt");
+        Runnable worker = Thread.workers.remove();
+        worker.run();
+        check(service.workCalls == 2 && service.running, "New attempt should run before main-thread cleanup");
+        service.onStartCommand(intent("stop", "project", "A", "newer"), 0, 11);
+        check(service.canceled && activeRpc.closed, "Matching running attempt must cancel");
+        drain();
+        check(service.stoppedAt == 11, "Cleanup must use latest delivered start ID");
+
+        store.find("project", "A").put("state", "PREPARED").put("attempt", "superseded");
+        service.onStartCommand(intent("run", "project", "A", "older"), 0, 12);
+        drain();
+        check(service.workCalls == 2, "Delayed start must not rebind to a newer stored attempt");
+        check("PREPARED".equals(store.find("project", "A").getString("state")), "Stale startup failure must not stop newer task");
+
+        AgentService earlyService = new AgentService(store);
+        host.stop(request("project", "A"));
+        earlyService.onStartCommand(host.app.intents.remove(), 0, 1);
+        earlyService.onStartCommand(intent("run", "project", "A", "superseded"), 0, 2);
+        drain();
+        check(earlyService.workCalls == 0, "Stop delivered before run intent must not start canceled work");
+        check(earlyService.stoppedAt == 2, "Stop-before-start race must clean up service");
+
+        for (String mode : Arrays.asList("login", "cli-login")) {
+            service.onStartCommand(intent(mode, null, null, null), 0, 13);
+            service.rpc = new Rpc();
+            activeRpc = service.rpc;
+            service.onStartCommand(stop, 0, 14);
+            service.onStartCommand(intent("stop", null, null, null), 0, 15);
+            check(!service.canceled && !activeRpc.closed && service.activeTarget == null,
+                "Work stops must not cancel " + mode);
+            drain();
+        }
+        check(service.loginCalls == 1 && CliLogin.calls == 1, "Both valid login paths must still execute");
+        service.onStartCommand(stop, 0, 16);
+        check(service.stoppedAt == 16 && Thread.workers.isEmpty(), "Idle stop must not leave a foreground service");
+        service.onStartCommand(intent("run", "project", "A", null), 0, 17);
+        check(!service.running && Thread.workers.isEmpty(), "Unscoped run intent must fail closed");
+        try {
+            host.stop(request("project", "missing"));
+            throw new AssertionError("Missing task must fail validation");
+        } catch (Exception expected) {
+            check(host.app.intents.isEmpty(), "Missing task must not send stop");
+        }
+        for (String state : Arrays.asList("COMPLETED", "CANCELED", "FAILED")) {
+            store.find("project", "A").put("state", state);
+            host.stop(request("project", "A"));
+            check(host.app.intents.isEmpty(), "Terminal task must not stop service: " + state);
+        }
+        System.out.println("Native cancellation regression: " + assertions + " assertions passed");
+    }
+
+    static final class AgentService {
+        static final int START_NOT_STICKY = 2;
+        Store store;
+        volatile Rpc rpc;
+        volatile boolean canceled, running;
+        String projectId, taskId, attempt;
+        AgentTaskTarget activeTarget;
+        int latestStartId, stoppedAt, workCalls, loginCalls;
+        StringBuilder reply = new StringBuilder();
+        long flushed;
+        boolean completed;
+        AgentService(Store store) { this.store = store; }
+        void stopSelf(int startId) { stoppedAt = startId; }
+        Object getMainLooper() { return this; }
+        void login() { loginCalls++; }
+        public int onStartCommand@SERVICE_START@
+        void command@SERVICE_COMMAND@
+        void ensureTaskRunning@SERVICE_ENSURE@
+        void run(Intent intent)@SERVICE_RUN@workCalls++;}
+    }
+
+    static final class HostHarness {
+        final Context app = new Context();
+        final Store store;
+        HostHarness(Store store) { this.store = store; }
+        void start@HOST_START@
+        Object stop(JSONObject p) throws Exception {
+            String id = p.optString("id");
+            @HOST_STOP@
+        }
+    }
+
+    static final class Thread {
+        static final Queue<Runnable> workers = new ArrayDeque<>();
+        final Runnable worker;
+        Thread(Runnable worker, String name) { this.worker = worker; }
+        void start() { workers.add(worker); }
+    }
+
+    static final class Handler {
+        static final Queue<Runnable> callbacks = new ArrayDeque<>();
+        Handler(Object looper) {}
+        void post(Runnable callback) { callbacks.add(callback); }
+    }
+
+    static final class Intent {
+        final Map<String, String> extras = new HashMap<>();
+        Intent() {}
+        Intent(Context context, Class<?> service) {}
+        Intent putExtra(String key, String value) { extras.put(key, value); return this; }
+        String getStringExtra(String key) { return extras.get(key); }
+    }
+
+    static final class Context {
+        final Queue<Intent> intents = new ArrayDeque<>();
+        void startForegroundService(Intent intent) { intents.add(intent); }
+    }
+
+    static final class JSONObject {
+        final Map<String, Object> values = new HashMap<>();
+        JSONObject put(String key, Object value) { values.put(key, value); return this; }
+        String getString(String key) { return (String) values.get(key); }
+        String optString(String key) { return values.containsKey(key) ? getString(key) : ""; }
+        JSONArray getJSONArray(String key) { return (JSONArray) values.get(key); }
+        boolean has(String key) { return values.containsKey(key); }
+        public String toString() { return values.toString(); }
+    }
+
+    static final class JSONArray {
+        final List<JSONObject> values = new ArrayList<>();
+        int length() { return values.size(); }
+        JSONObject getJSONObject(int index) { return values.get(index); }
+    }
+
+    static final class Store {
+        final Map<String, JSONObject> projects = new HashMap<>();
+        int dispatches;
+        void add(String id, JSONObject... tasks) {
+            JSONArray entries = new JSONArray();
+            entries.values.addAll(Arrays.asList(tasks));
+            projects.put(id, new JSONObject().put("tasks", entries));
+        }
+        JSONObject project(String id) { return projects.get(id); }
+        JSONObject get(String id, int revision) { return project(id); }
+        JSONObject find(String project, String taskId) {
+            for (JSONObject task : project(project).getJSONArray("tasks").values)
+                if (taskId.equals(task.getString("id"))) return task;
+            throw new IllegalArgumentException("Missing task");
+        }
+        void dispatch(String project, JSONObject command) throws Exception {
+            JSONObject task = find(project, command.getString("taskId"));
+            if (!task.getString("attempt").equals(command.getString("attempt"))) throw new Exception("Stale attempt");
+            dispatches++;
+            String state = task.getString("state");
+            if ("taskStop".equals(command.getString("type"))) {
+                if ("PREPARED".equals(state) || "RUNNING".equals(state)) task.put("state", command.getString("state"));
+            } else if ("taskRunning".equals(command.getString("type"))) {
+                if (!"PREPARED".equals(state)) throw new Exception("Task is not prepared");
+                task.put("state", "RUNNING");
+            }
+        }
+        void setting(String key, String value) {}
+    }
+
+    static final class Rpc {
+        boolean closed;
+        void close() { closed = true; }
+    }
+
+    static final class CliLogin {
+        static int calls;
+        static void run(AgentService service, String profileId, String method, java.util.function.BooleanSupplier canceled) {
+            if (canceled.getAsBoolean()) throw new AssertionError("Unrelated stop canceled CLI login");
+            calls++;
+        }
+    }
+}

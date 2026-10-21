@@ -5,12 +5,47 @@ import {create,reduce,hash,localEditMode,type Project} from './project';
 const source='{"title":"Before","exact":9007199254740993,"fraction":1.000,"other":"keep"}';
 function running(mode?:string){
  let project=create('p','Local edit fixture',source,1);
- project=reduce(project,{type:'workOrder',order:{objective:'Change title',requirements:[],allowedPaths:[['title']]}});
+ project=reduce(project,{type:'workOrder',baseHash:hash(source),order:{reviewedScope:true,objective:'Change title',requirements:[],allowedPaths:[['title']]}});
  project=reduce(project,{type:'prepareTask',id:'work',attempt:'attempt',kind:'work',...(mode?{localEditMode:mode}:{})});
  project=reduce(project,{type:'taskRunning',taskId:'work',attempt:'attempt'});
  return reduce(project,{type:'taskEdit',taskId:'work',attempt:'attempt',action:'replace',path:['title'],source:'"After"'});
 }
 const complete=(project:Project)=>reduce(project,{type:'taskDone',taskId:'work',attempt:'attempt',text:'Updated title',beforeCheckpointId:'before',afterCheckpointId:'after'});
+function scopedWork(source:string,path:(string|number)[]){
+ let project=create('p','Validated work',source,1);
+ project=reduce(project,{type:'workOrder',baseHash:hash(source),order:{reviewedScope:true,objective:'Update authored content',requirements:[],allowedPaths:[path]}});
+ project=reduce(project,{type:'prepareTask',id:'work',attempt:'attempt',kind:'work',localEditMode:'automatic'});
+ return reduce(project,{type:'taskRunning',taskId:'work',attempt:'attempt'});
+}
+test('schema-invalid staged combat settings remain an exact proposal instead of automatically applying',()=>{
+ const source='{"shortId":"protected","initialGameState":{"worldBackground":"Before","combatSettings":{"minCombatXP":1,"baseCombatXP":2,"abilityCooldown":3,"abilityBonus":4,"npcDailyHealingAmount":5,"damageTypes":[],"damageTypePresentation":{}},"exact":9007199254740993,"fraction":1.000}}';
+ const path=['initialGameState','combatSettings'];
+ const pending=reduce(scopedWork(source,path),{type:'taskEdit',taskId:'work',attempt:'attempt',action:'replace',path,source:'"unsafe"'});
+ const project=complete(pending);
+ assert.equal(project.activeSource,source);assert.equal(project.sourceRevision,0);assert.equal(project.tasks[0].state,'PROPOSAL_READY');
+ assert.match(project.tasks[0].localApplyBlockedReason!,/Local validation.*combatSettings.*Expected an object/);
+ assert.equal(project.candidates[0].source,pending.tasks[0].stagedSource);assert.match(project.candidates[0].source,/9007199254740993,"fraction":1\.000/);
+ assert.equal(project.candidates[0].baseHash,hash(source));assert.equal(project.tasks[0].baseSource,'');assert.equal(project.tasks[0].stagedSource,'');
+ const background=['initialGameState','worldBackground'];
+ const valid=complete(reduce(scopedWork(source,background),{type:'taskEdit',taskId:'work',attempt:'attempt',path:background,source:'"After"'}));
+ assert.equal(valid.tasks[0].state,'APPLIED');assert.equal(valid.activeSource,source.replace('Before','After'));assert.equal(valid.candidates.length,0);
+});
+test('pre-existing imported validation errors also block auto-apply until manually reviewed or repaired',()=>{
+ const source='{"initialGameState":{"worldBackground":"Before","combatSettings":"imported error","exact":9007199254740993,"fraction":1.000}}';
+ const path=['initialGameState','worldBackground'];
+ const project=complete(reduce(scopedWork(source,path),{type:'taskEdit',taskId:'work',attempt:'attempt',path,source:'"After"'}));
+ assert.equal(project.activeSource,source);assert.equal(project.tasks[0].state,'PROPOSAL_READY');assert.match(project.tasks[0].localApplyBlockedReason!,/pre-existing imported errors/);
+ assert.equal(reduce(project,{type:'accept',id:'work'}).activeSource,source.replace('Before','After'));
+ const repairPath=['initialGameState','combatSettings'];
+ const repaired=complete(reduce(scopedWork(source,repairPath),{type:'taskEdit',taskId:'work',attempt:'attempt',action:'remove',path:repairPath}));
+ assert.equal(repaired.tasks[0].state,'APPLIED');
+});
+test('legacy running automatic tasks cannot bypass approval by completing already staged edits',()=>{
+ const pending=running('automatic');delete pending.tasks[0].workOrder.reviewedScope;
+ const project=complete(JSON.parse(JSON.stringify(pending)));
+ assert.equal(project.activeSource,source);assert.equal(project.tasks[0].state,'PROPOSAL_READY');assert.equal(project.candidates.length,1);
+ assert.match(project.tasks[0].localApplyBlockedReason!,/explicitly approve/);
+});
 test('automatic local apply updates only completed work and leaves remote state untouched',()=>{
  const pending=running('automatic');assert.equal(pending.activeSource,source);
  const project=complete(pending);

@@ -15,7 +15,7 @@ test('applied note outcomes use transactional checkpoint comparisons and reflect
   dispatch({type:'prepareTask',kind:'plan',id:'plan',attempt:'p',addressNotes:true});dispatch({type:'taskRunning',taskId:'plan',attempt:'p'});
   dispatch({type:'proposeWorkOrder',taskId:'plan',attempt:'p',id:'suggestion',order:{objective:'Improve system',requirements:[],allowedPaths:[['system']]}});
   dispatch({type:'recordNotePlan',taskId:'plan',attempt:'p',noteId:'note',state:'proposed',explanation:'Suggested',proposalId:'suggestion'});dispatch({type:'taskDone',taskId:'plan',attempt:'p'});
-  dispatch({type:'workOrder',order:{objective:'Improve system',requirements:[],allowedPaths:[['system']],sourceProposalId:'suggestion'}});
+  dispatch({type:'workOrder',baseHash:hash(source),order:{reviewedScope:true,objective:'Improve system',requirements:[],allowedPaths:[['system']],sourceProposalId:'suggestion'}});
   dispatch({type:'prepareTask',kind:'work',id:'work',attempt:'w'});dispatch({type:'taskRunning',taskId:'work',attempt:'w'});
   dispatch({type:'taskEdit',taskId:'work',attempt:'w',path:['system','first'],source:'2'});dispatch({type:'taskEdit',taskId:'work',attempt:'w',path:['system','second'],source:'3'});dispatch({type:'taskDone',taskId:'work',attempt:'w'});
   dispatch({type:'candidateChange',id:'work',candidateHash:hash(service.store.project(id).candidates[0].source),path:['system','second'],kind:'changed',reject:true});dispatch({type:'accept',id:'work'});

@@ -1,18 +1,40 @@
 package dev.voyage.workbench;
 import android.app.*;import android.content.*;import android.os.*;import org.json.*;import java.io.*;import java.util.*;
 public final class AgentService extends Service {
- Store store;volatile Rpc rpc;volatile boolean canceled,running;String projectId,taskId,attempt;StringBuilder reply=new StringBuilder();long flushed;boolean completed;
+ Store store;volatile Rpc rpc;volatile boolean canceled,running;String projectId,taskId,attempt;AgentTaskTarget activeTarget;int latestStartId;StringBuilder reply=new StringBuilder();long flushed;boolean completed;
  public IBinder onBind(Intent i){return null;}
  public void onCreate(){super.onCreate();try{store=new Store(this);}catch(Exception e){throw new RuntimeException(e);}NotificationManager n=getSystemService(NotificationManager.class);n.createNotificationChannel(new NotificationChannel("agent","Voyage agent",NotificationManager.IMPORTANCE_LOW));PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),PendingIntent.FLAG_IMMUTABLE);startForeground(1,new Notification.Builder(this,"agent").setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Voyage Workbench").setContentText("Local agent is working").setContentIntent(open).build());}
- public int onStartCommand(Intent i,int flags,int startId){if(i==null){stopSelf();return START_NOT_STICKY;}String mode=i.getStringExtra("mode");if("stop".equals(mode)){canceled=true;try{if(projectId!=null)command(new JSONObject().put("type","taskStop").put("state","CANCELED"));}catch(Exception ignored){}if(rpc!=null)rpc.close();stopSelf();return START_NOT_STICKY;}if(running)return START_NOT_STICKY;running=true;canceled=false;new Thread(()->{try{if("login".equals(mode))login();else if("cli-login".equals(mode))CliLogin.run(this,i.getStringExtra("profileId"),i.getStringExtra("authMethod"),()->canceled);else run(i);}catch(Exception e){try{if(projectId!=null)command(new JSONObject().put("type","taskStop").put("state",canceled?"CANCELED":"FAILED").put("error",e.getMessage()));else if("login".equals(mode))store.setting("login",new JSONObject().put("error",e.getMessage()).toString());}catch(Exception ignored){}}finally{if(rpc!=null)rpc.close();running=false;store.setting("agentHeartbeat","0");stopSelf(startId);}},"voyage-agent").start();return START_NOT_STICKY;}
+ public int onStartCommand(Intent i,int flags,int startId){
+  latestStartId=startId;
+  if(i==null){if(!running)stopSelf(startId);return START_NOT_STICKY;}
+  String mode=i.getStringExtra("mode");
+  if("stop".equals(mode)){
+   if(running&&activeTarget!=null&&activeTarget.matches(i.getStringExtra("projectId"),i.getStringExtra("taskId"),i.getStringExtra("attempt"))){
+    canceled=true;
+    try{command(new JSONObject().put("type","taskStop").put("state","CANCELED"));}catch(Exception ignored){}
+    if(rpc!=null)rpc.close();
+   }else if(!running)stopSelf(startId);
+   return START_NOT_STICKY;
+  }
+  if(running)return START_NOT_STICKY;
+  projectId=null;taskId=null;attempt=null;activeTarget=null;
+  if(!"login".equals(mode)&&!"cli-login".equals(mode)){
+   activeTarget=new AgentTaskTarget(i.getStringExtra("projectId"),i.getStringExtra("taskId"),i.getStringExtra("attempt"));
+   if(!activeTarget.matches(activeTarget.projectId,activeTarget.taskId,activeTarget.attempt)){activeTarget=null;stopSelf(startId);return START_NOT_STICKY;}
+   projectId=activeTarget.projectId;taskId=activeTarget.taskId;attempt=activeTarget.attempt;
+  }
+  running=true;canceled=false;completed=false;rpc=null;reply=new StringBuilder();flushed=0;
+  new Thread(()->{try{if("login".equals(mode))login();else if("cli-login".equals(mode))CliLogin.run(this,i.getStringExtra("profileId"),i.getStringExtra("authMethod"),()->canceled);else run(i);}catch(Exception e){try{if(projectId!=null)command(new JSONObject().put("type","taskStop").put("state",canceled?"CANCELED":"FAILED").put("error",e.getMessage()));else if("login".equals(mode))store.setting("login",new JSONObject().put("error",e.getMessage()).toString());}catch(Exception ignored){}}finally{if(rpc!=null)rpc.close();store.setting("agentHeartbeat","0");new Handler(getMainLooper()).post(()->{running=false;activeTarget=null;rpc=null;stopSelf(latestStartId);});}},"voyage-agent").start();
+  return START_NOT_STICKY;
+ }
  void command(JSONObject c)throws Exception{c.put("taskId",taskId).put("attempt",attempt);store.dispatch(projectId,c);}
  JSONObject task()throws Exception{JSONArray tasks=store.project(projectId).getJSONArray("tasks");for(int j=0;j<tasks.length();j++)if(tasks.getJSONObject(j).getString("id").equals(taskId))return tasks.getJSONObject(j);throw new Exception("Task no longer exists");}
  void ensureTaskRunning()throws Exception{JSONObject current=task();if(canceled||!"RUNNING".equals(current.getString("state"))||!attempt.equals(current.getString("attempt")))throw new Exception("Task stopped");}
  void login()throws Exception{rpc=new Rpc(this,new File(getFilesDir(),"auth"));rpc.init();JSONObject start=rpc.rpc("account/login/start",new JSONObject().put("type","chatgptDeviceCode"),60);store.setting("login",start.toString());rpc.listener=e->{if("account/login/completed".equals(e.optString("method"))){start.put("complete",e.getJSONObject("params").optBoolean("success"));start.put("error",e.getJSONObject("params").optString("error"));store.setting("login",start.toString());completed=true;}};long end=System.currentTimeMillis()+15*60*1000;while(!completed&&!canceled&&System.currentTimeMillis()<end){store.setting("agentHeartbeat",Long.toString(System.currentTimeMillis()));try{rpc.pump();}catch(IOException e){if(!e.getMessage().startsWith("Timed out"))throw e;}}}
- void run(Intent intent)throws Exception{projectId=intent.getStringExtra("projectId");taskId=intent.getStringExtra("taskId");JSONObject t=task();attempt=t.getString("attempt");
+ void run(Intent intent)throws Exception{JSONObject t=task();if(canceled||!attempt.equals(t.getString("attempt")))throw new Exception("Task stopped or superseded before service startup");
  // Service creation recovers old work; this explicitly dispatched task alone is allowed to start.
  if(!"PREPARED".equals(t.getString("state")))throw new Exception("Task was interrupted before service startup. Start it again explicitly.");
- command(new JSONObject().put("type","taskRunning"));if(t.has("route")&&!"codex".equals(t.getJSONObject("route").getString("protocol"))){new Providers(this).run(t);completed=true;return;}File cwd=new File(getFilesDir(),"tasks/"+taskId);rpc=new Rpc(this,cwd);rpc.listener=this::event;rpc.init();JSONObject account=rpc.readAccount();if(account.isNull("account"))throw new Exception("Sign into Codex in Connection first.");
+ command(new JSONObject().put("type","taskRunning"));ensureTaskRunning();if(t.has("route")&&!"codex".equals(t.getJSONObject("route").getString("protocol"))){new Providers(this).run(t);completed=true;return;}File cwd=new File(getFilesDir(),"tasks/"+taskId);rpc=new Rpc(this,cwd);rpc.listener=this::event;rpc.init();JSONObject account=rpc.readAccount();if(account.isNull("account"))throw new Exception("Sign into Codex in Connection first.");
  ensureTaskRunning();
  boolean work="work".equals(t.getString("kind"));JSONArray definitions=new JSONArray(new String(getAssets().open((t.has("grading")||t.has("fieldFill"))?"tools-grade.json":work?"tools-work.json":"tools-plan.json").readAllBytes(),java.nio.charset.StandardCharsets.UTF_8));
  JSONObject started=rpc.rpc("thread/start",new JSONObject().put("model",t.has("route")&&!t.getJSONObject("route").optString("model").isEmpty()?t.getJSONObject("route").getString("model"):JSONObject.NULL).put("cwd",cwd.toString()).put("approvalPolicy","never").put("sandbox","read-only").put("dynamicTools",definitions).put("environments",new JSONArray()).put("developerInstructions",store.core.doc("agentSystem",work,t.has("grading"),t.has("fieldFill"))),60);

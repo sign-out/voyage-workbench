@@ -21,7 +21,7 @@ test('publication copy and legitimately named content fields remain editable',()
  assert.equal(document.read(project.activeSource,['shortId']),'"WORLD"');assert.equal(document.read(project.activeSource,['initialGameState','number']),'9007199254740993');
 });
 test('agent work cannot alter package credentials or identity even with whole-world scope',()=>{
- let project=create('p','World',envelope,1);project=reduce(project,{type:'workOrder',order:{objective:'Edit content',requirements:[],allowedPaths:[]}});project=reduce(project,{type:'prepareTask',kind:'work',id:'agent',attempt:'attempt'});project=reduce(project,{type:'taskRunning',taskId:'agent',attempt:'attempt'});
- for(const action of [{path:['shortId'],source:'"BAD"'},{action:'remove',path:['loadStatus']},{action:'insert',path:[],key:'canSafelySave',source:'true'}])assert.throws(()=>reduce(project,{type:'taskEdit',taskId:'agent',attempt:'attempt',...action}),/read only/);
+ let project=create('p','World',envelope,1);project=reduce(project,{type:'workOrder',baseHash:hash(envelope),order:{reviewedScope:true,objective:'Edit content',requirements:[],allowedPaths:[],wholeWorld:true}});project=reduce(project,{type:'prepareTask',kind:'work',id:'agent',attempt:'attempt'});project=reduce(project,{type:'taskRunning',taskId:'agent',attempt:'attempt'});
+ for(const action of [{path:['shortId'],source:'"BAD"'},{action:'remove',path:['loadStatus']},{action:'insert',path:[],key:'canSafelySave',source:'true'}])assert.throws(()=>reduce(project,{type:'taskEdit',taskId:'agent',attempt:'attempt',...action}),/scope|read only/);
  assert.equal(project.tasks[0].stagedSource,envelope);assert.equal(project.activeSource,envelope);
 });

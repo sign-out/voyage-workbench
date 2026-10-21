@@ -374,6 +374,108 @@ async function verifyLocalProjectActions(){
  console.log('Local project actions: close, trash, and confirmed permanent deletion passed');
 }
 
+async function verifyVoyageSyncLoading(){
+ const originalVoyage=service.voyage,originalSecrets=service.secrets,reads=[];
+ try{
+  service.secrets={durable:false,get:()=> 'fixture-key',set:()=>{}};
+  service.voyage=async(method,endpoint)=>{
+   assert.equal(method,'GET','Loading a world must never upload or save to Voyage');reads.push(endpoint);
+   if(endpoint.startsWith('/worlds?'))return {text:JSON.stringify({data:{worlds:[{shortId:'sync-one',title:'Saved world one'},{shortId:'sync-two',title:'Saved world two'}]}}),etag:''};
+   const second=endpoint.endsWith('sync-two');
+   return {text:JSON.stringify({data:{world:{title:second?'Saved world two':'Saved world one',description:'Saved remote content',initialGameState:{counter:42}}}}),etag:'sync-fixture'};
+  };
+  const starting=(await service.request('create',{name:'Existing local world',source:'{"title":"Keep this local world","description":"Local content"}'})).project;
+  await applyViewport({width:412,height:915,touch:true});
+  await evaluate(`localStorage.setItem('voyage-project',${JSON.stringify(starting.id)});location.reload()`);
+  await waitFor("document.querySelector('.workspace-tools')");
+  await navigate('Voyage sync',"document.querySelector('[aria-label=\"Voyage world ID\"]')");
+  await waitFor("[...document.querySelectorAll('button')].some(button=>button.textContent==='List my worlds'&&!button.disabled)");
+  await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent==='List my worlds').click()");
+  await waitFor("document.querySelector('.remote-list button')?.textContent==='Load world'");
+  await evaluate("document.querySelector('.remote-list button').click()");
+  await waitFor("document.querySelector('.world-editor')&&document.querySelector('.workspace-world-title')?.textContent==='Saved world one'");
+  const loadedId=await evaluate("localStorage.getItem('voyage-project')"),loaded=service.store.project(loadedId);
+  assert.notEqual(loadedId,starting.id);assert.equal(loaded.remote.worldId,'sync-one');
+  assert.equal(service.store.project(starting.id).activeSource,starting.activeSource,'Direct loading changed the previous project');
+  await navigate('Voyage sync',"document.querySelector('[aria-label=\"Voyage import destination\"]')");
+  await evaluate("(()=>{const select=document.querySelector('[aria-label=\"Voyage import destination\"]');select.value='current';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
+  await waitFor("document.querySelector('.remote-list button')?.textContent==='Import for review'");
+  await evaluate("document.querySelectorAll('.remote-list article button')[1].click()");
+  await waitFor("document.querySelector('.review-page .proposal-heading')");
+  const reviewed=service.store.project(loadedId);
+  assert.equal(await evaluate("localStorage.getItem('voyage-project')"),loadedId);
+  assert.equal(reviewed.activeSource,loaded.activeSource,'Review import overwrote the active world');
+  assert.ok(reviewed.candidates.some(candidate=>candidate.kind==='remote'&&candidate.source.includes('Saved world two')));
+  assert.ok(reads.some(endpoint=>endpoint.endsWith('sync-one'))&&reads.some(endpoint=>endpoint.endsWith('sync-two')));
+  console.log('Voyage sync: row click loads a saved world directly; current-project imports stay review-only; no remote writes');
+ }finally{service.voyage=originalVoyage;service.secrets=originalSecrets;}
+}
+
+async function verifyAndroidWorkspaceResume(){
+ const originalRequest=service.request;
+ const created=await originalRequest.call(service,'create',{name:'Android resume QA',source:'{"title":"Android resume QA","worldBackground":"Saved background"}'});
+ const failures=new Map([['references',1],['projects',1]]);
+ let rejectNextDraft=false,holdNextDraft=false,rejectDeferredDraft;
+ let notifyDeferredDraft;
+ const deferredDraftStarted=new Promise(resolve=>{notifyDeferredDraft=resolve;});
+ await window.webContents.debugger.sendCommand('Page.enable');
+ const nativeScript=await window.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument',{source:'window.CapacitorCustomPlatform={name:"android"};'});
+ service.request=async function(method,payload){
+  const remaining=failures.get(method)||0;if(remaining){failures.set(method,remaining-1);throw Error('Resume fixture unavailable: '+method);}
+  if(method==='command'&&payload.command.type==='draft'){
+   if(rejectNextDraft){rejectNextDraft=false;throw Error('Pause draft fixture unavailable');}
+   if(holdNextDraft){holdNextDraft=false;await new Promise((_resolve,reject)=>{rejectDeferredDraft=reject;notifyDeferredDraft();});}
+  }
+  return originalRequest.call(this,method,payload);
+ };
+ try{
+  await applyViewport({width:412,height:915,touch:true});
+  await evaluate(`localStorage.setItem('voyage-project',${JSON.stringify(created.project.id)});localStorage.removeItem('voyage-workspace-session-v1');location.reload()`);
+  await waitFor("document.querySelector('.workspace-world-title')?.textContent==='Android resume QA'&&document.querySelector('.world-editor')");
+  assert.equal(await evaluate('window.Capacitor.getPlatform()'),'android','Fixture must exercise the Android workspace path');
+  await navigate('Artwork',"document.querySelector('.artwork-workspace')");
+  await waitFor("JSON.parse(localStorage.getItem('voyage-workspace-session-v1'))?.tab==='artwork'");
+  await evaluate('location.reload()');
+  await waitFor("document.querySelector('.workspace-world-title')?.textContent==='Android resume QA'&&document.querySelector('.artwork-workspace')");
+  failures.set('project',1);
+  await evaluate('location.reload()');
+  await waitFor("document.body.textContent.includes('Could not resume the saved world')");
+  assert.equal(await evaluate("localStorage.getItem('voyage-project')"),created.project.id,'Failed restoration forgot the selected world');
+  await evaluate("window.dispatchEvent(new Event('voyage-resume'))");
+  await waitFor("document.querySelector('.workspace-world-title')?.textContent==='Android resume QA'&&document.querySelector('.artwork-workspace')");
+  await navigate('Content',"document.querySelector('.world-editor')");
+  await evaluate("(()=>{const row=[...document.querySelectorAll('.content-field')].find(button=>button.textContent.includes('worldBackground'));row.closest('details').open=true;row.click();})()");
+  await waitFor("document.querySelector('.editor-layout.mobile-editing .structured-editor textarea')");
+  rejectNextDraft=true;
+  await evaluate("(()=>{const field=document.querySelector('.structured-editor textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,'Draft before sleep');field.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await evaluate("window.dispatchEvent(new Event('voyage-pause'))");
+  await waitFor("document.body.textContent.includes('Pause draft fixture unavailable')");
+  await evaluate("window.dispatchEvent(new Event('voyage-resume'))");
+  await waitFor("document.querySelector('[role=status][aria-label=\"Draft saved locally\"]')");
+  assert.equal(service.store.project(created.project.id).draft.text,'"Draft before sleep"');
+  await evaluate('location.reload()');
+  await waitFor("document.querySelector('.editor-layout.mobile-editing .structured-editor textarea')?.value==='Draft before sleep'");
+  assert.equal(service.store.project(created.project.id).activeSource,created.project.activeSource,'Resume applied an unapproved draft');
+  holdNextDraft=true;
+  await evaluate("(()=>{const field=document.querySelector('.structured-editor textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,'Deferred pause draft');field.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await evaluate("window.dispatchEvent(new Event('voyage-pause'))");
+  await deferredDraftStarted;
+  await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent==='Close project').click()");await settled();
+  assert.equal(await evaluate("localStorage.getItem('voyage-project')"),created.project.id,'Close ignored an in-flight draft save');
+  rejectDeferredDraft(Error('Deferred pause fixture unavailable'));
+  await waitFor("document.body.textContent.includes('Deferred pause fixture unavailable')");
+  assert.equal(await evaluate("localStorage.getItem('voyage-project')"),created.project.id,'Failed pause save closed the world');
+  await evaluate("window.dispatchEvent(new Event('voyage-resume'))");
+  await waitFor("document.querySelector('[role=status][aria-label=\"Draft saved locally\"]')");
+  assert.equal(service.store.project(created.project.id).draft.text,'"Deferred pause draft"');
+  await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent==='Close project').click()");
+  await waitFor("!localStorage.getItem('voyage-project')");
+  await evaluate("window.dispatchEvent(new Event('voyage-resume'))");await settled();
+  assert.equal(await evaluate("localStorage.getItem('voyage-project')"),null,'Wake reopened an intentionally closed world');
+  console.log('Android workspace: independent restoration, saved screen, wake/save retry, deferred-save close guard, draft reload, and explicit close passed');
+ }finally{service.request=originalRequest;await window.webContents.debugger.sendCommand('Page.removeScriptToEvaluateOnNewDocument',{identifier:nativeScript.identifier});}
+}
+
 async function verifyVoyageProjectActions(){
  const originalVoyage=service.voyage,originalSecrets=service.secrets,reads=[];
  try{
@@ -427,6 +529,7 @@ app.whenReady().then(async()=>{
   ipcMain.handle('workbench',async(event,method,payload)=>{
    if(event.sender!==window.webContents)throw Error('Unknown test frame');
    if(method==='auth')return {available:false};
+   if(method==='appearance')return {};
    if(method==='startAgent'&&payload.fieldFill){
     const id='field-fill-'+Date.now(),attempt='fixture';
     service.store.dispatch(payload.id,{type:'prepareTask',id,attempt,kind:'plan',fieldFill:payload.fieldFill});
@@ -445,6 +548,8 @@ app.whenReady().then(async()=>{
   for(const config of screens.filter(config=>!process.env.VOYAGE_LAYOUT_CASES||process.env.VOYAGE_LAYOUT_CASES.split(',').includes(config.name)))await verifyScreen(config,created.project.id);
   await verifyLocalProjectActions();
   await verifyVoyageProjectActions();
+  await verifyVoyageSyncLoading();
+  await verifyAndroidWorkspaceResume();
   await verifyMapArtwork(created.project.id);
   await verifyMapGestures(created.project.id);
   if(!process.env.VOYAGE_LAYOUT_CASES)await verifyLiveResize(created.project.id);
