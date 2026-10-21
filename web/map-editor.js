@@ -1,4 +1,5 @@
 import {initImageUploads} from './image-upload.js';
+import {initMapCoverage} from './map-coverage-view.js';
 /** Voyage realm grid and local location map. All edits target the JSON document. */
 export const MAP_MIN_CELL = 86, MAP_MAX_CELL = 210;
 export function mapLabelsVisible(storage){try{return storage?.getItem('voyage-map-labels')!=='hidden';}catch{return true;}}
@@ -10,6 +11,7 @@ export function zoomMapCamera(camera, requested, point, viewport) {
 export function panMapCamera(camera,dx,dy){return {...camera,x:camera.x-dx/camera.size,y:camera.y+dy/camera.size};}
 export function initMapEditor({api,node,getSource,applyText,status,getProject,confirm,host:externalHost,imageUploads:externalUploads,onDirtyChange,onContextChange}) {
  const host=externalHost||document.getElementById('mapWorkbench');
+ const coverage=initMapCoverage({node,host});
  const imageUploads=externalUploads||initImageUploads({api,node,getProject,status});
  let displayStorage;try{displayStorage=globalThis.localStorage;}catch{}
  let showLabels=mapLabelsVisible(displayStorage);host.classList.toggle('map-labels-hidden',!showLabels);
@@ -55,12 +57,13 @@ export function initMapEditor({api,node,getSource,applyText,status,getProject,co
   if(firstLoad){const first=data.regions.find(r=>r.realm===realm&&Number.isInteger(r.x)&&Number.isInteger(r.y));if(first)center={x:first.x,y:first.y};}
   if(region&&!data.regions.some(r=>r.key===region&&(r.realm===realm||isUnplaced(r)))){region='';location='';view='realm';}
   if(location&&!data.locations.some(l=>l.key===location&&l.region===region))location='';
-  draw();}
- function projectChanged(){markDirty(false);imageUploads.projectChanged();disposeViewport();cellSize=132;data=null;realm='';region='';location='';view='realm';targetCell={x:0,y:0};targetLocal={x:0,y:0};center={x:0,y:0};host.replaceChildren();}
+  coverage.refresh(getSource(),data);draw();}
+ function projectChanged(){markDirty(false);coverage.reset();imageUploads.projectChanged();disposeViewport();cellSize=132;data=null;realm='';region='';location='';view='realm';targetCell={x:0,y:0};targetLocal={x:0,y:0};center={x:0,y:0};host.replaceChildren();}
  function draw(){const focusedKey=location||region||realm;const focusedItem=(location?data.locations:region?data.regions:data.realms)?.find(item=>item.key===focusedKey);onContextChange?.({...(focusedKey?{section:location?'locations':region?'regions':'realms',key:focusedKey}:{}),label:focusedItem?.name||focusedKey||'World map'});disposeViewport();host.replaceChildren();const heading=node('div',undefined,'map-heading');const title=node('div');title.append(node('h2','World map'),node('p','Drag regions between realm cells and locations within their parent region. North is up.'));const controls=node('div',undefined,'map-controls');const realmSelect=select(data.realms.map(r=>[r.key,r.name]),realm);realmSelect.setAttribute('aria-label','Realm');realmSelect.disabled=!data.realms.length;realmSelect.onchange=act(async()=>{if(!await canNavigate()){realmSelect.value=realm;return;}realm=realmSelect.value;region='';location='';view='realm';const first=data.regions.find(r=>r.realm===realm&&Number.isInteger(r.x)&&Number.isInteger(r.y));center={x:first?.x??0,y:first?.y??0};draw();});const newRealm=input();newRealm.placeholder='New realm name';newRealm.setAttribute('aria-label','New realm name');heading.append(title,labeled('Realm',realmSelect));controls.append(newRealm,button('+ Realm',async()=>{const name=newRealm.value.trim();if(!name)throw new Error('Enter a realm name.');await change('add-realm',{key:name},`Added realm ${name}.`);realm=name;region='';location='';view='realm';center={x:0,y:0};targetCell={x:0,y:0};draw();}));if(region)controls.append(button(view==='realm'?'Open region map':'Realm grid',async()=>{if(!await canNavigate())return;view=view==='realm'?'region':'realm';draw();focusRegion();}));host.append(heading);const settings=node('details',undefined,'map-settings');settings.open=!matchMedia('(width < 761px), (pointer:coarse) and (height < 501px)').matches||!data.realms.length;settings.append(node('summary','Map settings & realm management'),controls,settingsControls());host.append(settings);
   if(data.warnings.length){const warning=node('details',undefined,'map-warnings');warning.append(node('summary',`${data.warnings.length} map issue${data.warnings.length===1?'':'s'} to review`));const list=node('ul');for(const item of data.warnings.slice(0,40))list.append(node('li',item));warning.append(list);host.append(warning);}
-  if(!data.realms.length){host.append(node('div',data.regions.length?`Create a realm to place ${data.regions.length} existing region${data.regions.length===1?'':'s'} on the map.`:'Create a realm to place your first region.','blank-state'));return;}
-  const layout=node('div',undefined,'map-layout');const stage=node('div',undefined,'map-stage');const sidebar=node('aside',undefined,'map-inspector');if(view==='region'&&region){drawLocal(stage,sidebar);}else{view='realm';drawRealm(stage,sidebar);}layout.append(stage,sidebar);host.append(layout);
+  coverage.setScope({view,realm,region,location});host.append(coverage.controls());
+  if(!data.realms.length){host.append(node('div',data.regions.length?`Create a realm to place ${data.regions.length} existing region${data.regions.length===1?'':'s'} on the map.`:'Create a realm to place your first region.','blank-state'));coverage.paint();return;}
+  const layout=node('div',undefined,'map-layout');const stage=node('div',undefined,'map-stage');const sidebar=node('aside',undefined,'map-inspector');if(view==='region'&&region){drawLocal(stage,sidebar);}else{view='realm';drawRealm(stage,sidebar);}layout.append(stage,sidebar);host.append(layout);coverage.paint();
  }
  function drawRealm(stage,sidebar){
   const toolbar=node('div',undefined,'map-stage-toolbar'),nav=node('div',undefined,'map-nav');
@@ -98,7 +101,7 @@ export function initMapEditor({api,node,getSource,applyText,status,getProject,co
    if(found){
     if(safeImage(found.imageUrl)){cell.classList.add('has-map-image');const image=node('img');image.src=found.imageUrl;image.alt='';image.loading='lazy';cell.append(image);}
     const tile=node('button',undefined,'map-region-tile');tile.append(node('span',found.name||found.key,'map-region-name'));tile.setAttribute('aria-label',found.name||found.key);tile.title=found.name||found.key;tile.draggable=true;tile.ondragstart=e=>e.dataTransfer.setData('text/plain',found.key);
-    tile.onclick=act(async()=>{if(!await canNavigate())return;region=found.key;location='';targetCell={x,y};targetLocal={x:0,y:0};view='region';draw();focusRegion();});cell.append(tile);
+    tile.onclick=act(async()=>{if(!await canNavigate())return;region=found.key;location='';targetCell={x,y};targetLocal={x:0,y:0};view='region';draw();focusRegion();});cell.append(tile);coverage.decorateRegion(cell,found.key);
    }else{
     cell.setAttribute('role','button');cell.tabIndex=0;cell.setAttribute('aria-label',`Empty region cell ${x}, ${y}`);
     const choose=act(async()=>{if(!await canNavigate())return;region='';location='';targetCell={x,y};draw();focusInspector();});cell.onclick=choose;

@@ -1,6 +1,6 @@
 {
   "name": "voyage-workbench",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "license": "GPL-2.0-only",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test packages/core/*.test.ts hosts/desktop/*.test.ts hosts/provider/*.test.ts apps/workbench/src/*.test.tsx",
-    "test:release": "node --test tests/test_map_camera.mjs tests/test_remote_world_list.mjs tests/test_release_artifacts.mjs",
+    "test:release": "node --test tests/test_map_camera.mjs tests/test_map_coverage.mjs tests/test_remote_world_list.mjs tests/test_release_artifacts.mjs",
     "test:responsive": "node tools/run-responsive-smoke.mjs",
     "verify:artifacts": "node tools/verify-artifacts.mjs && python3 tools/verify-android-artifacts.py",
     "desktop": "node tools/start-desktop.mjs",
