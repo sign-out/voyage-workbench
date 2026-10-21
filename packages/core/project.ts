@@ -1,4 +1,5 @@
 import {sha256} from 'js-sha256';
+import workValidationReferences from './work-validation.json';
 import * as fieldFill from './field-fill';
 import {fieldFillSnapshot,fieldFillPrompt,parseFieldFill,type FieldFillSnapshot} from './field-fill';
 import * as doc from './document';
@@ -18,13 +19,14 @@ import * as authoring from './authoring';
 import {proposedArtwork,type ArtworkProposal} from './artwork-requests';
 import {gradingSnapshot,gradingPrompt,parseRubric,parseGradeReport,type Rubric,type GradingSnapshot,type GradeReport} from './world-grading';
 export type {WorkOrder} from './work-orders';
+export interface ApprovedWorkOrder extends WorkOrder {approvalBaseHash?:string}
 export interface WorkOrderProposal {id:string;taskId:string;baseHash:string;order:WorkOrder;created:number;noteIds?:string[]}
 export type LocalEditMode='automatic'|'proposal-only';
 export function localEditMode(value:unknown=''):LocalEditMode {if(value==='')return 'automatic';if(value==='automatic'||value==='proposal-only')return value;throw new Error('Choose automatic local apply or proposal-only.');}
-export interface Task {editorContext?:EditorSnapshot;localEditMode?:LocalEditMode;localApplyBlockedReason?:string;id:string;attempt:string;kind:'plan'|'work';state:string;prompt:string;reply:string;baseSource:string;baseHash:string;stagedSource:string;workOrder:WorkOrder;sourceNoteIds?:string[];builderNotes?:BuilderNote[];noteQueue?:NotePlanItem[];sessionId?:string;route?:TaskRoute;created:number;error?:string}
+export interface Task {editorContext?:EditorSnapshot;localEditMode?:LocalEditMode;localApplyBlockedReason?:string;id:string;attempt:string;kind:'plan'|'work';state:string;prompt:string;reply:string;baseSource:string;baseHash:string;stagedSource:string;workOrder:ApprovedWorkOrder;sourceNoteIds?:string[];builderNotes?:BuilderNote[];noteQueue?:NotePlanItem[];sessionId?:string;route?:TaskRoute;created:number;error?:string}
 export interface NoteChangeReceipt {id:string;taskId:string;proposalId:string;noteIds:string[];title:string;beforeHash:string;afterHash:string;beforeCheckpointId:string;afterCheckpointId:string;created:number}
 export interface Candidate {id:string;title:string;source:string;baseHash:string;created:number;kind:string;sourceProposalId?:string;noteIds?:string[];importNote?:string;rejectedChanges?:doc.ChangeChoice[]}
-export interface Project {artworkProposals?:ArtworkProposal[];bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string;editorContext?:Pick<EditorSnapshot,'screen'|'label'|'focusPaths'>}[];workOrder:WorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
+export interface Project {artworkProposals?:ArtworkProposal[];bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string;editorContext?:Pick<EditorSnapshot,'screen'|'label'|'focusPaths'>}[];workOrder:ApprovedWorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
 export interface Project {grading?:{rubric?:Rubric;reports:GradeReport[]}}
 export interface Task {grading?:GradingSnapshot;fieldFill?:FieldFillSnapshot}
 let nativeHasher:((source:string)=>string)|undefined;
@@ -36,6 +38,12 @@ export function projectSummary(project:Project){
  return {id:project.id,name:project.name,updated:project.updated,status:project.status||'active',worldTitle:world.title,shortId:project.remote.worldId||world.shortId||envelope.shortId};
 }
 function requireCurrent(p:Project,expected:string){if(hash(p.activeSource)!==expected)throw new Error('The world changed. Reload before applying this change.');}
+function approvedScope(source:string,order:ApprovedWorkOrder):WorkOrder {
+  if(order.reviewedScope!==true||order.approvalBaseHash!==hash(source))throw new Error('Review and explicitly approve the Work Order scope for the current world before execution.');
+  const checked=proposedOrder(source,{objective:order.objective,requirements:order.requirements,allowedPaths:order.wholeWorld===true?[]:order.allowedPaths,wholeWorld:order.wholeWorld});
+  if(JSON.stringify(checked.allowedPaths)!==JSON.stringify(order.allowedPaths))throw new Error('The approved Work Order scope is malformed. Review and approve it again.');
+  return checked;
+}
 export function reduce(project:Project,c:any):Project {
   const p:Project={...project,draft:project.draft?{...project.draft}:null,candidates:project.candidates.slice(),tasks:project.tasks.map(t=>({...t})),chat:project.chat.slice(),workOrder:{...project.workOrder},remote:{...project.remote,operations:project.remote.operations.map(o=>({...o}))}};p.updated=c.now||Date.now();
   function task():Task {const t=p.tasks.filter(t=>t.id===c.taskId&&(!c.attempt||t.attempt===c.attempt))[0];if(!t)throw new Error('This task attempt no longer exists.');return t;}
@@ -146,12 +154,12 @@ export function reduce(project:Project,c:any):Project {
     case 'dismissWorkOrderProposal':if(p.tasks.some(task=>['PREPARED','RUNNING'].includes(task.state)&&task.workOrder.sourceProposalId===c.id))throw new Error('Stop the task before dismissing its source suggestion.');p.workOrderProposals=(p.workOrderProposals||[]).filter(proposal=>proposal.id!==c.id);break;
     case 'workOrder':{
       if(c.order.sourceProposalId&&!p.workOrderProposals?.some(proposal=>proposal.id===c.order.sourceProposalId&&proposal.baseHash===hash(p.activeSource)))throw new Error('The source Work Order suggestion is missing or stale. Reload it before approving.');
-      if(c.order.reviewedScope){
+      if(c.order.reviewedScope===true){
         requireCurrent(p,c.baseHash);
         const checked=proposedOrder(p.activeSource,{objective:c.order.objective,requirements:c.order.requirements,allowedPaths:c.order.wholeWorld?[]:c.order.allowedPaths,wholeWorld:c.order.wholeWorld===true});
         c={...c,order:{...c.order,...checked}};
       }
-      p.workOrder={...(c.order.reviewedScope?{reviewedScope:true}:{}),objective:String(c.order.objective||''),requirements:c.order.requirements||[],allowedPaths:c.order.allowedPaths||[],...(typeof c.order.wholeWorld==='boolean'?{wholeWorld:c.order.wholeWorld}:{}),...(c.order.sourceProposalId?{sourceProposalId:c.order.sourceProposalId}:{})};break;
+      p.workOrder={...(c.order.reviewedScope===true?{reviewedScope:true,approvalBaseHash:hash(p.activeSource)}:{}),objective:String(c.order.objective||''),requirements:c.order.requirements||[],allowedPaths:c.order.allowedPaths||[],...(typeof c.order.wholeWorld==='boolean'?{wholeWorld:c.order.wholeWorld}:{}),...(c.order.sourceProposalId?{sourceProposalId:c.order.sourceProposalId}:{})};break;
     }
     case 'prepareTask':{
       if(p.tasks.some(t=>['PREPARED','RUNNING'].indexOf(t.state)>=0))throw new Error('Finish or stop the current task first.');
@@ -163,7 +171,7 @@ export function reduce(project:Project,c:any):Project {
       const grading=c.grading===undefined?undefined:gradingSnapshot(p.grading?.rubric,c.grading);
       if(c.kind==='work'&&!p.workOrder.objective.trim())throw new Error('Write or approve a Work Order first.');
       if(c.kind==='work'&&p.workOrder.sourceProposalId&&!p.workOrderProposals?.some(proposal=>proposal.id===p.workOrder.sourceProposalId&&proposal.baseHash===hash(p.activeSource)))throw new Error('The originating Work Order suggestion is stale or missing. Refresh it or explicitly detach its link.');
-      if(c.kind==='work'&&p.workOrder.reviewedScope){if(p.draft)throw new Error('Apply or discard the editor draft before approving work.');proposedOrder(p.activeSource,{objective:p.workOrder.objective,requirements:p.workOrder.requirements,allowedPaths:p.workOrder.wholeWorld?[]:p.workOrder.allowedPaths,wholeWorld:p.workOrder.wholeWorld===true});}
+      if(c.kind==='work'){if(p.draft)throw new Error('Apply or discard the editor draft before approving work.');approvedScope(baseSource,p.workOrder);}
       if(c.includeBuilderNotes!==undefined&&typeof c.includeBuilderNotes!=='boolean')throw new Error('Choose whether to include builder notes for this task.');
       if(c.addressNotes&&c.kind!=='plan')throw new Error('Flagged notes can only start a planning task.');
       if(c.addressNotes&&p.draft)throw new Error('Apply or discard the editor draft before planning flagged notes.');
@@ -183,7 +191,9 @@ export function reduce(project:Project,c:any):Project {
     case 'taskSession':task().sessionId=c.sessionId;break;
     case 'taskEdit':{
       const t=task();if(t.kind!=='work'||t.state!=='RUNNING')throw new Error('Planning and interrupted tasks cannot edit a world.');
-      if(t.workOrder.allowedPaths.length&&!t.workOrder.allowedPaths.some(path=>path.every((k,i)=>c.path[i]===k)))throw new Error('This path is outside the approved Work Order scope.');
+      const scope=approvedScope(t.baseSource,t.workOrder);
+      if(hash(t.baseSource)!==t.baseHash)throw new Error('The frozen Work Order source changed. Review and approve it again.');
+      if(!Array.isArray(c.path)||!scope.allowedPaths.some(path=>path.every((key,index)=>c.path[index]===key)))throw new Error('This path is outside the approved Work Order scope.');
       const nextSource=c.action==='insert'?doc.insert(t.stagedSource,c.path,c.key,c.source):c.action==='remove'?doc.remove(t.stagedSource,c.path):doc.edit(t.stagedSource,c.path,c.source);doc.assertPackageMetadataUnchanged(t.stagedSource,nextSource);t.stagedSource=nextSource;break;
     }
     case 'taskDone':{const t=task();if(t.state!=='RUNNING')throw new Error('Task is no longer running.');t.reply=c.text||t.reply;
@@ -200,7 +210,15 @@ export function reduce(project:Project,c:any):Project {
           if(p.draft||t.editorContext?.hasUnappliedEdits)t.localApplyBlockedReason='An editing draft or unapplied form needs review. Apply or discard your edits, then review this proposal.';
           else if(hash(p.activeSource)!==t.baseHash)t.localApplyBlockedReason='The local world changed during this task. Review the proposal instead of overwriting newer changes.';
           else if(t.stagedSource===p.activeSource){t.state='COMPLETED';p.candidates=p.candidates.filter(value=>value.id!==t.id);}
-          else {acceptCandidate(candidate);t.state='APPLIED';}
+          else {
+            try {approvedScope(t.baseSource,t.workOrder);if(hash(t.baseSource)!==t.baseHash)throw new Error('The frozen Work Order source changed.');}
+            catch(error){t.localApplyBlockedReason=String((error as Error).message)+' Review this proposal instead.';}
+            if(!t.localApplyBlockedReason){
+              const errors=doc.validate(t.stagedSource,workValidationReferences).filter(issue=>issue.level==='error');
+              if(errors.length)t.localApplyBlockedReason='Local validation blocked automatic apply: '+errors.length+' error(s); '+doc.label(errors[0].path)+': '+errors[0].message+' Review this proposal manually, including any pre-existing imported errors.';
+              else {acceptCandidate(candidate);t.state='APPLIED';}
+            }
+          }
         }
       }t.baseSource='';t.stagedSource='';t.builderNotes=[];break;}
     case 'taskStop':{const t=task();if(['PREPARED','RUNNING'].indexOf(t.state)>=0){t.state=c.state||'CANCELED';t.error=c.error||'';t.builderNotes=[];}break;}

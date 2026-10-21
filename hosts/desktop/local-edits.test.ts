@@ -4,6 +4,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {Service} from './service';
+import {hash} from '../../packages/core/project';
 
 test('local mode persists and automatic application atomically retains a restorable exact-source checkpoint',async()=>{
  const directory=mkdtempSync(path.join(tmpdir(),'voyage-local-mode-')),resources=path.resolve('apps/workbench/public/references');
@@ -16,7 +17,7 @@ test('local mode persists and automatic application atomically retains a restora
   assert.deepEqual(await service.request('localEditingSettings'),{mode:'proposal-only'});
   await service.request('saveLocalEditingSettings',{mode:'automatic'});
   const source='{"title":"Before","exact":9007199254740993,"fraction":1.000}',project=(await service.request('create',{name:'Local fixture',source})).project;
-  service.store.dispatch(project.id,{type:'workOrder',order:{objective:'Change title',requirements:[],allowedPaths:[['title']]}});
+  service.store.dispatch(project.id,{type:'workOrder',baseHash:hash(source),order:{reviewedScope:true,objective:'Change title',requirements:[],allowedPaths:[['title']]}});
   service.store.dispatch(project.id,{type:'prepareTask',id:'work',attempt:'attempt',kind:'work',localEditMode:(await service.request('localEditingSettings')).mode});
   await service.request('saveLocalEditingSettings',{mode:'proposal-only'});
   service.store.dispatch(project.id,{type:'taskRunning',taskId:'work',attempt:'attempt'});

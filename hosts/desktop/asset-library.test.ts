@@ -23,7 +23,9 @@ test('signed media uploads reject oversized encoded payloads before allocation o
  const directory=mkdtempSync(path.join(tmpdir(),'voyage-media-bound-'));
  const service=new Service(directory,path.resolve('apps/workbench/public/references'),{durable:false,get:()=>'',set:()=>{}});
  let resolutions=0;service.publicUrl=async()=>{resolutions++;return new URL('https://example.com/signed');};
- try{await assert.rejects(service.request('signedUpload',{url:'https://example.com/signed',mime:'image/png',base64:' '.repeat(4*Math.ceil(5*1024*1024/3)+1)}),/size limit/);assert.equal(resolutions,0);}finally{service.store.close();rmSync(directory,{recursive:true,force:true});}
+ const project=service.store.create('Upload binding','{}').project!;
+ service.store.dispatch(project.id,{type:'remoteLink',worldId:'WORLD',environment:'alpha',etag:'"revision"',baselineHash:''});
+ try{await assert.rejects(service.request('signedUpload',{projectId:project.id,environment:'alpha',worldId:'WORLD',url:'https://example.com/signed',mime:'image/png',base64:' '.repeat(4*Math.ceil(5*1024*1024/3)+1)}),/size limit/);assert.equal(resolutions,0);}finally{service.store.close();rmSync(directory,{recursive:true,force:true});}
 });
 test('shared library deduplicates bytes, survives project deletion and indexes confirmed remote music',async()=>{
  const directory=mkdtempSync(path.join(tmpdir(),'voyage-library-')),previous=(globalThis as any).window;

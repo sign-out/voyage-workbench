@@ -104,8 +104,8 @@ async function verifyVoyageSync(window){
   await window.webContents.executeJavaScript(`[...document.querySelectorAll('button')].find(button=>button.textContent==='List my worlds').click()`);
   await waitFor(`!!document.querySelector('.remote-list button')`);
   await window.webContents.executeJavaScript(`document.querySelector('.remote-list button').click()`);
-  await window.webContents.executeJavaScript(`[...document.querySelectorAll('button')].find(button=>button.textContent==='Import from Voyage API').click()`);
- await ensureJsonView(window);
+  await waitFor(`localStorage.getItem('voyage-project')!==${JSON.stringify(previous.id)}&&document.querySelector('header h1')?.textContent==='Content'&&!!document.querySelector('.editor-main')`);
+  await ensureJsonView(window);
   await waitFor(`document.querySelector('textarea[aria-label="JSON source"]')?.value.includes('9007199254740993')`);
   const imported=await window.webContents.executeJavaScript(`(async()=>{const id=localStorage.getItem('voyage-project');return (await window.voyage.invoke('project',{id})).project;})()`);assert.notEqual(imported.id,previous.id);assert.equal(imported.activeSource,source);
   const originalSaveDialog=dialog.showSaveDialog,exportFile=path.join(dir,'api-import-export.json');
@@ -180,7 +180,7 @@ async function verifyLocalEditing(window){
   await tool('Settings');await waitFor(`document.querySelector('[aria-label="Local assistant edit mode"]')&&!document.querySelector('[aria-label="Local assistant edit mode"]').disabled`);
   assert.equal(await evaluate(`document.querySelector('[aria-label="Local assistant edit mode"]').value`),'automatic');
   await choose('proposal-only');await tool('Planning');await tool('Settings');await waitFor(`document.querySelector('[aria-label="Local assistant edit mode"]')?.value==='proposal-only'`);await choose('automatic');
-  const before=await evaluate(`(async()=>{const id=localStorage.getItem('voyage-project'),settings=(await window.voyage.invoke('providerSettings')).settings;settings.profiles.push({id:'local-work-mock',name:'Local work mock',protocol:'openai',baseUrl:'http://127.0.0.1:${server.address().port}',model:'test'});settings.routes.building={profileId:'local-work-mock',model:'test'};await window.voyage.invoke('saveProviderSettings',{settings});await window.voyage.invoke('command',{id,command:{type:'workOrder',order:{objective:'Improve motivation',requirements:[],allowedPaths:[['initialGameState','npcs','mara']]}}});const source=(await window.voyage.invoke('project',{id})).project.activeSource;await window.voyage.invoke('startAgent',{id,kind:'work'});return source;})()`);
+  const before=await evaluate(`(async()=>{const id=localStorage.getItem('voyage-project'),settings=(await window.voyage.invoke('providerSettings')).settings;settings.profiles.push({id:'local-work-mock',name:'Local work mock',protocol:'openai',baseUrl:'http://127.0.0.1:${server.address().port}',model:'test'});settings.routes.building={profileId:'local-work-mock',model:'test'};await window.voyage.invoke('saveProviderSettings',{settings});const source=(await window.voyage.invoke('project',{id})).project.activeSource;const baseHash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source)))).map(value=>value.toString(16).padStart(2,'0')).join('');await window.voyage.invoke('command',{id,command:{type:'workOrder',baseHash,order:{reviewedScope:true,objective:'Improve motivation',requirements:[],allowedPaths:[['initialGameState','npcs','mara']]}}});await window.voyage.invoke('startAgent',{id,kind:'work'});return source;})()`);
   await tool('Planning');await waitFor(`document.querySelector('.work-order').textContent.includes('Assistant changes applied locally')`);
   const after=await evaluate(`(async()=>{return (await window.voyage.invoke('project',{id:localStorage.getItem('voyage-project')})).project;})()`);assert.equal(after.tasks[0].state,'APPLIED');assert.equal(after.activeSource,before.replace('Archivist','Stronger motivation'));assert.equal(after.candidates.length,0);
   await evaluate(`document.querySelector('.work-order .feature-status button').click()`);await waitFor(`document.querySelector('header h1').textContent==='History'&&document.body.textContent.includes('Before automatic assistant apply')`);
@@ -256,9 +256,10 @@ async function verifyContextualAssistant(window){
   const second=JSON.parse(bodies[1].messages.find(message=>message.role==='user').content);
   assert.deepEqual(second.editorContext.focusPaths,[['initialGameState','npcs']]);assert.equal(second.history[0].editorContext.label,'Mara');
   await tool('Map');await waitFor(`document.querySelector('.map-viewport')`);
-  await waitFor(`document.querySelector('.assistant-focus').textContent.includes('Earth')`);
+  await waitFor(`document.querySelector('.assistant-focus')?.textContent.includes('Earth')`);
   assert.ok(await evaluate(`document.querySelector('.assistant-thread').textContent.includes('Context-aware suggestion 1')`));
   await button('Review suggestions');await waitFor(`document.querySelector('header h1').textContent==='Planning'`);
+  await button('Assistant');await waitFor(`document.querySelector('.assistant-focus')?.textContent.includes('Earth')`);
   assert.ok(await evaluate(`document.querySelector('.assistant-focus').textContent.includes('Earth')`));
   assert.equal(await evaluate(`(async()=>{return (await window.voyage.invoke('project',{id:localStorage.getItem('voyage-project')})).project.activeSource;})()`),source);
   await button('Close assistant');
@@ -272,8 +273,8 @@ async function verifyAuthoringTools(window){
  const fixture='{"shortId":"SMOKE_SYNC","initialGameState":{"worldBackground":"Audit fixture","npcs":{"mara":{"id":"mara","name":"Mara","basicInfo":"Archivist","currentLocation":"home","exact":9007199254740993},"orin":{"name":"Orin","basicInfo":"Cartographer","currentLocation":"home"}},"locations":{"home":{"name":"Home","region":"north","imageUrl":"https://example.invalid/map.png"}},"regions":{"north":{"realm":"earth"}},"realms":{"earth":{}},"custom":{"scale":1.2300e+42}}}';
  await window.webContents.executeJavaScript(`(async()=>{const id=localStorage.getItem('voyage-project');await window.voyage.invoke('command',{id,command:{type:'stage',id:'authoring-smoke',source:${JSON.stringify(fixture)},kind:'import',title:'Authoring audit fixture'}});await window.voyage.invoke('command',{id,command:{type:'accept',id:'authoring-smoke'}});})()`);
  await tool('World tools');await input('[aria-label="Search authoring entries"]','Mara');await waitFor(`[...document.querySelectorAll('.authoring-list button')].some(button=>button.textContent==='Mara')`);
- await window.webContents.executeJavaScript(`[...document.querySelectorAll('.authoring-list button')].find(button=>button.textContent==='Mara').click()`);await waitFor(`document.querySelector('header h1').textContent==='World'&&document.querySelector('.breadcrumbs').textContent.includes('mara')`);
- await resizeWindow(window,320,915);await window.webContents.executeJavaScript(`[...document.querySelectorAll('button')].find(button=>button.textContent==='Open editor')?.click()`);await waitFor(`document.querySelector('.entry-tool-actions button')?.getBoundingClientRect().width>0`);
+ await window.webContents.executeJavaScript(`[...document.querySelectorAll('.authoring-list button')].find(button=>button.textContent==='Mara').click()`);await waitFor(`document.querySelector('header h1').textContent==='Content'&&document.querySelector('.breadcrumbs').textContent.includes('mara')`);
+ await resizeWindow(window,320,915);await window.webContents.executeJavaScript(`[...document.querySelectorAll('.mobile-editor-nav button')].find(button=>button.textContent==='Edit').click()`);await waitFor(`document.querySelector('.entry-tool-actions button')?.getBoundingClientRect().width>0`);
  const overlap=await window.webContents.executeJavaScript(`(()=>{const button=document.querySelector('.entry-tool-actions button');button.scrollIntoView({block:'center'});const rect=button.getBoundingClientRect(),hit=document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2);return {hit:hit===button||button.contains(hit),page:document.documentElement.scrollWidth,viewport:innerWidth};})()`);assert.ok(overlap.hit,'Mobile entry tools are covered by form fields');assert.ok(overlap.page<=overlap.viewport);
  await button('Inspect references, assets & entry tools');await waitFor(`document.querySelector('header h1').textContent==='World tools'`);await input('[aria-label="Bookmark name"]','Mara audit');await button('Bookmark current entry');await waitFor(`document.querySelector('.authoring-workbench').textContent.includes('Bookmark saved')`);
  await button('Reference impact');await waitFor(`document.querySelector('.authoring-workbench').textContent.includes('Open target')`);assert.ok(await window.webContents.executeJavaScript(`document.querySelector('.authoring-workbench').textContent.includes('currentLocation')`));
@@ -354,7 +355,7 @@ async function verifyWorkspaceLayouts(window){
   }
  }
  window.setMinimumSize(320,480);await resizeWindow(window,412,915);
- await window.webContents.executeJavaScript(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent==='World').click()`);
+ await window.webContents.executeJavaScript(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent==='Content').click()`);
  await new Promise(resolve=>setTimeout(resolve,200));
  await window.webContents.executeJavaScript(`(()=>{const button=[...document.querySelectorAll('.children button')].find(button=>button.textContent.includes('note'));if(!button)throw Error('Authored note field missing');button.click();})()`);
  await ensureFormView(window);
@@ -420,7 +421,7 @@ async function verifyProviderSaving(window){
  await window.webContents.executeJavaScript(`[...document.querySelectorAll('.provider-presets button')].find(button=>button.querySelector('strong')?.textContent==='OpenAI API').click()`);
  const profileId=await window.webContents.executeJavaScript(`(()=>{const field=[...document.querySelectorAll('input[type="password"]')].at(-1);Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field,'smoke-provider-key');field.dispatchEvent(new Event('input',{bubbles:true}));return field.getAttribute('aria-label').slice('API key '.length);})()`);
  await new Promise(resolve=>setTimeout(resolve,100));
- await window.webContents.executeJavaScript(`window.confirm=()=>false;[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent==='World').click()`);
+ await window.webContents.executeJavaScript(`window.confirm=()=>false;[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.textContent==='Content').click()`);
  assert.equal(await window.webContents.executeJavaScript(`document.querySelector('header h1').textContent`),'Models & agents');
  await window.webContents.executeJavaScript(`[...document.querySelectorAll('button')].find(button=>button.textContent==='Save settings').click()`);
  for(let attempt=0;attempt<60;attempt++){if(await window.webContents.executeJavaScript(`document.querySelector('.provider-page [role="status"]')?.textContent.includes('API keys and stage routes saved')`))break;await new Promise(resolve=>setTimeout(resolve,100));}
@@ -496,7 +497,7 @@ async function verifyPublicationPreview(window){
   await resizeWindow(window,1280,915);
   await window.webContents.executeJavaScript(`[...document.querySelectorAll('.publication-preview button')].find(button=>button.textContent==='Edit long copy').click()`);
  await ensureFormView(window);
-  await waitFor(`document.querySelector('header h1').textContent==='World'&&document.querySelector('textarea[aria-label="Text value"]')?.value.includes('Public long copy')`);
+  await waitFor(`document.querySelector('header h1').textContent==='Content'&&document.querySelector('textarea[aria-label="Text value"]')?.value.includes('Public long copy')`);
  }finally{server.close();}
 }
 async function verifyCoverStudio(window){
@@ -527,7 +528,7 @@ async function verifyCoverStudio(window){
 }
 async function verifySharedViews(window){
  await verifyAppearance(window);
- await window.webContents.executeJavaScript(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.querySelector('span').textContent==='World').click()`);
+ await window.webContents.executeJavaScript(`[...document.querySelectorAll('.tools-menu-items button')].find(button=>button.querySelector('span').textContent==='Content').click()`);
  async function waitFor(expression){for(let attempt=0;attempt<60;attempt++){if(await window.webContents.executeJavaScript(expression))return;await new Promise(resolve=>setTimeout(resolve,150));}throw Error('UI did not become ready: '+expression);}
  await window.webContents.executeJavaScript(`document.querySelector('button[aria-label="Open projects"]').click()`);
  await waitFor(`[...document.querySelectorAll('button')].some(button=>button.textContent==='Open Lantern Coast →')`);

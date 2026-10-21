@@ -3,6 +3,8 @@ import com.getcapacitor.*;import com.getcapacitor.annotation.*;import android.ap
 @CapacitorPlugin(name="Workbench")
 public final class WorkbenchPlugin extends Plugin {
  Host host;final ExecutorService executor=Executors.newSingleThreadExecutor();
+ @Override protected void handleOnResume(){getBridge().triggerJSEvent("voyage-resume","window");}
+ @Override protected void handleOnPause(){getBridge().triggerJSEvent("voyage-pause","window");}
  public void load(){executor.execute(()->{try{host=new Host(getContext());try{host.ensureIdle();host.store.recover();}catch(Exception active){}}catch(Exception e){android.util.Log.e("Voyage","Host initialization failed",e);}});}
  @PluginMethod public void request(PluginCall call){String method=call.getString("method");JSObject p=call.getObject("payload",new JSObject());
  if("copyText".equals(method)){getActivity().runOnUiThread(()->{try{if(!(p.opt("text") instanceof String))throw new Exception("Clipboard text must be a string.");ClipData clip=ClipData.newPlainText("Voyage draft",p.getString("text"));if(android.os.Build.VERSION.SDK_INT>=33){android.os.PersistableBundle extras=new android.os.PersistableBundle();extras.putBoolean(ClipDescription.EXTRA_IS_SENSITIVE,true);clip.getDescription().setExtras(extras);}ClipboardManager manager=(ClipboardManager)getContext().getSystemService(Context.CLIPBOARD_SERVICE);if(manager==null)throw new Exception("Clipboard is unavailable");manager.setPrimaryClip(clip);resolve(call,new JSONObject().put("copied",true));}catch(Exception error){call.reject(error.getMessage());}});return;}
