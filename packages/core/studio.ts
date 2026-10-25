@@ -82,7 +82,7 @@ export function assetSlots(source:string){
    if(section==='locations'){const areas=child.node.children.find(field=>field.key==='areas')?.node;if(areas?.kind==='object')for(const area of areas.children)addMissing(area.node,path.concat('areas',area.key),['images','establishingShot','imageUrl'],'AREA_IMAGE');}
   }
  }
- if(base.length){const parent=base.slice(0,-1),world=doc.at(root,parent),node=world.children.find(child=>child.key==='image')?.node;if(node?.kind==='string')result.push({path:parent.concat('image'),kind:'image',url:String(node.value)});else addMissing(world,parent,['image']);}
+ if(base.length){const parent=base.slice(0,-1),world=doc.at(root,parent),node=world.children.find(child=>child.key==='image')?.node;if(node?.kind==='string')result.push({path:parent.concat('image'),kind:'image',target:'WORLD_COVER',url:String(node.value)});else addMissing(world,parent,['image'],'WORLD_COVER');}
  return result;
 }
 export function assignAsset(source:string,path:doc.Path,url:string){

@@ -30,9 +30,12 @@ test('raw covers use creation metadata; envelope covers use the authored envelop
  assert.equal(raw.source,state);
  assert.equal(JSON.parse(raw.creationDetails).title,'World');
  assert.equal(artworkDestinations(state,raw.creationDetails)[0].url,'https://images.example/cover.png');
+ assert.equal(artworkDestinations(state,raw.creationDetails)[0].target,'WORLD_COVER');
+ assert.match(artworkPrompt(artworkDestinations(state)[0]),/1000 × 1000/);
  const source='{"world":{"shortId":"keep","initialGameState":'+state+'}}';
  const cover=artworkDestinations(source).find(item=>item.category==='World cover')!;
  assert.deepEqual(cover.path,['world','image']);
+ assert.equal(cover.target,'WORLD_COVER');
  const assigned=assignArtwork(source,details,cover.id,'https://images.example/cover.png');
  assert.equal(assigned.creationDetails,details);
  assert.equal(JSON.parse(assigned.source).world.shortId,'keep');
@@ -49,6 +52,7 @@ test('empty nullable artwork fields remain selectable without replacing malforme
  for(const label of ['Guide','Key','World cover']){
   const destination=destinations.find(item=>item.label===label)!;
   assert.ok(destination,label);
+  if(label==='World cover')assert.equal(destination.target,'WORLD_COVER');
   const assigned=assignArtwork(source,'{}',destination.id,'https://images.example/image.png');
   assert.equal(artworkDestinations(assigned.source).find(item=>item.id===destination.id)!.url,'https://images.example/image.png');
   assert.equal(JSON.parse(assigned.source).initialGameState.regions.bad.images,false);

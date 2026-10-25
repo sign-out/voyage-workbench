@@ -1,4 +1,9 @@
 import {sha256} from 'js-sha256';
+import {assistantRecoverySettings,type AssistantRecoverySettings} from './assistant-recovery';
+import {sectionCheckpointPaths,validateSectionCheckpoint,type SectionCheckpoint} from './section-checkpoints';
+export {assistantRecoverySettings} from './assistant-recovery';
+export type {AssistantRecoverySettings} from './assistant-recovery';
+import {chatPlanContent,type ChatPlan} from './chat-plans';
 import workValidationReferences from './work-validation.json';
 import * as fieldFill from './field-fill';
 import {fieldFillSnapshot,fieldFillPrompt,parseFieldFill,type FieldFillSnapshot} from './field-fill';
@@ -28,7 +33,16 @@ export interface NoteChangeReceipt {id:string;taskId:string;proposalId:string;no
 export interface Candidate {id:string;title:string;source:string;baseHash:string;created:number;kind:string;sourceProposalId?:string;noteIds?:string[];importNote?:string;rejectedChanges?:doc.ChangeChoice[]}
 export interface Project {artworkProposals?:ArtworkProposal[];bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string;editorContext?:Pick<EditorSnapshot,'screen'|'label'|'focusPaths'>}[];workOrder:ApprovedWorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
 export interface Project {grading?:{rubric?:Rubric;reports:GradeReport[]}}
+export interface Project {chatPlan?:ChatPlan}
 export interface Task {grading?:GradingSnapshot;fieldFill?:FieldFillSnapshot}
+export interface Task {assistantRecovery?:AssistantRecoverySettings}
+export interface Task {sectionCheckpoints?:SectionCheckpoint[]}
+
+export function assistantCompletionValidation(project:Project,task:Task,text:string):{valid:true} {
+ if(task.fieldFill)parseFieldFill(text,task.fieldFill);
+ else if(task.grading)parseGradeReport(text,task.grading,task.baseSource,{id:task.id,taskId:task.id,sourceHash:task.baseHash,created:project.updated});
+ return {valid:true};
+}
 let nativeHasher:((source:string)=>string)|undefined;
 export function setHasher(fn:(source:string)=>string){nativeHasher=fn;}
 export const hash=(source:string)=>nativeHasher?nativeHasher(source):sha256(source);
@@ -56,6 +70,10 @@ export function reduce(project:Project,c:any):Project {
   }
   if(p.draft&&['edit','insert','remove','accept'].indexOf(c.type)>=0)throw new Error('Apply or discard the editor draft first.');
   switch(c.type){
+    case 'chatPlan':{
+      if(!Number.isSafeInteger(c.expectedRevision)||c.expectedRevision!==(p.chatPlan?.revision||0))throw new Error('The saved plan changed. Reload it before saving again.');
+      p.chatPlan={...chatPlanContent(c.plan),revision:c.expectedRevision+1,updated:p.updated};break;
+    }
     case 'gradingRubric':{
       if(p.tasks.some(t=>t.grading&&['PREPARED','RUNNING'].includes(t.state)))throw new Error('Stop or finish grading before changing the rubric.');
       const rubric=c.rubric===undefined?undefined:parseRubric(c.rubric);
@@ -181,7 +199,7 @@ export function reduce(project:Project,c:any):Project {
       const noteSnapshot=(includeNotes?p.builderNotes||[]:[]).map(note=>({...note,path:note.path.slice()}));
       const editorContext=fill||grading?undefined:editorSnapshot(p.activeSource,c.editorContext);
       const applyMode=c.localEditMode===undefined?'proposal-only':localEditMode(c.localEditMode);
-      p.tasks.unshift({localEditMode:applyMode,...(editorContext?{editorContext}:{}),id:c.id,attempt:c.attempt,kind:c.kind,state:'PREPARED',prompt:taskPrompt,builderNotes:noteSnapshot,sourceNoteIds:c.kind==='work'?(p.workOrderProposals?.find(proposal=>proposal.id===p.workOrder.sourceProposalId)?.noteIds?.slice()||[]):[],...(queuedNotes?{noteQueue:queuedNotes}:{}),reply:'',baseSource,baseHash:hash(baseSource),stagedSource:baseSource,workOrder:fill?{objective:'',requirements:[],allowedPaths:[]}:p.workOrder,route:c.route,created:p.updated});
+      p.tasks.unshift({assistantRecovery:assistantRecoverySettings(c.assistantRecovery),localEditMode:applyMode,...(editorContext?{editorContext}:{}),id:c.id,attempt:c.attempt,kind:c.kind,state:'PREPARED',prompt:taskPrompt,builderNotes:noteSnapshot,sourceNoteIds:c.kind==='work'?(p.workOrderProposals?.find(proposal=>proposal.id===p.workOrder.sourceProposalId)?.noteIds?.slice()||[]):[],...(queuedNotes?{noteQueue:queuedNotes}:{}),reply:'',baseSource,baseHash:hash(baseSource),stagedSource:baseSource,workOrder:fill?{objective:'',requirements:[],allowedPaths:[]}:p.workOrder,route:c.route,created:p.updated});
       if(grading)p.tasks[0].grading=grading;
       if(fill)p.tasks[0].fieldFill=fill;
       if(c.kind==='plan'&&!grading&&!fill)p.chat.push({role:'user',...(editorContext?{editorContext:{screen:editorContext.screen,label:editorContext.label,focusPaths:editorContext.focusPaths}}:{}),text:queuedNotes?'Address project notes · '+queuedNotes.length+' flagged notes':c.prompt});break;
@@ -195,6 +213,20 @@ export function reduce(project:Project,c:any):Project {
       if(hash(t.baseSource)!==t.baseHash)throw new Error('The frozen Work Order source changed. Review and approve it again.');
       if(!Array.isArray(c.path)||!scope.allowedPaths.some(path=>path.every((key,index)=>c.path[index]===key)))throw new Error('This path is outside the approved Work Order scope.');
       const nextSource=c.action==='insert'?doc.insert(t.stagedSource,c.path,c.key,c.source):c.action==='remove'?doc.remove(t.stagedSource,c.path):doc.edit(t.stagedSource,c.path,c.source);doc.assertPackageMetadataUnchanged(t.stagedSource,nextSource);t.stagedSource=nextSource;break;
+    }
+    case 'taskSectionCheckpoint':{
+      const t=task();if(t.kind!=='work'||t.state!=='RUNNING')throw new Error('Checkpoint tool is unavailable for planning or interrupted tasks.');
+      if(!c.attempt||c.attempt!==t.attempt)throw new Error('This task attempt no longer exists.');
+      const scope=approvedScope(t.baseSource,t.workOrder);
+      if(hash(t.baseSource)!==t.baseHash)throw new Error('The frozen Work Order source changed. Review and approve it again.');
+      const paths=sectionCheckpointPaths(c.paths,scope.allowedPaths,doc.statePath(doc.parse(t.baseSource))),last=t.sectionCheckpoints?.at(-1),sourceHash=hash(t.stagedSource);
+      const before=last?c.sectionBaseSource:t.baseSource;
+      if(typeof before!=='string'||hash(before)!==(last?.sourceHash||t.baseHash))throw new Error('The frozen section checkpoint source changed or is unavailable.');
+      if(last?.sourceHash===sourceHash&&JSON.stringify(last.paths)===JSON.stringify(paths))break;
+      if(typeof c.label!=='string'||!c.label.trim()||c.label.length>200)throw new Error('Checkpoint label must be a nonempty string of at most 200 characters.');
+      const result=validateSectionCheckpoint(before,t.stagedSource,paths,last);
+      if(typeof c.sectionCheckpointId!=='string'||!c.sectionCheckpointId)throw new Error('Section checkpoint storage is unavailable.');
+      t.sectionCheckpoints=[...(t.sectionCheckpoints||[]),{id:c.sectionCheckpointId,sequence:(last?.sequence||0)+1,label:c.label.trim(),paths,sourceHash,preexistingErrors:result.preexistingErrors}];break;
     }
     case 'taskDone':{const t=task();if(t.state!=='RUNNING')throw new Error('Task is no longer running.');t.reply=c.text||t.reply;
       if(t.fieldFill){t.fieldFill={...t.fieldFill,result:parseFieldFill(t.reply,t.fieldFill)};t.state='COMPLETED';}
@@ -247,4 +279,4 @@ export function remotePayload(source:string,baseline?:string,worldId?:string):st
   if(!object.children.some(c=>c.key==='initialGameState'))throw new Error('Remote saves require the downloaded world envelope.');
   return '{"world":{'+fields.filter(k=>object.children.some(c=>c.key===k)).map(k=>JSON.stringify(k)+':'+doc.read(source,prefix.concat(k))).join(',')+'}}';
 }
-export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode,projectSummary} as any)[r.operation]||(fieldFill as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(harness as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}
+export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode,projectSummary,assistantRecoverySettings,assistantCompletionValidation} as any)[r.operation]||(fieldFill as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(harness as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}

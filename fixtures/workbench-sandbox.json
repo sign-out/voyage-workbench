@@ -1,0 +1,864 @@
+{
+  "aiInstructions": {
+    "generateStory": {
+      "How to Use the Narrator": "",
+      "Turn Structure": "",
+      "Turn Boundaries and Endings": "",
+      "Player Agency": "",
+      "Combat Narration": "",
+      "Victory and Downtime": "",
+      "Character Behavior": "",
+      "Style Principles": "",
+      "custom": "This is a disposable test setting. Keep feedback clear and brief. Let the player choose whether to inspect the lamp, speak to the keeper, or explore the harbor. Do not claim that a test action has changed another world."
+    },
+    "generateInitialStart": {
+      "Opening Structure": "",
+      "Style Principles": "",
+      "custom": ""
+    },
+    "generateActionInfo": {
+      "custom": ""
+    },
+    "generateCharacterBackground": {
+      "prompt": "",
+      "custom": ""
+    },
+    "generateConversationStarters": {
+      "Conversation Starter Guidance": "",
+      "custom": ""
+    },
+    "generateDialogue": {
+      "Style, Tone, and Length": "",
+      "custom": ""
+    },
+    "generateNpcChatSummary": {
+      "Summary Guidance": "",
+      "custom": ""
+    },
+    "generateNPCIntents": {
+      "core_principles": "",
+      "when_to_generate": "",
+      "what_is_not_action": "",
+      "description_economy": "",
+      "summary_established_beats": "",
+      "action_format": "",
+      "story_driver": "",
+      "custom": ""
+    },
+    "generateNewNPC": {
+      "custom": ""
+    },
+    "generateNPCDetails": {
+      "character_creator_instructions": "",
+      "personality_archetype_information": "",
+      "style": "",
+      "cliche_avoidance": "",
+      "hidden_info": "",
+      "personality": "",
+      "faction_affiliation": "",
+      "abilities": "",
+      "custom": ""
+    },
+    "generateNPCUpdates": {
+      "relationship_change_updates": "",
+      "party_management": "",
+      "custom": "",
+      "relationship_initialization": ""
+    },
+    "generateLocationDetails": {
+      "custom": ""
+    },
+    "generateRegionDetails": {
+      "custom": ""
+    },
+    "generateEncounters": {
+      "custom": ""
+    },
+    "ItemGenerationAndUsage": {
+      "custom": ""
+    },
+    "summarization": {
+      "custom": ""
+    },
+    "generateLearnedAbilities": {
+      "custom": ""
+    }
+  },
+  "heroesVersion": 36,
+  "realms": {},
+  "regions": {
+    "Lantern Coast": {
+      "name": "Lantern Coast",
+      "basicInfo": "Tidal cities, salt marshes, and ancient light towers line a stormy coast."
+    }
+  },
+  "locations": {
+    "Brinehaven": {
+      "name": "Brinehaven",
+      "region": "Lantern Coast",
+      "basicInfo": "A harbor town beneath a silent lighthouse."
+    }
+  },
+  "unassignedAreas": {},
+  "factions": {},
+  "worldVoices": {},
+  "npcs": {
+    "Mara Venn": {
+      "name": "Mara Venn",
+      "basicInfo": "A lighthouse keeper who has lost contact with the offshore watch. Practical, exhausted, and unwilling to abandon her crew.",
+      "currentLocation": "Brinehaven",
+      "known": true
+    }
+  },
+  "worldLore": {
+    "The Great Lamps": {
+      "text": "Each lamp marks a safe passage through the remembering sea. An extinguished lamp draws ships toward places erased from every chart."
+    }
+  },
+  "storyStarts": {
+    "The Dark Lighthouse": {
+      "name": "The Dark Lighthouse",
+      "description": "Investigate a lighthouse that went dark during the evening tide.",
+      "storyStart": "Rain ticks against the windows of the harbor office. Mara Venn sets a cold brass lantern on your table. \"The offshore lamp went out an hour ago,\" she says. \"Then we heard someone knocking from inside this.\"",
+      "locations": [
+        "Brinehaven"
+      ],
+      "allowPlayerInput": true,
+      "isDefault": true
+    }
+  },
+  "itemTypes": {},
+  "abilities": {},
+  "skills": {},
+  "traits": {},
+  "traitCategories": {},
+  "npcTypes": {},
+  "resourceSettings": {},
+  "quests": {},
+  "narrativeEvents": {},
+  "triggers": {},
+  "narratorStyle": "Evocative maritime fantasy. Use concrete sensory details, grounded dialogue, and meaningful choices. Respect player agency.",
+  "storySettings": {
+    "worldBackground": "DISPOSABLE WORKBENCH TEST WORLD. This small harbor exists only for local edit, checkpoint, rollback, grading, and plan handoff tests. The harbor keeper needs help relighting a lamp. No changes in this sandbox should affect another world.",
+    "questGenerationGuidance": "Use small, reversible tasks within the harbor. Never introduce dependencies on another world or mod."
+  },
+  "attributeSettings": {
+    "attributeNames": [
+      ""
+    ],
+    "lowAttributeTraits": {},
+    "maxStartingAttribute": 16,
+    "lowAttributeThreshold": 2,
+    "attributeBonusModifier": 2.5,
+    "attributeStatModifiers": {},
+    "attributeDamageModifiers": {},
+    "attributeDamageReductionModifiers": {},
+    "startingAttributeValue": 8,
+    "startingAttributePoints": 16
+  },
+  "skillSettings": {
+    "maxSkillLevel": 25,
+    "maxSkillSuccessLevel": 25,
+    "skillXPRewards": {},
+    "xpFromNewSkill": 200,
+    "trainingCooldown": 10,
+    "skillBonusModifier": 1,
+    "charXPPerSkillLevel": 5,
+    "baseXPFromSkillUpgrade": 125,
+    "skillTypeDifficultyBonus": {},
+    "startingXPToLevelUpSkill": 100,
+    "baseChanceToLearnNewSkill": 0.1,
+    "skillLearningBonusModifier": 0.01,
+    "additionalXPRequiredPerSkillLevel": 40,
+    "newSkillGenerationEnabled": true
+  },
+  "progressionSettings": {
+    "startingCharacterLevelUpRequirement": 1000,
+    "extraRequiredXPPerCharacterLevel": 400,
+    "maxCharacterLevel": 100,
+    "abilityPointEveryLevels": 1,
+    "abilityPointsPerGrant": 1,
+    "attributePointEveryLevels": 5,
+    "attributePointsPerGrant": 1,
+    "maxAttributeValue": 999,
+    "traitPickEveryLevels": 10,
+    "traitPicksPerGrant": 1,
+    "locationDiscoveryXP": 10,
+    "levelUpTraitPool": [],
+    "milestoneTitles": [
+      {
+        "levelGranted": 1,
+        "title": "Initiate"
+      },
+      {
+        "levelGranted": 10,
+        "title": "Adept"
+      },
+      {
+        "levelGranted": 20,
+        "title": "Veteran"
+      },
+      {
+        "levelGranted": 30,
+        "title": "Expert"
+      },
+      {
+        "levelGranted": 40,
+        "title": "Master"
+      },
+      {
+        "levelGranted": 50,
+        "title": "Legend"
+      }
+    ]
+  },
+  "locationSettings": {
+    "regionSize": 100,
+    "simpleRadius": 2,
+    "complexRadius": 5,
+    "regionLocationCount": 8,
+    "avgTravelDistance": 20,
+    "minTravelDistance": 5,
+    "newRegionGenerationEnabled": true,
+    "regionMapBorderFeatheringEnabled": true,
+    "encountersEnabled": false
+  },
+  "itemSettings": {
+    "currencyName": "mark",
+    "itemSlots": [
+      {
+        "slot": "head",
+        "category": "Armor",
+        "quantity": 1
+      },
+      {
+        "slot": "body",
+        "category": "Armor",
+        "quantity": 1
+      },
+      {
+        "slot": "legs",
+        "category": "Armor",
+        "quantity": 1
+      },
+      {
+        "slot": "feet",
+        "category": "Armor",
+        "quantity": 1
+      },
+      {
+        "slot": "hands",
+        "category": "Armor",
+        "quantity": 1
+      }
+    ],
+    "itemCategories": [
+      "Currency",
+      "Armor",
+      "Weapon",
+      "Tool",
+      "Consumable"
+    ],
+    "startingItems": []
+  },
+  "combatSettings": {
+    "minCombatXP": 1,
+    "baseCombatXP": 100,
+    "abilityCooldown": 20,
+    "abilityBonus": 10,
+    "npcDailyHealingAmount": 999,
+    "damageTypes": [
+      ""
+    ],
+    "damageTypePresentation": {}
+  },
+  "tipSettings": {
+    "tips": [
+      ""
+    ],
+    "tipDisplayEnabled": false,
+    "tipTurnInterval": 5,
+    "tipMinimumTurns": 1,
+    "tipMaximumTurns": 50
+  },
+  "death": {
+    "permadeath": false,
+    "instructions": ""
+  },
+  "endGame": {
+    "win": {
+      "endCondition": "win",
+      "instructions": ""
+    },
+    "lose": {
+      "endCondition": "lose",
+      "instructions": ""
+    },
+    "end": {
+      "endCondition": "end",
+      "instructions": ""
+    }
+  },
+  "relationshipStages": [
+    {
+      "name": "Nemesis",
+      "minScore": -100,
+      "maxScore": -81
+    },
+    {
+      "name": "Antagonist",
+      "minScore": -80,
+      "maxScore": -61
+    },
+    {
+      "name": "Hostile",
+      "minScore": -60,
+      "maxScore": -41
+    },
+    {
+      "name": "Unfriendly",
+      "minScore": -40,
+      "maxScore": -21
+    },
+    {
+      "name": "Cold",
+      "minScore": -20,
+      "maxScore": -1
+    },
+    {
+      "name": "Neutral",
+      "minScore": 0,
+      "maxScore": 0
+    },
+    {
+      "name": "Warm",
+      "minScore": 1,
+      "maxScore": 20
+    },
+    {
+      "name": "Friendly",
+      "minScore": 21,
+      "maxScore": 40
+    },
+    {
+      "name": "Confidant",
+      "minScore": 41,
+      "maxScore": 60
+    },
+    {
+      "name": "Ally",
+      "minScore": 61,
+      "maxScore": 80
+    },
+    {
+      "name": "Devoted",
+      "minScore": 81,
+      "maxScore": 100
+    }
+  ],
+  "gameplayMusicSettings": {
+    "characterCreationTrackId": "CharacterCreationFantasy",
+    "tracks": {
+      "CharacterCreationFantasy": {
+        "cues": [
+          "character-creation"
+        ],
+        "variants": [
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/FantasyCharacterSelectA.wav"
+          },
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/FantasyCharacterSelectB.wav"
+          },
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/FantasyCharacterSelectC.wav"
+          }
+        ]
+      },
+      "CharacterCreationFuturistic": {
+        "cues": [
+          "character-creation"
+        ],
+        "variants": [
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/FuturisticCharacterCreateA.wav"
+          },
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/FuturisticCharacterCreateB.wav"
+          },
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/FuturisticCharacterCreateC.wav"
+          }
+        ]
+      },
+      "Investigatory": {
+        "matchTags": [
+          "investigation",
+          "searching",
+          "clues",
+          "hidden",
+          "sneaking",
+          "spying",
+          "detective",
+          "tracking"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Investigatory1_NAR_REENCODED.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Investigatory1_PLY.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Investigatory2_NAR_REENCODED.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Investigatory2_PLY_REENCODED.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Investigatory3_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Investigatory3_PLY.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Investigatory4_NAR_REENCODED.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Investigatory4_PLY.ogg"
+          }
+        ]
+      },
+      "Apprehensive": {
+        "matchTags": [
+          "dread",
+          "ominous",
+          "lurking",
+          "danger",
+          "warning",
+          "threatening",
+          "tense",
+          "anxious",
+          "uneasy",
+          "foreboding",
+          "suspicious",
+          "nervous"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Apprehensive_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Apprehensive_PLY_REENCODED.ogg"
+          }
+        ]
+      },
+      "Awestruck": {
+        "matchTags": [
+          "wonder",
+          "magnificent",
+          "ancient",
+          "revelation",
+          "sacred",
+          "overwhelming",
+          "majestic",
+          "vast",
+          "breathtaking",
+          "awe",
+          "mystical",
+          "divine",
+          "grandeur",
+          "discovery"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Awestruck_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Awestruck_PLY.ogg"
+          }
+        ]
+      },
+      "Calm": {
+        "matchTags": [
+          "peaceful",
+          "safe",
+          "rest",
+          "serene",
+          "tranquil",
+          "relaxed",
+          "shelter",
+          "stillness",
+          "meditative",
+          "comfort"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Calm_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Calm_PLY.ogg"
+          }
+        ]
+      },
+      "Dead": {
+        "matchTags": [
+          "death",
+          "killed",
+          "fallen",
+          "tragedy",
+          "grief",
+          "devastating",
+          "perished",
+          "fatal"
+        ],
+        "cues": [
+          "dead"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dead1_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dead1_PLY.ogg",
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dead1.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dead2_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dead2_PLY.ogg",
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dead2.ogg"
+          },
+          {
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dead3_PLY.ogg",
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dead3.ogg"
+          },
+          {
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dead4_PLY.ogg",
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dead4.ogg"
+          }
+        ]
+      },
+      "Distraught": {
+        "matchTags": [
+          "distress",
+          "turmoil",
+          "betrayal",
+          "anguish",
+          "conflict",
+          "desperate",
+          "troubled",
+          "dilemma",
+          "confrontation",
+          "argument",
+          "tension",
+          "accusation",
+          "rejection",
+          "bitter"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Distraught_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Distraught_PLY.ogg"
+          }
+        ]
+      },
+      "Eulogizing": {
+        "matchTags": [
+          "mourning",
+          "memorial",
+          "funeral",
+          "tribute",
+          "remembrance",
+          "farewell",
+          "honoring",
+          "grave"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Eulogizing_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Eulogizing_PLY.ogg"
+          }
+        ]
+      },
+      "Exuberant": {
+        "matchTags": [
+          "excitement",
+          "energetic",
+          "wild",
+          "celebration",
+          "dancing",
+          "festival",
+          "jubilant",
+          "excited",
+          "revelry",
+          "exhilarating",
+          "raucous",
+          "festive"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Exuberant_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Exuberant_PLY.ogg"
+          }
+        ]
+      },
+      "Fighting": {
+        "matchTags": [
+          "combat",
+          "battle",
+          "fighting",
+          "attack",
+          "clash",
+          "warfare",
+          "strike",
+          "assault"
+        ],
+        "cues": [
+          "combat"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Fighting1_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Fighting1_PLY_REENCODED.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Fighting2_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Fighting2_PLY_REENCODED.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Fighting3_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Fighting3_PLY_REENCODED.ogg"
+          }
+        ]
+      },
+      "Happy": {
+        "matchTags": [
+          "cheerful",
+          "pleasant",
+          "friendly",
+          "lighthearted",
+          "warm",
+          "kind",
+          "reunion",
+          "welcome",
+          "hopeful",
+          "gentle",
+          "tender"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Happy_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Happy_PLY.ogg"
+          }
+        ]
+      },
+      "Morose": {
+        "matchTags": [
+          "melancholy",
+          "somber",
+          "gloomy",
+          "lonely",
+          "bleak",
+          "empty",
+          "weary",
+          "sorrowful",
+          "resigned",
+          "loss",
+          "regret",
+          "desolate"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Morose_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Morose_PLY.ogg"
+          }
+        ]
+      },
+      "Pursued": {
+        "matchTags": [
+          "chase",
+          "fleeing",
+          "escape",
+          "pursuit",
+          "hunted",
+          "running",
+          "urgent",
+          "panic",
+          "frantic"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Pursued_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Pursued_PLY.ogg"
+          }
+        ]
+      },
+      "Spooked": {
+        "matchTags": [
+          "horror",
+          "supernatural",
+          "haunted",
+          "eerie",
+          "ghost",
+          "creepy",
+          "cursed",
+          "unnatural",
+          "sinister",
+          "macabre",
+          "unsettling"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Spooked1_NAR_REENCODED.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Spooked1_PLY.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Spooked2_NAR_REENCODED.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Spooked2_PLY_REENCODED.ogg"
+          }
+        ]
+      },
+      "Triumphant": {
+        "matchTags": [
+          "victory",
+          "triumph",
+          "heroic",
+          "conquered",
+          "achievement",
+          "glory",
+          "champion",
+          "winning",
+          "victorious",
+          "glorious",
+          "legendary",
+          "celebrated"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Triumphant_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Triumphant_PLY.ogg"
+          }
+        ]
+      },
+      "Unconscious": {
+        "matchTags": [
+          "dream",
+          "unconscious",
+          "vision",
+          "trance",
+          "ethereal",
+          "floating",
+          "surreal",
+          "sleep"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Unconscious1_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Unconscious1_PLY.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Unconscious2_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Unconscious2_PLY.ogg"
+          }
+        ]
+      },
+      "Travelling": {
+        "matchTags": [
+          "journey",
+          "travel",
+          "road",
+          "adventure",
+          "exploring",
+          "trek",
+          "wandering",
+          "path",
+          "expedition",
+          "voyage",
+          "roaming"
+        ],
+        "cues": [
+          "travel"
+        ],
+        "variants": [
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Travelling1_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Travelling1_PLY.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Travelling2_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Travelling2_PLY.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Travelling3_NAR.ogg",
+            "gameplayUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Travelling3_PLY.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Travelling4_NAR.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Travelling5_NAR.ogg"
+          },
+          {
+            "narrationUrl": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Travelling6_NAR.ogg"
+          }
+        ]
+      },
+      "Near_Dead": {
+        "cues": [
+          "near-death"
+        ],
+        "variants": [
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Near_Dead1.ogg"
+          },
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Near_Dead2.ogg"
+          }
+        ]
+      },
+      "Dying": {
+        "cues": [
+          "dying"
+        ],
+        "variants": [
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dying1.ogg"
+          },
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Dying2.ogg"
+          }
+        ]
+      },
+      "Recover": {
+        "cues": [
+          "recovery"
+        ],
+        "variants": [
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Recover1.ogg"
+          },
+          {
+            "url": "https://latitude-standard-pull-zone-1.b-cdn.net/site_assets/heroes/audio/music/Recover2.ogg"
+          }
+        ]
+      }
+    }
+  },
+  "otherSettings": {
+    "npcHealthPerLevel": 12,
+    "npcMinHealth": 66
+  },
+  "imagePromptConfiguration": {
+    "npcs": "",
+    "locations": "",
+    "areas": "",
+    "regions": "",
+    "items": ""
+  },
+  "characterCreationSettings": {
+    "customizationEnabled": true
+  },
+  "premadeCharacters": [],
+  "nameFilterSettings": {},
+  "randomNames": {
+    "male": [
+      ""
+    ],
+    "female": [
+      ""
+    ]
+  },
+  "mods": [],
+  "arcs": {},
+  "questTriggers": {},
+  "gameModes": {},
+  "authorSeeds": {},
+  "encounterElements": {},
+  "characterArchetypes": {},
+  "locationArchetypes": {},
+  "regionArchetypes": {}
+}

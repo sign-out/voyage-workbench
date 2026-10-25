@@ -14,7 +14,7 @@ test('HTTP planner creates durable artwork requests without image calls or portr
   const body=JSON.parse(raw);
   assert.equal(request.url,'/chat/completions');
   assert.ok(body.tools.some((tool:any)=>tool.function.name==='propose_artwork'));
-  const packet=JSON.parse(body.messages[1].content),target=packet.artworkDestinations.find((item:any)=>!item.hasArtwork);
+  const packet=JSON.parse(body.messages[1].content),target=packet.artworkDestinations.find((item:any)=>item.label==='Guide'&&!item.hasArtwork);
   const message=++calls===1?{tool_calls:[{id:'artwork',type:'function',function:{name:'propose_artwork',arguments:JSON.stringify({destinationId:target.id,prompt:'Watercolor lighthouse keeper, preserve the world style.'})}}]}:{content:'Review the artwork request, then approve generation in Artwork.'};
   if(calls===2){const result=JSON.parse(body.messages.at(-1).content);assert.equal(result.generated,false);assert.equal(result.awaitingHumanApproval,true);assert.equal(result.activeWorldUnchanged,true);}
   response.setHeader('Content-Type','application/json');response.end(JSON.stringify({choices:[{message,finish_reason:message.tool_calls?'tool_calls':'stop'}]}));
