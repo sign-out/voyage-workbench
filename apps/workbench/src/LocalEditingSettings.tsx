@@ -10,6 +10,8 @@ export function LocalEditingSettings(){
 }
 
 export function LocalTaskOutcome({task,onHistory,onReview}:{task?:Task;onHistory:()=>void;onReview:()=>void}){
+ const section=task?.sectionCheckpoints?.at(-1);
+ if(section&&['RUNNING','FAILED','CANCELED','INTERRUPTED'].includes(task!.state))return <div className="feature-status" role="status">{section.sequence} local section checkpoint(s) saved. Latest: {section.label}. {section.preexistingErrors>0?`${section.preexistingErrors} pre-existing validation error(s) remain; no new errors were introduced at this checkpoint. `:''}The active world and Voyage are unchanged. Failed staged edits remain separate from the latest checkpoint. <button onClick={onHistory}>Review section history</button></div>;
  if(task?.state==='APPLIED')return <div className="feature-status" role="status">Assistant changes applied locally. A before-change checkpoint is available in History. Nothing was uploaded to Voyage. <button onClick={onHistory}>View local history</button></div>;
  if(task?.kind==='work'&&task.state==='COMPLETED')return <p role="status">Assistant work completed without local changes.</p>;
  if(task?.state==='PROPOSAL_READY'&&task.localApplyBlockedReason)return <div className="alert" role="status">Automatic local apply paused: {task.localApplyBlockedReason} <button onClick={onReview}>Review local proposal</button></div>;

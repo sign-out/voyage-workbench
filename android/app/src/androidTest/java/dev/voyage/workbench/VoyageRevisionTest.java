@@ -24,7 +24,7 @@ public class VoyageRevisionTest {
   Host host=new Host(InstrumentationRegistry.getInstrumentation().getTargetContext()){
    @Override JSONObject api(String method,String endpoint,String body,String etag,String target)throws Exception{
     assertEquals("alpha",target);
-    if(endpoint.equals("/validate"))return new JSONObject().put("text","{\"data\":{\"valid\":true}}");
+    if(endpoint.equals("/validate"))return new JSONObject().put("text","{\"data\":{\"valid\":true,\"errors\":[]}}");
     if(method.equals("PUT")){assertEquals("W/\"revision-2\"",etag);writes.incrementAndGet();remoteSource.set((String)store.core.doc("read",body,new JSONArray().put("world")));return new JSONObject().put("text","{}");}
     assertEquals("GET",method);return new JSONObject().put("text","{\"data\":{\"world\":"+remoteSource.get()+"}}").put("etag","W/\"revision-2\"");
    }

@@ -34,7 +34,7 @@ test('only current running planners may propose valid destinations and bounded b
 });
 test('planning packets expose actionable artwork IDs without leaking URLs or claiming generation',()=>{
  const project=planning(),packet=assistantPacket(project,project.tasks[0]);
- assert.deepEqual(packet.artworkDestinations!.map(item=>[item.label,item.hasArtwork]).sort(),[['Guide',false],['Mal0',true]]);
+ assert.deepEqual(packet.artworkDestinations!.map(item=>[item.label,item.hasArtwork]).sort(),[['Guide',false],['Mal0',true],['World cover',false]]);
  assert.equal(packet.artworkDestinations!.find(item=>item.label==='Guide')!.id,destinationId);
  assert.doesNotMatch(JSON.stringify(packet.artworkDestinations),/https:/);
  assert.ok(toolDefinitions(false).some(tool=>tool.name==='propose_artwork'));

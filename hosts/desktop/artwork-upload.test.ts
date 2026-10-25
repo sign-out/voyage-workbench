@@ -66,12 +66,45 @@ test('every documented artwork purpose can upload, moderate and retain its hoste
    assert.equal(uploaded.state,'ready');assert.equal(uploaded.imageUrl,'https://images.example/'+target+'.png');
    assert.equal((await prepareUpload(project,target,asset)).id,uploaded.id);
   }
-  assert.equal(allowances,5);assert.equal(moderations,5);assert.equal(byteUploads,5);
-  assert.equal((await feature<any[]>('uploads:'+project.id,[])).length,5);
-  await assert.rejects(prepareUpload(project,'WORLD_COVER',asset),/Unknown upload target/);
+  assert.equal(allowances,6);assert.equal(moderations,6);assert.equal(byteUploads,6);
+  assert.equal((await feature<any[]>('uploads:'+project.id,[])).length,6);
   await assert.rejects(prepareUpload(project,'__proto__',asset),/Unknown upload target/);
   assert.equal(service.store.project(project.id).activeSource,source);
  }finally{(globalThis as any).window=previousWindow;(globalThis as any).Image=previousImage;globalThis.fetch=previousFetch;service.store.close();rmSync(directory,{recursive:true,force:true});}
+});
+
+test('cover uploads accept positive dimensions while gameplay retains its minimum',async()=>{
+ const fixture=await uploadFixture();const {api,project,asset,calls}=fixture;
+ try{
+  (globalThis as any).Image=class {naturalWidth=1;naturalHeight=2;async decode(){}};
+  const prepared=await api.prepareUpload(project,'WORLD_COVER',asset);
+  assert.equal(prepared.width,1);assert.equal(prepared.height,2);
+  const uploaded=await api.sendUpload(project,prepared.id);assert.equal(uploaded.state,'ready');
+  await assert.rejects(api.prepareUpload(project,'AREA_IMAGE',asset),/600 × 600/);
+  (globalThis as any).Image=class {naturalWidth=0;naturalHeight=2;async decode(){}};
+  await assert.rejects(api.prepareUpload(project,'WORLD_COVER',{...asset,id:'zero-cover'}),/positive dimensions/);
+  assert.deepEqual(calls,{allowances:1,puts:1,moderations:1});
+ }finally{fixture.close();}
+});
+
+test('the exact decoded 5 MiB limit accepts padded base64 and rejects one extra byte',async()=>{
+ const fixture=await uploadFixture();const {api,project,asset,calls}=fixture;
+ try{
+  const bytes=Buffer.alloc(5*1024*1024);Buffer.from('\x89PNG\r\n\x1a\n','latin1').copy(bytes);
+  const dataUrl='data:image/png;base64,'+bytes.toString('base64');
+  const info=await api.imageInfo(dataUrl);assert.equal(info.byteLength,5*1024*1024);
+  const prepared=await api.prepareUpload(project,'WORLD_COVER',{...asset,id:'exact-size',dataUrl});assert.equal(prepared.state,'prepared');
+  await assert.rejects(api.prepareUpload(project,'WORLD_COVER',{...asset,id:'too-big',dataUrl:'data:image/png;base64,'+Buffer.concat([bytes,Buffer.alloc(1)]).toString('base64')}),/5 MiB/);
+  assert.deepEqual(calls,{allowances:0,puts:0,moderations:0});
+ }finally{fixture.close();}
+});
+
+test('64-megapixel rejection explicitly identifies the local safety guard',async()=>{
+ const fixture=await uploadFixture();
+ try{
+  (globalThis as any).Image=class {naturalWidth=8001;naturalHeight=8000;async decode(){}};
+  await assert.rejects(fixture.api.imageInfo(imageData),/local 64-megapixel safety limit.*not a Voyage API limit/);
+ }finally{fixture.close();}
 });
 
 test('host rejects missing, foreign and stale image bindings before allowance, PUT or moderation',async()=>{

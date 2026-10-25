@@ -4,11 +4,13 @@ A single-page agent contract covering access, safe mutation rules, Studio behavi
 
 ## Agent-facing contract
 
-This is the complete single-page specification for agents integrating with the preview Voyage Creator API.
+This is a local endpoint reference. The selected host's live OpenAPI and guide remain authoritative. The checked-in Alpha contract and guide were refreshed on October 24, 2026: see `docs/openapi.json` (`1.3.0-preview`) and `docs/voyage-agent-guide.md`. Production still reports `1.2.0-preview`; do not interchange their document layouts.
 
 Base URL: `https://api-alpha.aidungeon.com/creator/v1`
 
 Endpoint paths below are relative to `/creator/v1`. Use the API origin shown above, not the Voyage web origin.
+
+Workbench currently retains its Alpha-only connection policy. The upstream guide now recommends production (`https://api.aidungeon.com/creator/v1`) by default for new integrations; this is not permission to retarget an existing Alpha world or reuse its credentials on another host. Alpha can upgrade shared drafts beyond production compatibility. Preview 1.3 keeps shared fields at the root and party-specific quests, arcs, narrative events and party state under `parties[partyId]`; preserve all parties and `triggerDefinitions`. Download a fresh document instead of reusing preview 1.2's flat layout. Never edit version fields to bypass compatibility checks.
 
 ### Authentication and access
 
@@ -41,6 +43,8 @@ The API edits the same durable draft as Studio and the legacy world editor. When
 - Pending keys and completed results remain protected for 24 hours.
 - `request_in_progress` means the key is still protected; `Retry-After` is the earliest useful recheck.
 - `request_status_unknown` means a durable effect may have happened. Reconcile observable world and Studio state before issuing another mutation.
+- `studio_unavailable` is a clean pre-side-effect availability failure. Respect `Retry-After` and retry the unchanged request; repeated failures should be escalated with the request ID.
+- `studio_version_mismatch` is not transient. Open the world in the selected environment's Studio once to confirm an upgrade, or explicitly choose a compatible environment for a newer draft. Do not automatically change hosts.
 - `PUT` safety comes from `If-Match`; validation has no side effect and needs no idempotency key.
 - The JSON request limit is 64 MiB.
 - 480 total requests per account per minute.
@@ -219,11 +223,14 @@ Creates a direct image-upload allowance. Requires `Idempotency-Key`.
 
 ```json
 {
+  "target": "WORLD_COVER",
+  "width": 1000,
+  "height": 1000,
   "mimeType": "image/png"
 }
 ```
 
-Supported types are PNG, JPEG/JPG, and WebP. The response contains a signed upload URL and upload ID. Upload the bytes to that signed URL before moderation.
+Supported types are PNG, JPEG/JPG, and WebP. All image files are limited to 5 MiB. `WORLD_COVER` accepts any positive dimensions; gameplay targets require at least 600×600. The response contains a signed upload URL, upload ID and expiry. PUT the raw bytes to that URL with the matching Content-Type before expiry and before moderation. Consult OpenAPI's `x-media-constraints` for the selected host's current rules.
 
 ### `POST /worlds/{shortId}/uploads/{uploadId}/moderate`
 
@@ -235,7 +242,7 @@ Moderates a completed direct upload for its intended use. Requires `Idempotency-
 }
 ```
 
-`target` is `AREA_IMAGE`, `LOCATION_IMAGE`, `NPC_PORTRAIT`, or `REGION_MAP_IMAGE`.
+`target` is `WORLD_COVER`, `AREA_IMAGE`, `ITEM_IMAGE`, `LOCATION_IMAGE`, `NPC_PORTRAIT`, or `REGION_MAP_IMAGE`, matching the allowance. Set the returned canonical `imageUrl` on the appropriate field (`world.image` for a cover), then conditionally save the world; moderation does not save or publish it. `422 studio_media_failed` is a settled image rejection: fix the image and use a new upload. `DELETE /uploads/{uploadId}` cleans up rejected or unmoderated objects; successfully moderated images cannot be deleted through that endpoint.
 
 ## Generated images
 

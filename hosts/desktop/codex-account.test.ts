@@ -55,19 +55,24 @@ test('wire errors retain method and code; planner artwork dispatch only creates 
  try{
   rpc=new Rpc(path.join(directory,'home'),directory);processes.add(rpc);await rpc.init();
   await assert.rejects(rpc.request('account/read',{refreshToken:false}),error=>error instanceof CodexRpcError&&error.code===-32603&&error.method==='account/read');rpc.close();
-  const commands:any[]=[],task:any={id:'task',attempt:'attempt',kind:'plan',state:'RUNNING',baseSource:'{}'};
-  const store:any={directory,project:()=>({tasks:[task]}),dispatch:(_project:string,command:any)=>commands.push(command)};
+  const commands:any[]=[],task:any={id:'task',attempt:'attempt',kind:'plan',state:'RUNNING',baseSource:'{}',prompt:''};
+  const store:any={directory,project:()=>({tasks:[task],chat:[]}),dispatch:(_project:string,command:any)=>commands.push(command)};
   const host=new AgentHost(store,path.join(directory,'home'),()=>[]);let taskRpc:Rpc|undefined;const initialize=Rpc.prototype.init;
   Rpc.prototype.init=async function(){taskRpc=this;processes.add(this);return initialize.call(this);};
   try{await host.run('project','task');}finally{Rpc.prototype.init=initialize;}
   assert.equal(commands.at(-1).state,'FAILED');assert.match(commands.at(-1).error,/one account-only retry/);
   assert.equal(commands.some(command=>command.type==='taskSession'),false);assert.equal(host.running.size,0);
   const request={destinationId:'cover',prompt:'A misty harbor'};
-  const result=await taskRpc!.onTool('propose_artwork',request);
+  await assert.rejects(taskRpc!.onTool('propose_artwork',request),/Task was stopped/);
+  const createRpc=host.createRpc;
+  const liveRpc:any={onEvent:()=>{},onTool:async()=>{},init:async()=>{},close:()=>{},request:async(method:string)=>method==='account/read'?{account:{type:'chatgpt'}}:method==='thread/start'?{thread:{id:'live-thread'}}:{}};
+  host.createRpc=()=>liveRpc;await host.run('project','task');
+  const result=await liveRpc.onTool('propose_artwork',request);
   assert.match(result.proposalId,/^[0-9a-f-]{36}$/);assert.deepEqual(result,{proposalId:result.proposalId,awaitingHumanApproval:true,activeWorldUnchanged:true,generated:false});
   assert.deepEqual(commands.at(-1),{type:'proposeArtwork',id:result.proposalId,taskId:'task',attempt:'attempt',request});
-  task.kind='work';await assert.rejects(taskRpc!.onTool('propose_artwork',request),/unavailable for this stage/);
-  task.state='CANCELED';await assert.rejects(taskRpc!.onTool('propose_artwork',request),/Task was stopped/);
+  task.kind='work';await assert.rejects(liveRpc.onTool('propose_artwork',request),/unavailable for this stage/);
+  task.state='CANCELED';await assert.rejects(liveRpc.onTool('propose_artwork',request),/Task was stopped/);
+  host.createRpc=createRpc;
   for(const invalidation of ['cancel','new-attempt','cancel-after-thread']){
    task.kind='plan';task.state='RUNNING';task.attempt='attempt';const calls:string[]=[];let reads=0;const original=Rpc.prototype.request;
    Rpc.prototype.request=async function(method){

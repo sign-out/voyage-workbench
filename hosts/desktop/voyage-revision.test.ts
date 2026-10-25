@@ -14,7 +14,7 @@ test('Alpha weak ETags save with quoted revisions and recover legacy invalid_rev
   try{
     globalThis.fetch=async(url,options)=>{
       assert.equal(new URL(String(url)).hostname,'api-alpha.aidungeon.com');
-      if(String(url).endsWith('/validate'))return new Response('{"data":{"valid":true}}');
+      if(String(url).endsWith('/validate'))return new Response('{"data":{"valid":true,"errors":[]}}');
       if(options?.method==='PUT'){
         writes++;
         assert.equal((options.headers as Record<string,string>)['If-Match'],'"revision-1"');

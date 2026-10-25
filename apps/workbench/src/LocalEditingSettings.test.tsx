@@ -15,3 +15,7 @@ test('local task feedback distinguishes applied changes from blocked proposals',
  const applied=renderToStaticMarkup(<LocalTaskOutcome task={{state:'APPLIED'} as Task} onHistory={()=>{}} onReview={()=>{}}/>);assert.match(applied,/applied locally/);assert.match(applied,/View local history/);assert.match(applied,/Nothing was uploaded/);
  const blocked=renderToStaticMarkup(<LocalTaskOutcome task={{state:'PROPOSAL_READY',localApplyBlockedReason:'Draft exists'} as Task} onHistory={()=>{}} onReview={()=>{}}/>);assert.match(blocked,/Draft exists/);assert.match(blocked,/Review local proposal/);
 });
+test('failed work shows recoverable staged section history without claiming remote save',()=>{
+ const html=renderToStaticMarkup(<LocalTaskOutcome task={{state:'FAILED',sectionCheckpoints:[{id:'receipt',sequence:2,label:'NPCs and locations',paths:[['npcs']],sourceHash:'hash',preexistingErrors:1}]} as Task} onHistory={()=>{}} onReview={()=>{}}/>);
+ assert.match(html,/2 local section checkpoint/);assert.match(html,/NPCs and locations/);assert.match(html,/pre-existing validation error/);assert.match(html,/active world and Voyage are unchanged/);assert.match(html,/Review section history/);
+});

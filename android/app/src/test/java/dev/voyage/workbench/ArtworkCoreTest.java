@@ -20,11 +20,11 @@ public class ArtworkCoreTest {
     +"project=VoyageCore.reduce(project,{type:'prepareTask',id:'task',attempt:'one',kind:'plan',prompt:'Create missing portraits'});"
     +"project=VoyageCore.reduce(project,{type:'taskRunning',taskId:'task',attempt:'one'});"
     +"var packet=JSON.parse(VoyageCore.nativeRequest(JSON.stringify({operation:'assistantPacket',args:[project,project.tasks[0]]})));"
-    +"var target=packet.artworkDestinations.filter(function(item){return !item.hasArtwork;})[0];"
+    +"var target=packet.artworkDestinations.filter(function(item){return item.label==='guide'&&!item.hasArtwork;})[0];"
     +"if(target.label!=='guide')throw Error('Missing-name fallback failed');"
     +"project=VoyageCore.reduce(project,{type:'proposeArtwork',taskId:'task',attempt:'one',id:'artwork',request:{destinationId:target.id,prompt:'Watercolor lighthouse keeper'}});"
     +"project=VoyageCore.reduce(project,{type:'taskDone',taskId:'task',attempt:'one',text:'Review artwork requests'});"
-    +"if(project.activeSource!==source||project.artworkProposals.length!==1||packet.artworkDestinations.length!==2)throw Error('Artwork proposal modified source or lost destinations');"
+    +"if(project.activeSource!==source||project.artworkProposals.length!==1||packet.artworkDestinations.length!==3)throw Error('Artwork proposal modified source or lost destinations');"
     +"project.artworkProposals[0].label;";
    assertEquals("guide",Context.toString(context.evaluateString(scope,script,"artwork-regression",1,null)));
   }finally {Context.exit();}

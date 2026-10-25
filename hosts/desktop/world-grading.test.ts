@@ -22,7 +22,7 @@ function fixtureReport(){return {
 };}
 
 test('grading persists a separate report and optional fixes remain unapproved suggestions',async()=>{
- const directory=mkdtempSync(path.join(tmpdir(),'voyage-world-grading-'));let calls=0;
+ const directory=mkdtempSync(path.join(tmpdir(),'voyage-world-grading-'));let calls=0,forbidden=false;
  const server=createServer(async(request,response)=>{
   let raw='';for await(const chunk of request)raw+=chunk;const body=JSON.parse(raw);calls++;
   const tools=body.tools.map((tool:any)=>tool.function.name);
@@ -30,8 +30,7 @@ test('grading persists a separate report and optional fixes remain unapproved su
   const packet=JSON.parse(body.messages.find((message:any)=>message.role==='user').content);
   assert.equal(packet.grading.rubricVersion,'1.6');assert.equal(packet.grading.sourceHash,hash(source));assert.deepEqual(packet.history,[]);
   response.setHeader('Content-Type','application/json');
-  const message=calls===1?{tool_calls:[{id:'forbidden',type:'function',function:{name:'propose_work_order',arguments:JSON.stringify({objective:'Forbidden',requirements:[],allowedPaths:[['title']]})}}]}:{content:JSON.stringify(fixtureReport())};
-  if(calls===2)assert.match(body.messages.at(-1).content,/unavailable/);
+  const message=forbidden?{tool_calls:[{id:'forbidden',type:'function',function:{name:'propose_work_order',arguments:JSON.stringify({objective:'Forbidden',requirements:[],allowedPaths:[['title']]})}}]}:{content:JSON.stringify(fixtureReport())};
   response.end(JSON.stringify({choices:[{message}]}));
  });
  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -48,6 +47,10 @@ test('grading persists a separate report and optional fixes remain unapproved su
   const report=saved.grading!.reports[0];assert.equal(report.scores.universal.lower,0);assert.equal(report.scores.universal.upper,100);
   service.store.dispatch(project.id,{type:'gradingFixOrder',reportId:report.id,fixId:'opening',id:'suggestion',baseHash:hash(source)});
   const suggested=service.store.project(project.id);assert.equal(suggested.workOrderProposals?.length,1);assert.equal(suggested.workOrder.objective,'');assert.equal(suggested.tasks.length,1);assert.equal(suggested.activeSource,source);
+  forbidden=true;const before=calls;
+  await service.request('startAgent',{id:project.id,kind:'plan',grading:selection});
+  for(let attempt=0;attempt<200&&['PREPARED','RUNNING'].includes(service.store.project(project.id).tasks[0].state);attempt++)await new Promise(resolve=>setTimeout(resolve,15));
+  const stopped=service.store.project(project.id);assert.equal(calls,before+1);assert.equal(stopped.tasks[0].state,'FAILED');assert.match(stopped.tasks[0].error!,/unavailable/);assert.equal(stopped.grading?.reports.length,1);assert.equal(stopped.workOrderProposals?.length,1);assert.equal(stopped.activeSource,source);
   service.store.dispatch(project.id,{type:'edit',path:['title'],source:'"Changed world"',baseHash:hash(source)});
   assert.throws(()=>service.store.dispatch(project.id,{type:'gradingFixOrder',reportId:report.id,fixId:'opening',id:'stale',baseHash:hash(service.store.project(project.id).activeSource)}),/world changed/);
   const reopened=new Store(directory);try{assert.equal(reopened.project(project.id).grading?.reports[0].sourceHash,hash(source));}finally{reopened.close();}

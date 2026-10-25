@@ -3,6 +3,7 @@ import {assetSlots,assignAsset,mediaUrl} from './studio';
 import {put} from './features';
 
 export const imageTargets={
+ WORLD_COVER:{label:'World cover',width:1000,height:1000},
  NPC_PORTRAIT:{label:'Character portrait',width:750,height:1000},
  REGION_MAP_IMAGE:{label:'Region map',width:1000,height:1000},
  LOCATION_IMAGE:{label:'Location scene',width:750,height:1333},
@@ -24,7 +25,7 @@ export function artworkDestinations(source:string,creationDetails='{}'):ArtworkD
   const context=(entry?.children||[]).filter(child=>['name','title','description','visualDescription','basicInfo','generatedAppearance'].includes(String(child.key))&&child.node.kind==='string').map(child=>String(child.key)+': '+String(child.node.value).slice(0,2000)).join('\n').slice(0,6000);
   return {id:JSON.stringify(slot.path),path:slot.path,label:cover?'World cover':String(name)+(category==='Area scenes'?' · '+String(relative[1]):''),category,target,url:slot.url,context};
  });
- if(!base.length){const details=doc.parse(creationDetails),image=details.children.find(child=>child.key==='image')?.node;result.unshift({id:'creation-cover',path:null,label:'World cover',category:'World cover',url:image?.kind==='string'?String(image.value):'',context:''});}
+ if(!base.length){const details=doc.parse(creationDetails),image=details.children.find(child=>child.key==='image')?.node;result.unshift({id:'creation-cover',path:null,label:'World cover',category:'World cover',target:'WORLD_COVER',url:image?.kind==='string'?String(image.value):'',context:''});}
  return result;
 }
 export function assignArtwork(source:string,creationDetails:string,id:string,url:string){

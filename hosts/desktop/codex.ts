@@ -4,6 +4,8 @@ import {existsSync,mkdirSync,writeFileSync} from 'node:fs';
 import os from 'node:os';import path from 'node:path';
 import {Store} from './store';
 import {randomUUID} from 'node:crypto';
+import {AssistantRecoveryBudget} from '../../packages/core/assistant-recovery';
+import {assistantCompletionValidation} from '../../packages/core/project';
 import * as doc from '../../packages/core/document';
 import {modelCatalog} from '../../packages/core/model-catalog';
 import {readBuilderNotes,type Task} from '../../packages/core/project';
@@ -48,6 +50,7 @@ import {toolDefinitions,agentSystem} from '../../packages/core/providers';
 import {assistantPacket} from '../../packages/core/assistant-context';
 export class AgentHost {
   running=new Map<string,{rpc:Rpc;task:Task;threadId?:string}>();loginRpc?:Rpc;login:any=null;
+  createRpc=(home:string,cwd:string)=>new Rpc(home,cwd);
   constructor(public store:Store,public home:string,public references:()=>any[]){ }
   async models(){const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();const models:any[]=[];let cursor:string|undefined;for(let page=0;page<20;page++){const result=await rpc.request('model/list',{limit:100,...(cursor?{cursor}:{}),includeHidden:false},20000);models.push(...result.data);if(!result.nextCursor)return modelCatalog(models);if(result.nextCursor===cursor)throw new Error('Model catalog pagination did not advance.');cursor=result.nextCursor;}throw new Error('Model catalog exceeds the supported page limit.');}finally{rpc.close();}}
   async auth(){try{const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();const r=await readCodexAccount(rpc);return {available:true,account:r.account,login:this.login};}finally{rpc.close();}}catch(e){return {available:false,error:(e as Error).message,login:this.login};}}
@@ -55,17 +58,26 @@ export class AgentHost {
   async logout(){const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();await rpc.request('account/logout');this.login=null;}finally{rpc.close();}return {ok:true};}
   async run(projectId:string,taskId:string){const project=this.store.project(projectId),task=project.tasks.find(t=>t.id===taskId);if(!task)throw new Error('Task not found.');
     const cwd=path.join(this.store.directory,'tasks',task.id);mkdirSync(cwd,{recursive:true});writeFileSync(path.join(cwd,'world.json'),task.baseSource);
-    let rpc:Rpc;try{rpc=new Rpc(this.home,cwd);}catch(e){this.store.dispatch(projectId,{type:'taskStop',taskId,state:'FAILED',error:(e as Error).message});return;}
+    let rpc:Rpc;try{rpc=this.createRpc(this.home,cwd);}catch(e){this.store.dispatch(projectId,{type:'taskStop',taskId,state:'FAILED',error:(e as Error).message});return;}
     this.running.set(task.id,{rpc,task});this.store.dispatch(projectId,{type:'taskRunning',taskId,attempt:task.attempt});let reply='',lastFlush=0,done=false;
-    const finish=(error?:string)=>{if(done)return;done=true;try{this.store.dispatch(projectId,error?{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error}:{type:'taskDone',taskId,attempt:task.attempt,text:reply});}catch(failure){try{this.store.dispatch(projectId,{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error:(failure as Error).message});}catch{}}this.running.delete(task.id);rpc.close();};
+    const recovery=new AssistantRecoveryBudget(task.assistantRecovery);
+    const finish=(error?:string)=>{if(done)return;done=true;clearTimeout(timeout);try{this.store.dispatch(projectId,error?{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error}:{type:'taskDone',taskId,attempt:task.attempt,text:reply});}catch(failure){try{this.store.dispatch(projectId,{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error:(failure as Error).message});}catch{}}if(this.running.get(task.id)?.rpc===rpc)this.running.delete(task.id);rpc.close();};
     const ensureRunning=()=>{const current=this.store.project(projectId).tasks.find(current=>current.id===taskId);if(done||this.running.get(taskId)?.rpc!==rpc||current?.state!=='RUNNING'||current.attempt!==task.attempt)throw new Error('Task was stopped.');};
     const timeout=setTimeout(()=>finish('The task exceeded its 30-minute limit. Restart explicitly if needed.'),30*60*1000);timeout.unref();
     rpc.onEvent=(method,p)=>{
       if(method==='item/agentMessage/delta'){reply+=p.delta||'';if(Date.now()-lastFlush>1000){lastFlush=Date.now();try{this.store.dispatch(projectId,{type:'taskReply',taskId,attempt:task.attempt,text:reply});}catch{}}}
-      if(method==='turn/completed'){clearTimeout(timeout);finish(p.turn?.status==='completed'?undefined:p.turn?.error?.message||'The provider interrupted this task.');}
+      if(method==='turn/completed'){
+        if(p.turn?.status!=='completed'){finish(p.turn?.error?.message||'The provider interrupted this task.');return;}
+        try{ensureRunning();assistantCompletionValidation(this.store.project(projectId),task,reply);}
+        catch(error){
+          try{ensureRunning();const correction=recovery.correctiveOpportunity(error);reply='';this.store.dispatch(projectId,{type:'taskReply',taskId,attempt:task.attempt,text:reply});const threadId=this.running.get(taskId)!.threadId;if(!threadId)throw new Error('Task session no longer exists.');void rpc.request('turn/start',{threadId,input:[{type:'text',text:JSON.stringify(correction),text_elements:[]}]}).catch(error=>finish(error.message));}
+          catch(failure){finish((failure as Error).message);}return;
+        }
+        finish();
+      }
       if(method==='host/exited'){clearTimeout(timeout);finish('Codex stopped before finishing.');}
     };
-    rpc.onTool=async(name,args)=>{const current=this.store.project(projectId).tasks.find(t=>t.id===task.id)!;if(current.state!=='RUNNING')throw new Error('Task was stopped.');if((current.grading||current.fieldFill)&&!toolDefinitions(false,!!current.grading,!!current.fieldFill).some(tool=>tool.name===name))throw new Error('Tool is unavailable for this read-only task.');const source=current.kind==='work'?current.stagedSource:current.baseSource;
+    const executeTool=(name:string,args:any)=>{const current=this.store.project(projectId).tasks.find(t=>t.id===task.id)!;const source=current.kind==='work'?current.stagedSource:current.baseSource;
       if(name==='world_read'){const s=doc.read(source,args.path);if(s.length>100000)throw new Error('This section is too large for a single read. Use world_children and read smaller paths.');return {source:s};}
       if(name==='world_children'){const result=doc.describe(source,args.path);return {kind:result.kind,children:result.children.slice(0,500),truncated:result.children.length>500};}
       if(name==='world_search')return doc.search(source,args.query);
@@ -75,8 +87,13 @@ export class AgentHost {
       if(name==='record_note_plan'){this.store.dispatch(projectId,{type:'recordNotePlan',taskId,attempt:task.attempt,noteId:args.noteId,state:args.state,explanation:args.explanation,proposalId:args.proposalId});return {recorded:true,awaitingHumanReview:true};}
       if(name==='propose_artwork'){if(current.kind!=='plan')throw new Error('Tool is unavailable for this stage');const id=randomUUID();this.store.dispatch(projectId,{type:'proposeArtwork',id,taskId,attempt:task.attempt,request:args});return {proposalId:id,awaitingHumanApproval:true,activeWorldUnchanged:true,generated:false};}
       if(name==='propose_work_order'){const id=randomUUID();this.store.dispatch(projectId,{type:'proposeWorkOrder',id,taskId,attempt:task.attempt,order:args});return {proposalId:id,awaitingHumanApproval:true,activeWorldUnchanged:true};}
+      if(name==='world_checkpoint'){const saved=this.store.dispatch(projectId,{type:'taskSectionCheckpoint',taskId,attempt:task.attempt,label:args.label,paths:args.paths});return {checkpoint:saved.project!.tasks.find(value=>value.id===taskId)!.sectionCheckpoints!.at(-1),staged:true,activeWorldUnchanged:true,localOnly:true};}
       if(name==='world_edit'){this.store.dispatch(projectId,{...args,type:'taskEdit',taskId,attempt:task.attempt});return {staged:true,activeWorldUnchanged:true};}
       throw new Error('Unknown tool');
+    };
+    rpc.onTool=async(name,args)=>{
+      try{ensureRunning();if(!toolDefinitions(task.kind==='work',!!task.grading,!!task.fieldFill).some(tool=>tool.name===name))throw new Error('Tool is unavailable for this stage.');return recovery.tool(()=>{if(!args||typeof args!=='object'||Array.isArray(args))throw new Error('Tool arguments must be an object. Correct the tool argument JSON.');return executeTool(name,args);},ensureRunning);}
+      catch(error){finish((error as Error).message);throw error;}
     };
     try{await rpc.init();const account=await readCodexAccount(rpc);if(!account.account)throw new Error('Sign into Codex in Connection first.');
       ensureRunning();

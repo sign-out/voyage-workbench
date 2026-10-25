@@ -10,7 +10,7 @@ test('save as new creates an independent private world and exactly replays uncer
  const directory=mkdtempSync(path.join(os.tmpdir(),'voyage-copy-'));
  const service=new Service(directory,path.resolve('apps/workbench/public/references'),{durable:false,get:()=>'',set:()=>{}});
  const previous=(globalThis as any).window;
- (globalThis as any).window={voyage:{invoke:(method:string,payload:any)=>service.request(method,payload)}};
+ (globalThis as any).window={voyage:{invoke:(method:string,payload:any)=>method==='connection'?Promise.resolve({environment:'alpha',apiBase:'https://api-alpha.aidungeon.com/creator/v1'}):service.request(method,payload)}};
  try{
   const {createWorldCopy,publicationAction,feature,saveFeature}=await import('../../apps/workbench/src/features-api');
   const source='{"shortId":"ORIGINAL","loadId":"original-load","title":"Human world title","visibility":"public","initialGameState":{"exact":90071992547409931234}}';
@@ -32,7 +32,7 @@ test('save as new creates an independent private world and exactly replays uncer
   let fail=true;
   service.voyage=async(method,endpoint,body,etag,key)=>{
    calls.push({method,endpoint,body,key});
-   if(endpoint==='/validate')return {text:'{"valid":true}',etag:''};
+   if(endpoint==='/validate')return {text:'{"data":{"valid":true,"errors":[],"warnings":[],"stage":"draft"}}',etag:''};
    if(method==='POST'&&endpoint==='/worlds'){
     assert.match(body!,/90071992547409931234/);
     const world=JSON.parse(body!).world;
