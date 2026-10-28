@@ -26,7 +26,8 @@ for line in sys.stdin:
  elif method=='mcpServerStatus/list':result={'data':[]}
  elif method=='turn/start':
   emit({'id':rid,'result':{'turn':{'id':'turn-1'}}})
-  if mode=='hang':continue
+  if mode=='hang':
+   notify('turn/started',{'threadId':'persistent-thread','turn':{'id':'turn-1'}});continue
   if mode=='unknown':
    emit({'id':900,'method':'item/commandExecution/requestApproval','params':{}});continue
   emit({'id':901,'method':'item/tool/call','params':{'threadId':'persistent-thread','turnId':'turn-1','callId':'c','tool':'lookup','arguments':{'id':'one'}}})
@@ -111,12 +112,10 @@ class CodexRpcTests(unittest.TestCase):
         self.assertEqual(denial['error']['code'], -32601)
 
     def test_cancel_and_timeout_are_bounded(self):
-        session = self.session('hang', timeout=3)
         cancel = threading.Event()
-        timer = threading.Timer(0.25, cancel.set)
-        timer.start()
+        session = self.session('hang', timeout=3,
+                               on_event=lambda method, params: cancel.set() if method == 'turn/started' else None)
         self.assertEqual(session.run('Hi', cancel)['status'], 'interrupted')
-        timer.join()
         self.assertIn('turn/interrupt', [item.get('method') for item in self.wire()])
         session = self.session('hang', timeout=0.25)
         with self.assertRaises(TimeoutError):

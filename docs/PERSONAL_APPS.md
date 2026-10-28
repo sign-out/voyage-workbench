@@ -1,20 +1,20 @@
 # Voyage Workbench desktop and Android apps
 
-These are local, personal preview builds of the lean hybrid workbench. They use the same React interface and exact-source TypeScript document engine. The previous Python application remains available.
+The desktop and Android packages use the same React interface and exact-source TypeScript document engine. Regular releases and explicitly marked prereleases are available from this repository's Releases page. The previous Python application remains available.
 
 ## Install and run
 
 | Platform | File | Requirements |
 | --- | --- | --- |
-| Windows | `releases/test-0.2.11/Voyage-Workbench-0.2.11-windows-x64.exe` | Windows x64; portable executable; self-signed test certificate, not publicly trusted |
-| Android phone | `releases/test-0.2.11/Voyage-Workbench-0.2.11-android-arm64-v8a.apk` | Android 13+; ARM64; permit installation from the source used to open the APK |
-| Android emulator | `releases/test-0.2.11/Voyage-Workbench-0.2.11-android-x86_64.apk` | Android 13+ x86-64 |
-| Linux | `releases/test-0.2.11/Voyage-Workbench-0.2.11-linux-x64.tar.gz` | Linux x64; extract the archive, then run `./run-linux.sh` |
-| Android lightweight | `releases/test-0.2.11/Voyage-Workbench-0.2.11-android-arm64-v8a-lightweight.apk` | Optional ARM64 editor with provider packs installed on demand; x86-64 variant also available |
+| Windows | `Voyage-Workbench-0.2.18-windows-x64.exe` | Windows x64; portable executable; self-signed certificate, not publicly trusted |
+| Android phone | `Voyage-Workbench-0.2.18-android-arm64-v8a.apk` | Android 13+; ARM64; permit installation from the source used to open the APK |
+| Android emulator | `Voyage-Workbench-0.2.18-android-x86_64.apk` | Android 13+ x86-64 |
+| Android universal | `Voyage-Workbench-0.2.18-android-universal.apk` | Android 13+; includes both supported architectures; larger download |
+| Linux | `Voyage-Workbench-0.2.18-linux-x64.tar.gz` | Linux x64; extract the archive, then run `./run-linux.sh` |
 
-The Android release APKs are non-debuggable and signed with this machine's development certificate. Preserve that certificate to build compatible updates. Version 0.2.11 uses Android version code 13 and updates the existing app without uninstalling. These are personal installation packages, not store releases. Native Windows execution is unverified on this Linux computer; earlier scoped provider startup/login/vault and catalog tests ran on an attached ARM64 Samsung phone.
+Download these files from the latest release in `sign-out/voyage-workbench`; local release staging uses `releases/0.2.18/`. The Android release APKs are non-debuggable and retain the existing development signing certificate for compatible updates. Version 0.2.18 uses Android version code 20. Install over the existing app; do not uninstall or clear app data. These are direct installation packages, not store releases. Native Windows execution remains unverified on this Linux computer. Earlier scoped provider startup/login/vault and catalog tests ran on an ARM64 Samsung phone; that is not device coverage for this release.
 
-The default full/offline Android edition bundles Codex, Claude Code and Cursor with their required support. The optional lightweight edition starts with the same editor but no provider binaries. Open **Settings → Models & agents → On-device runtimes**, permit Android installation prompts, then explicitly install the provider you need. Save settings first and approve the normal Android installation dialog. Packs are version-pinned Workbench release downloads built from qualified official packages, not untested vendor `latest`. Install over the existing application when switching editions; do not uninstall to preserve projects and encrypted credentials. The full/offline APK is the simplest option if all providers are needed or installation prompts are not available.
+The current full/offline Android edition bundles Codex, Claude Code and Cursor with their required support. Historical lightweight editions and optional runtime packs are separate, version-pinned releases; they are not additional 0.2.18 artifacts. Provider subscriptions and network inference are not included in the offline editor/runtime package. Install over the existing application to preserve projects and encrypted credentials.
 
 Android uses PRoot support; it does not require a Linux distribution or a separate Termux installation. PRoot is a compatibility layer, not a security sandbox. Agent access is restricted to Workbench's structured read/edit tools. Provider installation never performs inference or substitutes a direct API fallback.
 

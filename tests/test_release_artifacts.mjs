@@ -1,11 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {assertSafePackageEntries,assertReleaseVersions} from '../tools/release-checks.mjs';
+import {assertSafePackageEntries,assertReleaseVersions,assertReleaseNotices} from '../tools/release-checks.mjs';
 
 const metadata=JSON.parse(readFileSync('package.json','utf8'));
 const lock=JSON.parse(readFileSync('package-lock.json','utf8'));
 const android=readFileSync('android/app/build.gradle','utf8');
+
+test('release notices follow the pinned Electron runtime instead of stale metadata',()=>{
+ const electron=lock.packages['node_modules/electron'].version;
+ const notices={workbenchVersion:metadata.version,electron:{version:electron,source:'https://github.com/electron/electron/archive/refs/tags/v'+electron+'.tar.gz'}};
+ assert.doesNotThrow(()=>assertReleaseNotices(notices,metadata,lock));
+ assert.throws(()=>assertReleaseNotices({...notices,workbenchVersion:'stale'},metadata,lock),/application version/);
+ assert.throws(()=>assertReleaseNotices({...notices,electron:{...notices.electron,version:'stale'}},metadata,lock),/Electron/);
+ assert.throws(()=>assertReleaseNotices({...notices,electron:{...notices.electron,source:'https://example.invalid/'}},metadata,lock),/source URL/);
+});
 
 test('release versions, entry point and packaging exclusions agree',()=>{
  assert.doesNotThrow(()=>assertReleaseVersions(metadata,lock,android));

@@ -323,7 +323,7 @@ async function verifyArtworkDestinations(window){
   const assigned=await evaluate(`(async()=>{const project=(await window.voyage.invoke('project',{id:localStorage.getItem('voyage-project')})).project;return project.activeSource;})()`);
   assert.equal(JSON.parse(assigned).initialGameState.itemTypes.compass.imageUrl,'https://example.invalid/compass.png');assert.match(assigned,/90071992547409931234/);
   await evaluate(`[...document.querySelectorAll('.artwork-destination-list button')].find(button=>button.querySelector('strong').textContent==='World cover').click()`);
-  await waitFor(`document.querySelector('.artwork-destination-editor').textContent.includes('no dedicated cover upload target')`);
+  await waitFor(`document.querySelector('.artwork-destination-editor').textContent.includes('Upload & attach selected artwork')&&document.querySelector('.artwork-destination-editor').textContent.includes('dedicated Discover crop previews')`);
   assert.equal(generations,1);
  }finally{globalThis.fetch=originalFetch;}
 }
