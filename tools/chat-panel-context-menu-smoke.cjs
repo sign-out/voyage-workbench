@@ -9,6 +9,7 @@ const pause=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds))
 app.whenReady().then(async()=>{
  const window=new BrowserWindow({show:false,width:900,height:700});
  try{
+  await window.loadURL('data:text/html,<title>Isolated editing fixture</title>');
   await session.fromPartition('persist:voyage-chatgpt-panel').protocol.handle('https',()=>new Response('<!doctype html><textarea>Test plan</textarea><button id="ask">Ask ChatGPT</button><button id="copy">Copy</button><p>Ask ChatGPT</p><script>window.menuOpened=false;document.addEventListener("contextmenu",()=>{window.menuOpened=true;});</script>',{headers:{'content-type':'text/html'}}));
   const controller=createChatPanel(window);controller.request('chatPanelShow',{x:0,y:0,width:800,height:600});
   const view=window.contentView.children.find(child=>child.webContents&&child.webContents!==window.webContents);
@@ -29,9 +30,12 @@ app.whenReady().then(async()=>{
     if(!view.webContents.isLoading()&&await view.webContents.executeJavaScript('!!document.querySelector("textarea")'))break;
     await pause(20);
    }
-   await pause(50);
+   for(let attempt=0;attempt<100;attempt++){
+    if(await view.webContents.executeJavaScript('getComputedStyle(document.querySelector("#ask")).display==="none"')===expected)break;
+    await pause(20);
+   }
    const result=await view.webContents.executeJavaScript(`(()=>{const input=document.querySelector('textarea');input.focus();window.menuOpened=false;const allowed=input.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));input.select();return {allowed,opened:window.menuOpened,selected:input.selectionEnd-input.selectionStart,bridge:typeof window.voyage,node:typeof process};})()`);
-   assert.equal(result.allowed,true);assert.equal(result.opened,!expected);assert.equal(result.selected,9);assert.equal(result.bridge,'undefined');assert.equal(result.node,'undefined');
+   assert.equal(result.allowed,true);assert.equal(result.opened,!expected,JSON.stringify(controller.request('chatPanelDiagnostics')));assert.equal(result.selected,9);assert.equal(result.bridge,'undefined');assert.equal(result.node,'undefined');
    assert.equal(await view.webContents.executeJavaScript('getComputedStyle(document.querySelector("#ask")).display==="none"'),expected);
    await view.webContents.executeJavaScript(`(()=>{document.querySelector('#dynamic')?.remove();const control=document.createElement('div');control.id='dynamic';control.setAttribute('role','menuitem');control.innerHTML='<span>Ask ChatGPT</span>';document.body.append(control);})()`);
    await pause(20);

@@ -42,8 +42,10 @@ on using separate files or processes. Reassess licenses when changing boundaries
 
 ## Release source access
 
-The `v0.2.9-test` tag in `https://github.com/sign-out/voyage-workbench` provides the
-original application source, tests, and build scripts for the 0.2.9 test binaries.
+Each release tag in `https://github.com/sign-out/voyage-workbench` provides the
+corresponding application source, tests, and build scripts. Regular releases use
+`vVERSION`; historical test builds use `vVERSION-test`. For example, `v0.2.18`
+identifies the source for the 0.2.18 binaries.
 GitHub provides downloadable source archives at that tag alongside the release.
 Private signing keys, SDK installations, caches, account data, and downloaded
 runtime binaries are intentionally excluded. Distributor signing keys are not

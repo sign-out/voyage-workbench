@@ -10,6 +10,10 @@ root = Path(__file__).resolve().parents[1]
 retained = root / '.release-compliance/retained/third-party'
 output = root / 'apps/workbench/public/third-party'
 version = json.loads((root / 'package.json').read_text())['version']
+lock = json.loads((root / 'package-lock.json').read_text())
+electron_version = lock['packages']['node_modules/electron']['version']
+if json.loads((root / 'node_modules/electron/package.json').read_text())['version'] != electron_version:
+    raise ValueError('Installed Electron differs from the release lockfile.')
 manifest = json.loads((retained / 'source-manifest.json').read_text())
 for entry in manifest:
     source = retained / 'sources' / entry['file']
@@ -24,6 +28,8 @@ for source in (retained / 'notices').rglob('*'):
         destination = output / 'licenses' / source.relative_to(retained / 'notices')
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
+for source_name, destination_name in [('LICENSE', 'ELECTRON-LICENSE.txt'), ('LICENSES.chromium.html', 'LICENSES.chromium.html')]:
+    shutil.copyfile(root / 'node_modules/electron/dist' / source_name, output / 'licenses' / destination_name)
 with zipfile.ZipFile(retained / 'sources/proot.zip') as archive:
     license_path = next(name for name in archive.namelist() if name.endswith('/COPYING'))
     (output / 'licenses/PROOT-COPYING.txt').write_bytes(archive.read(license_path))
@@ -50,12 +56,11 @@ sources = {
     'termuxBuildSystem': 'https://github.com/termux/termux-packages/archive/' + commit + '.tar.gz',
     'termuxRecipesAndPatches': 'https://github.com/termux/termux-packages/tree/' + commit + '/packages',
     'rhino': {'version': '1.8.0', 'source': 'https://github.com/mozilla/rhino/archive/refs/tags/Rhino1_8_0_Release.tar.gz'},
-    'electron': {'version': '44.5.1', 'source': 'https://github.com/electron/electron/archive/refs/tags/v44.5.1.tar.gz', 'notices': 'licenses/LICENSES.chromium.html'},
+    'electron': {'version': electron_version, 'source': 'https://github.com/electron/electron/archive/refs/tags/v' + electron_version + '.tar.gz', 'notices': 'licenses/LICENSES.chromium.html'},
     'windowsVoice': json.loads((voice / 'sources.json').read_text()),
     'windowsVoiceBuildCommit': voice_manifest['buildCommit'],
     'windowsVoiceBuildScripts': 'https://github.com/openai/codex/tree/' + voice_manifest['buildCommit'] + '/third_party/voice',
 }
-lock = json.loads((root / 'package-lock.json').read_text())
 sources['javascript'] = []
 for package_path, metadata in lock['packages'].items():
     if not package_path.startswith('node_modules/') or metadata.get('dev'):

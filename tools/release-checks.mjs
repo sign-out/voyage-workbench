@@ -19,3 +19,9 @@ export function assertReleaseVersions(metadata,lock,android){
  if(!metadata.scripts?.['package:windows']?.includes('package:windows:signed'))throw new Error('Default Windows packaging must use the verified signing workflow.');
  for(const config of [metadata.build,metadata.build?.win,metadata.build?.linux])for(const resource of config?.extraResources||[])if(['references','third-party'].includes(resource.to))throw new Error('Reference data and notices must use their single bundled dist copy.');
 }
+
+export function assertReleaseNotices(notices,metadata,lock){
+ if(notices.workbenchVersion!==metadata.version)throw new Error('Notices have a stale application version.');
+ const electron=lock.packages?.['node_modules/electron']?.version;
+ if(!electron||notices.electron?.version!==electron||notices.electron?.source!=='https://github.com/electron/electron/archive/refs/tags/v'+electron+'.tar.gz')throw new Error('Notices have a stale Electron version or source URL.');
+}

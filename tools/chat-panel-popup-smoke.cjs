@@ -10,6 +10,7 @@ app.on('web-contents-created',(_event,contents)=>{const original=contents.setWin
 app.whenReady().then(async()=>{
  const window=new BrowserWindow({show:false,width:900,height:700});
  try{
+  await window.loadURL('data:text/html,<title>Isolated popup fixture</title>');
   await session.fromPartition('persist:voyage-chatgpt-panel').protocol.handle('https',async request=>{requests.push({url:request.url,method:request.method,referrer:request.headers.get('referer'),contentType:request.headers.get('content-type'),body:await request.text()});return new Response('<!doctype html><p>Popup fixture</p><a id="signin" href="https://auth.openai.com/linked" referrerpolicy="no-referrer">Open sign-in</a><form action="https://auth.openai.com/submitted" method="post" target="_blank"><input name="fixture" value="safe"><button>Submit</button></form>',{headers:{'content-type':'text/html'}});});
   const controller=createChatPanel(window),bounds={x:0,y:0,width:800,height:600};controller.request('chatPanelShow',bounds);
   const view=window.contentView.children.find(child=>child.webContents&&child.webContents!==window.webContents);

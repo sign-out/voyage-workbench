@@ -4,10 +4,11 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import os from 'node:os';
 import {extractFile,listPackage} from '@electron/asar';
-import {assertSafePackageEntries,assertReleaseVersions} from './release-checks.mjs';
+import {assertSafePackageEntries,assertReleaseVersions,assertReleaseNotices} from './release-checks.mjs';
 
 const digest=data=>createHash('sha256').update(data).digest('hex');
 const metadata=JSON.parse(readFileSync('package.json','utf8'));
+const lock=JSON.parse(readFileSync('package-lock.json','utf8'));
 const artifactRoot=process.env.VOYAGE_ARTIFACT_ROOT||'releases';
 assertReleaseVersions(metadata,JSON.parse(readFileSync('package-lock.json','utf8')),readFileSync('android/app/build.gradle','utf8'));
 function files(directory){return readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?files(path.join(directory,entry.name)):[path.join(directory,entry.name)]);}
@@ -24,7 +25,8 @@ for(const platform of ['linux','win']){
  }
  for(const source of files('.desktop-runtime/'+(platform==='win'?'windows':'linux')))same(readFileSync(path.join(resources,'provider',path.relative('.desktop-runtime/'+(platform==='win'?'windows':'linux'),source))),source,platform);
  const notices=JSON.parse(extractFile(file,'dist/third-party/SOURCES.json').toString());
- if(notices.workbenchVersion!==metadata.version)throw new Error(platform+' notices have a stale application version.');
+ assertReleaseNotices(notices,metadata,lock);
+ same(extractFile(file,'dist/third-party/licenses/LICENSES.chromium.html'),'node_modules/electron/dist/LICENSES.chromium.html',platform+' Chromium notices');
  console.log(platform+' '+metadata.version+': compiled-only package, host, UI, references, notices and provider runtime verified');
 }
 const signer=process.env.VOYAGE_OSSLSIGNCODE||'.build-tools/signing/build/osslsigncode';

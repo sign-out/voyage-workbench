@@ -11,12 +11,20 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--provider-packs', type=Path)
+parser.add_argument('--channel', choices=['test', 'stable'], default='test')
+parser.add_argument('--dry-run', action='store_true')
 args = parser.parse_args()
 artifact_root = Path(os.environ.get('VOYAGE_ARTIFACT_ROOT', str(root / 'releases')))
 if not artifact_root.is_absolute():
     artifact_root = root / artifact_root
 version = json.loads((root / 'package.json').read_text())['version']
-output = root / 'releases' / ('test-' + version)
+tag = 'v' + version + ('-test' if args.channel == 'test' else '')
+output = root / 'releases' / (('test-' if args.channel == 'test' else '') + version)
+if args.dry_run:
+    print(json.dumps({'version': version, 'channel': args.channel, 'tag': tag,
+                     'output': str(output),
+                     'sourceUrl': 'https://github.com/sign-out/voyage-workbench/tree/' + tag}))
+    sys.exit(0)
 if output.exists():
     raise ValueError('Release staging directory already exists. Inspect it before replacing artifacts.')
 subprocess.run([str(root / 'tools/npm'), 'run', 'verify:artifacts'], cwd=root, check=True)
@@ -32,7 +40,7 @@ shutil.copyfile(root / 'LICENSE', output / 'LICENSE.txt')
     'License: GNU General Public License version 2 only (GPL-2.0-only).\n'
     'The complete license accompanies this release as LICENSE.txt.\n\n'
     'Source, tests and build instructions:\n'
-    'https://github.com/sign-out/voyage-workbench/tree/v' + version + '-test\n\n'
+    'https://github.com/sign-out/voyage-workbench/tree/' + tag + '\n\n'
     'Source is maintained in that separate repository, not as an asset here.\n'
     'Third-party runtimes retain their own terms; bundled notices and source\n'
     'offers identify their exact upstream versions and build materials.\n'
@@ -56,12 +64,12 @@ with tarfile.open(archive, 'w:gz') as package:
 subprocess.run(['python3', str(root / 'tools/sign-release.py'), '--detached-file', str(archive)], check=True)
 signing = Path.home() / '.local/share/voyage-signing'
 identity = json.loads((signing / 'windows-test.json').read_text())
-manifest = {'version': version, 'channel': 'test', 'signer': {'kind': 'self-signed-test', 'publicKeySha256': identity['publicKeySha256'], 'certificatePem': (signing / 'windows-test.pem').read_text(), 'publicKeyPem': (signing / 'public-key.pem').read_text()}, 'artifacts': []}
+manifest = {'version': version, 'channel': args.channel, 'signer': {'kind': 'self-signed-test', 'publicKeySha256': identity['publicKeySha256'], 'certificatePem': (signing / 'windows-test.pem').read_text(), 'publicKeyPem': (signing / 'public-key.pem').read_text()}, 'artifacts': []}
 for artifact in sorted(output.iterdir()):
     with artifact.open('rb') as stream:
         manifest['artifacts'].append({'file': artifact.name, 'bytes': artifact.stat().st_size, 'sha256': hashlib.file_digest(stream, 'sha256').hexdigest()})
 checksums = output / 'checksums.json'
 checksums.write_text(json.dumps(manifest, indent=2) + '\n')
 subprocess.run(['python3', str(root / 'tools/sign-release.py'), '--detached-file', str(checksums)], check=True)
-print('Verified signed test artifacts staged locally: ' + str(output))
+print('Verified signed ' + args.channel + ' artifacts staged locally: ' + str(output))
 print('No application source, private signing material or user data included. Nothing published.')

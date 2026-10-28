@@ -24,6 +24,7 @@ app.on('browser-window-created',(_,window)=>window.webContents.once('did-finish-
   const id=await evaluate(`(async()=>{const result=await window.voyage.invoke('create',{name:'Plan fixture',source:${JSON.stringify(source)}});await window.voyage.invoke('command',{id:result.project.id,command:{type:'workOrder',order:{objective:'Old order',requirements:['Old requirement'],allowedPaths:[],wholeWorld:true}}});localStorage.setItem('voyage-project',result.project.id);return result.project.id;})()`);
   window.webContents.reload();await wait(`document.querySelector('.workspace-world-title')?.textContent==='Plan fixture'`);await evaluate('window.confirm=()=>true; true');
   await button('ChatGPT Chat · Preview');
+  for(let attempt=0;attempt<100&&!window.contentView.children.some(child=>child.webContents&&child.webContents!==window.webContents);attempt++)await pause(50);
   await button('Save response as plan');await wait('!!document.querySelector(".chat-plan-review")');
   const view=window.contentView.children.find(child=>child.webContents&&child.webContents!==window.webContents);
   assert.ok(view);assert.equal(view.getVisible(),false,'Native remote page is hidden during local review');

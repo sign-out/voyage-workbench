@@ -35,7 +35,7 @@ async function waitFor(expression){
 }
 async function settled(){await evaluate('new Promise(resolve=>setTimeout(()=>{document.body.getBoundingClientRect();resolve();},0))');}
 async function captureEvidence(filename){
- await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+ await evaluate('new Promise(resolve=>{requestAnimationFrame(()=>requestAnimationFrame(resolve));setTimeout(resolve,250);})');
  fs.writeFileSync(path.join(output,filename),(await window.webContents.capturePage()).toPNG());
 }
 async function navigate(name,ready){
