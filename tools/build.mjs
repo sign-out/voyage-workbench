@@ -1,8 +1,7 @@
 import {build as bundle} from 'esbuild';import {build as viteBuild} from 'vite';import {mkdirSync,readFileSync,writeFileSync,copyFileSync} from 'node:fs';import {execFileSync} from 'node:child_process';
 import {builtinModules} from 'node:module';
 mkdirSync('apps/workbench/public/references',{recursive:true});
-const references=JSON.parse(readFileSync('docs/wiki.json','utf8')).map(({tab,uiLocation,section,title,summary,schema,sizeLimits,related})=>({tab,uiLocation,section,title,summary,schema,sizeLimits,related}));
-writeFileSync('apps/workbench/public/references/sections.json',JSON.stringify(references));
+execFileSync(process.execPath,['node_modules/tsx/dist/cli.mjs','tools/reference-assets.ts'],{stdio:'inherit'});
 for(const name of ['blank-world','lantern-coast','living-continuity'])copyFileSync('fixtures/'+name+'.json','apps/workbench/public/references/'+name+'.json');
 await viteBuild();
 const desktop=await bundle({entryPoints:{main:'hosts/desktop/main.ts',preload:'hosts/desktop/preload.ts'},bundle:true,platform:'node',format:'cjs',outdir:'build/desktop',outExtension:{'.js':'.cjs'},external:['electron'],sourcemap:true,metafile:true});

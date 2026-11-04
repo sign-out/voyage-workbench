@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {create,reduce,hash,localEditMode,type Project} from './project';
 
-const source='{"title":"Before","exact":9007199254740993,"fraction":1.000,"other":"keep"}';
+const source='{"heroesVersion":37,"title":"Before","exact":9007199254740993,"fraction":1.000,"other":"keep"}';
 function running(mode?:string){
  let project=create('p','Local edit fixture',source,1);
  project=reduce(project,{type:'workOrder',order:{objective:'Change title',requirements:[],allowedPaths:[['title']]}});
@@ -10,7 +10,7 @@ function running(mode?:string){
  project=reduce(project,{type:'taskRunning',taskId:'work',attempt:'attempt'});
  return reduce(project,{type:'taskEdit',taskId:'work',attempt:'attempt',action:'replace',path:['title'],source:'"After"'});
 }
-const complete=(project:Project)=>reduce(project,{type:'taskDone',taskId:'work',attempt:'attempt',text:'Updated title',beforeCheckpointId:'before',afterCheckpointId:'after'});
+const complete=(project:Project)=>reduce(project,{type:'taskDone',taskId:'work',attempt:'attempt',text:'Updated title',references:[{section:'heroesVersion',schema:{_type:'literal',value:37}},{section:'title',schema:'string'}],beforeCheckpointId:'before',afterCheckpointId:'after'});
 test('automatic local apply updates only completed work and leaves remote state untouched',()=>{
  const pending=running('automatic');assert.equal(pending.activeSource,source);
  const project=complete(pending);

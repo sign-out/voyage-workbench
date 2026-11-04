@@ -1,7 +1,7 @@
 import * as doc from './document';
 import type {Project} from './project';
 
-import {relationshipRules} from './relationships';
+import {relationshipRules,structuralReferences} from './relationships';
 export {relationshipRules} from './relationships';
 export interface Entry {path:doc.Path;name:string;kind:doc.Node['kind'];section:string}
 export interface AuthoringPreferences {
@@ -47,20 +47,41 @@ export function entryCatalog(source:string,query='',offset=0,limit=40){
 }
 export function referenceImpact(source:string,path:doc.Path,direction='all',offset=0,limit=40){
  const root=doc.parse(source),base=doc.statePath(root),world=doc.at(root,base),links:{from:doc.Path;to:doc.Path;missing:boolean;direction:string}[]=[];
- for(const rule of relationshipRules){
+ for(const link of structuralReferences(world,base)){
+   const {from,to,missing}=link;
+   const incoming=inside(path,to)||inside(to,path),outgoing=inside(path,from)||inside(from,path);
+   if(!(incoming||outgoing)||direction==='incoming'&&!incoming||direction==='outgoing'&&!outgoing)continue;
+   links.push({from,to,missing,direction:incoming&&outgoing?'both':incoming?'incoming':'outgoing'});
+ }
+ return {links:links.slice(offset,offset+limit),total:links.length,coverage:relationshipRules.map(rule=>rule.section+'.'+rule.field+('array' in rule?'[]':'')+' → '+rule.target+('alternateTarget' in rule?' or '+rule.alternateTarget:'')),limitation:'Known structural references only. Scripts, prose, custom fields and runtime relationships are not interpreted. Trait gates may name traits or Story Starts; category order, OR logic and runtime eligibility are not simulated.'};
+}
+export function compatibilityFieldUpdates(source:string){
+ const root=doc.parse(source),base=doc.statePath(root),world=doc.at(root,base);
+ const version=world.children.find(child=>child.key==='heroesVersion')?.node;
+ const changes:{path:doc.Path;destination:doc.Path}[]=[],blockers:{path:doc.Path;message:string}[]=[];
+ const edits:{start:number;end:number;replacement:string}[]=[];
+ if(version?.kind!=='number'||Number(source.slice(version.start,version.end))!==37)return {source,changes,blockers:[{path:base.concat('heroesVersion'),message:'Only already-V37 authored worlds are supported. These field updates are not a V36-to-V37 migration; heroesVersion is never changed.'}]};
+ const rules=[{section:'npcs',from:'relationship',to:'initialRelationship',kind:'number'},{section:'npcs',from:'known',to:'initialKnown',kind:'boolean'},{section:'quests',from:'initialStatus',to:'status',kind:'string'}];
+ for(const rule of rules){
   const collection=world.children.find(child=>child.key===rule.section)?.node;
   if(collection?.kind!=='object')continue;
   for(const entry of collection.children){
-   const field=entry.node.children.find(child=>child.key===rule.field)?.node;
-   if(field?.kind!=='string'||!field.value)continue;
-   const from=base.concat(rule.section,entry.key,rule.field),to=base.concat(rule.target,String(field.value));
-   const incoming=inside(path,to)||inside(to,path),outgoing=inside(path,from)||inside(from,path);
-   if(!(incoming||outgoing)||direction==='incoming'&&!incoming||direction==='outgoing'&&!outgoing)continue;
-   let missing=false;try{doc.at(root,to);}catch{missing=true;}
-   links.push({from,to,missing,direction:incoming&&outgoing?'both':incoming?'incoming':'outgoing'});
+   if(entry.node.kind!=='object')continue;
+   const field=entry.node.children.find(child=>child.key===rule.from);
+   if(!field)continue;
+   const path=base.concat(rule.section,entry.key,rule.from);
+   if(entry.node.children.some(child=>child.key===rule.to)){blockers.push({path,message:'Destination '+rule.to+' already exists. Resolve the collision manually; neither value was discarded.'});continue;}
+   if(field.node.kind!==rule.kind){blockers.push({path,message:'Expected '+rule.kind+'; review this value manually.'});continue;}
+   if(rule.section==='quests'&&!['hidden','planned','available','expired','accepted','completed','abandoned','rejected'].includes(String(field.node.value))){blockers.push({path,message:'Quest status is not in the verified V37 enum. Review it manually.'});continue;}
+   const token=source.slice(field.keyStart).match(/^"(?:[^"\\]|\\.)*"/)![0];
+   edits.push({start:field.keyStart,end:field.keyStart+token.length,replacement:JSON.stringify(rule.to)});
+   changes.push({path,destination:base.concat(rule.section,entry.key,rule.to)});
   }
  }
- return {links:links.slice(offset,offset+limit),total:links.length,coverage:relationshipRules.map(rule=>rule.section+'.'+rule.field+' → '+rule.target),limitation:'Known structural references only. Scripts, prose, custom fields and runtime relationships are not interpreted.'};
+ if(blockers.length)return {source,changes,blockers};
+ let updated=source;edits.sort((left,right)=>right.start-left.start).forEach(edit=>updated=updated.slice(0,edit.start)+edit.replacement+updated.slice(edit.end));
+ doc.parse(updated);doc.assertPackageMetadataUnchanged(source,updated);
+ return {source:updated,changes,blockers};
 }
 export function completeness(source:string,references:any[]=[],sections=authoringDefaults.advisorySections){
  const issues=doc.validate(source,references),root=doc.parse(source),base=doc.statePath(root),world=doc.at(root,base);

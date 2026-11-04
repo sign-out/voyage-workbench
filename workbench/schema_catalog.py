@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 import threading
@@ -12,7 +13,7 @@ import urllib.request
 URL = 'https://api.unofficial.voyage/schema.json'
 MAX_BYTES = 8 * 1024 * 1024
 CODECS = {'literal', 'required', 'partial', 'record', 'array', 'intersection', 'union', 'refined'}
-PRIMITIVES = {'string', 'number', 'boolean', 'null', 'unknown', 'any'}
+PRIMITIVES = {'string', 'number', 'boolean', 'null', 'unknown', 'any', 'undefined'}
 
 
 class SchemaRefreshError(ValueError):
@@ -33,9 +34,15 @@ def normalize(payload):
         if nodes > 250000 or depth > 100:
             raise SchemaRefreshError('Schema nesting or node limit exceeded.')
         if isinstance(value, str):
-            if value not in PRIMITIVES:
-                raise SchemaRefreshError('Unsupported schema primitive: ' + value[:80])
-            return
+            if value in PRIMITIVES:return value
+            if re.fullmatch(r'"(?:[^"\\]|\\.)*"(?:\s*\|\s*"(?:[^"\\]|\\.)*")+', value.strip()):
+                literals = re.findall(r'"(?:[^"\\]|\\.)*"', value)
+                nodes += len(literals)
+                if nodes > 250000 or depth >= 100:
+                    raise SchemaRefreshError('Schema nesting or node limit exceeded.')
+                return {'_type': 'union', 'of': [{'_type': 'literal', 'value': json.loads(literal)}
+                    for literal in literals]}
+            raise SchemaRefreshError('Unsupported schema primitive: ' + value[:80])
         if not isinstance(value, dict) or value.get('_type') not in CODECS:
             raise SchemaRefreshError('Unsupported schema format; expected documented Voyage codec definitions.')
         kind = value['_type']
@@ -43,18 +50,18 @@ def normalize(payload):
             fields = value.get('fields')
             if not isinstance(fields, dict):
                 raise SchemaRefreshError('Schema object fields must be a map.')
-            for child in fields.values():
-                codec(child, depth + 1)
+            return {**value, 'fields': {key: codec(child, depth + 1) for key, child in fields.items()}}
         elif kind in ('array', 'record', 'refined'):
-            codec(value.get('codomain' if kind == 'record' else 'of'), depth + 1)
+            key = 'codomain' if kind == 'record' else 'of'
+            return {**value, key: codec(value.get(key), depth + 1)}
         elif kind in ('intersection', 'union'):
             children = value.get('parts' if kind == 'intersection' else 'of')
             if not isinstance(children, list) or not children:
                 raise SchemaRefreshError('Schema combinations must contain types.')
-            for child in children:
-                codec(child, depth + 1)
+            return {**value, 'parts' if kind == 'intersection' else 'of': [codec(child, depth + 1) for child in children]}
         elif 'value' not in value or isinstance(value['value'], (list, dict)):
             raise SchemaRefreshError('Schema literal must contain a scalar value.')
+        return dict(value)
 
     source = payload
     if isinstance(source, dict) and '_type' not in source:
@@ -65,8 +72,7 @@ def normalize(payload):
         elif 'schemas' in source:
             source = source['schemas']
     if isinstance(source, dict) and '_type' in source:
-        codec(source)
-        return {'root': source}
+        return {'root': codec(source)}
     if isinstance(source, dict):
         entries = [{'section': key, 'schema': value.get('schema') if isinstance(value, dict) and 'schema' in value else value}
                    for key, value in source.items()]
@@ -84,8 +90,7 @@ def normalize(payload):
         seen.add(entry['section'])
         if entry.get('schema') is None:
             continue
-        codec(entry['schema'])
-        references.append({'section': entry['section'], 'schema': entry['schema']})
+        references.append({'section': entry['section'], 'schema': codec(entry['schema'])})
     if not references:
         raise SchemaRefreshError('The downloaded schema contains no usable sections.')
     return {'sections': references}

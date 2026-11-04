@@ -44,7 +44,7 @@ test('recovered account permits only the explicitly requested turn; failed turns
   assert.deepEqual(calls,['account/read','account/read','thread/start','turn/start']);
  }
 });
-test('wire errors retain method and code; planner artwork dispatch only creates an approval proposal',async()=>{
+test('wire errors retain method and code; late tools after a failed run cannot execute',async()=>{
  const directory=mkdtempSync(path.join(tmpdir(),'voyage-account-wire-')),previous=process.env.VOYAGE_CODEX_BINARY;
  const executable=path.join(directory,'fake-codex');
  writeFileSync(executable,`#!${process.execPath}\nconst rl=require('node:readline').createInterface({input:process.stdin});rl.on('line',line=>{const message=JSON.parse(line);if(message.id===undefined)return;const response=message.method==='account/read'?{error:{code:-32603,message:'workspace routing discovery failed'}}:{result:{}};console.log(JSON.stringify({id:message.id,...response}));});`,{mode:0o700});
@@ -60,12 +60,8 @@ test('wire errors retain method and code; planner artwork dispatch only creates 
   try{await host.run('project','task');}finally{Rpc.prototype.init=initialize;}
   assert.equal(commands.at(-1).state,'FAILED');assert.match(commands.at(-1).error,/one account-only retry/);
   assert.equal(commands.some(command=>command.type==='taskSession'),false);assert.equal(host.running.size,0);
-  const request={destinationId:'cover',prompt:'A misty harbor'};
-  const result=await taskRpc!.onTool('propose_artwork',request);
-  assert.match(result.proposalId,/^[0-9a-f-]{36}$/);assert.deepEqual(result,{proposalId:result.proposalId,awaitingHumanApproval:true,activeWorldUnchanged:true,generated:false});
-  assert.deepEqual(commands.at(-1),{type:'proposeArtwork',id:result.proposalId,taskId:'task',attempt:'attempt',request});
-  task.kind='work';await assert.rejects(taskRpc!.onTool('propose_artwork',request),/unavailable for this stage/);
-  task.state='CANCELED';await assert.rejects(taskRpc!.onTool('propose_artwork',request),/Task was stopped/);
+  await assert.rejects(taskRpc!.onTool('propose_artwork',{destinationId:'cover',prompt:'A misty harbor'}),/Task was stopped/);
+  assert.equal(commands.some(command=>command.type==='taskTool'),false);
   for(const invalidation of ['cancel','new-attempt','cancel-after-thread']){
    task.kind='plan';task.state='RUNNING';task.attempt='attempt';const calls:string[]=[];let reads=0;const original=Rpc.prototype.request;
    Rpc.prototype.request=async function(method){

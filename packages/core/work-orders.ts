@@ -1,5 +1,5 @@
 import * as doc from './document';
-export interface WorkOrder {objective:string;requirements:string[];allowedPaths:doc.Path[];wholeWorld?:boolean;sourceProposalId?:string;reviewedScope?:boolean}
+export interface WorkOrder {creationId?:string;objective:string;requirements:string[];allowedPaths:doc.Path[];wholeWorld?:boolean;sourceProposalId?:string;reviewedScope?:boolean}
 export function proposedOrder(source:string,input:unknown):WorkOrder {
  if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('Expected a structured Work Order.');
  const order=input as Record<string,unknown>;

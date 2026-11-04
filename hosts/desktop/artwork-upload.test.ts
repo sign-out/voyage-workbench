@@ -43,9 +43,9 @@ test('every documented artwork purpose can upload, moderate and retain its hoste
    assert.equal(uploaded.state,'ready');assert.equal(uploaded.imageUrl,'https://images.example/'+target+'.png');
    assert.equal((await prepareUpload(project,target,asset)).id,uploaded.id);
   }
-  assert.equal(allowances,5);assert.equal(moderations,5);assert.equal(byteUploads,5);
-  assert.equal((await feature<any[]>('uploads:'+project.id,[])).length,5);
-  await assert.rejects(prepareUpload(project,'WORLD_COVER',asset),/Unknown upload target/);
+  assert.equal(allowances,6);assert.equal(moderations,6);assert.equal(byteUploads,6);
+  assert.equal((await feature<any[]>('uploads:'+project.id,[])).length,6);
+  await assert.rejects(prepareUpload(project,'UNKNOWN_TARGET',asset),/Unknown upload target/);
   await assert.rejects(prepareUpload(project,'__proto__',asset),/Unknown upload target/);
   assert.equal(service.store.project(project.id).activeSource,source);
  }finally{(globalThis as any).window=previousWindow;(globalThis as any).Image=previousImage;globalThis.fetch=previousFetch;service.store.close();rmSync(directory,{recursive:true,force:true});}

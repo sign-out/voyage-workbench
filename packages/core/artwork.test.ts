@@ -55,3 +55,14 @@ test('empty nullable artwork fields remain selectable without replacing malforme
  }
  assert.equal(destinations.some(item=>item.category==='Region maps'),false);
 });
+test('world covers use the verified upload purpose and named portraits have distinct labels',()=>{
+ const source='{"initialGameState":{"heroesVersion":37,"npcs":{"guide":{"name":"Guide","portraits":{"happy":"https://example.com/happy.png","angry":"https://example.com/angry.png"}}}}}';
+ const destinations=artworkDestinations(source);
+ assert.equal(destinations.find(item=>item.category==='World cover')?.target,'WORLD_COVER');
+ assert.equal(artworkDestinations('{"heroesVersion":37}')[0].target,'WORLD_COVER');
+ for(const name of ['happy','angry']){
+  const portrait=destinations.find(item=>item.label==='Guide · '+name)!;
+  assert.equal(portrait.target,'NPC_PORTRAIT');
+  assert.deepEqual(portrait.path,['initialGameState','npcs','guide','portraits',name]);
+ }
+});

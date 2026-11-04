@@ -69,6 +69,20 @@ class SchemaCatalogTests(unittest.TestCase):
             self.refresh(catalog, {'unknown': 'new-codec'})
         self.assertEqual(catalog.path.read_bytes(), before)
 
+    def test_version_mismatch_skips_cross_version_checks_without_migrating(self):
+        root = {'_type': 'intersection', 'parts': [ROOT_CODEC,
+            {'_type': 'partial', 'fields': {'triggerDefinitions': {'_type': 'record', 'codomain': 'unknown'}}}]}
+        for profile in (normalize(root), normalize({'sections': [
+                {'section': 'heroesVersion', 'schema': {'_type': 'literal', 'value': 36}},
+                {'section': 'newSetting', 'schema': {'_type': 'required', 'fields': {'enabled': 'boolean'}}}]})):
+            for source in ('{"heroesVersion":37,"newSetting":[]}', '{"initialGameState":{"newSetting":[]}}', '{"heroesVersion":"36","newSetting":[]}', '{"heroesVersion":1e99999999999999999999,"newSetting":[]}'):
+                before = source
+                warnings = schema.validate(source, profile)
+                self.assertEqual(len(warnings), 1)
+                self.assertIn('Schema checks were skipped', warnings[0])
+                self.assertEqual(source, before)
+            self.assertTrue(any('expected object' in warning for warning in schema.validate('{"heroesVersion":36,"newSetting":[]}', profile)))
+
     def test_corrupt_or_partial_cache_falls_back_to_existing_default(self):
         (self.directory / 'community-schema.json').write_text('{bad')
         catalog = SchemaCatalog(self.directory)
@@ -101,6 +115,20 @@ class SchemaCatalogTests(unittest.TestCase):
             normalize([{'section': 'x', 'schema': 'string'}, {'section': 'x', 'schema': 'number'}])
         with self.assertRaises(SchemaRefreshError):
             normalize({'type': 'object', 'properties': {}})
+
+
+    def test_serialized_string_enums_and_undefined_alternatives_are_checked(self):
+        root = {'_type': 'partial', 'fields': {'time': '"dawn" | "morning" | "noon"',
+            'optional': {'_type': 'union', 'of': ['number', 'undefined']}}}
+        before = json.dumps(root)
+        profile = normalize(root)
+        self.assertEqual(json.dumps(root), before)
+        self.assertEqual(schema.validate('{"initialGameState":{"time":"dawn","optional":1}}', profile), [])
+        self.assertTrue(schema.validate('{"initialGameState":{"time":"bogus"}}', profile))
+        self.assertTrue(schema.validate('{"initialGameState":{"optional":"bogus"}}', profile))
+        self.assertEqual(schema.validate('{"initialGameState":{}}', profile), [])
+        for invalid in ('"dawn" | arbitraryType', 'unknownType', '"dawn" |'):
+            with self.assertRaises(SchemaRefreshError):normalize({'time': invalid})
 
 
 if __name__ == '__main__':

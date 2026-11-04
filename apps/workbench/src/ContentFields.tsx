@@ -7,7 +7,7 @@ export type ContentReference={section:string;title:string;tab?:string;uiLocation
 const groups=[['world','World'],['mechanics','Mechanics'],['ai','AI'],['music','Music'],['other','Other']] as const;
 const bundledCategories:Record<string,string[]>={
  world:['storySettings','worldLore','storyStarts','itemTypes','factions','npcs','premadeCharacters','regions','locations','quests','narrativeEvents','npcTypes','realms','arcs','worldVoices','unassignedAreas'],
- mechanics:['relationshipStages','attributeSettings','resourceSettings','skills','skillSettings','progressionSettings','traits','traitCategories','death','endGame','itemSettings','abilities','triggers','combatSettings'],
+ mechanics:['relationshipStages','attributeSettings','resourceSettings','skills','skillSettings','progressionSettings','traits','traitCategories','death','endGame','itemSettings','abilities','triggers','triggerDefinitions','questTriggers','combatSettings'],
  ai:['aiInstructions','imagePromptConfiguration','generateCharacterBackground','generateConversationStarters','generateDialogue','generateEncounters','generateInitialStart','generateLocationDetails','generateNpcChatSummary','generateNPCDetails','generateNPCUpdates','generateRegionDetails','generateStory','generateItemGenerationAndUsage','generateActionInfo','generateLearnedAbilities','generateNewNPC','generateNPCIntents','summarization'],
  music:['gameplayMusicSettings','characterCreationMusic']
 };

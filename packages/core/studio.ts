@@ -61,8 +61,9 @@ export function assetSlots(source:string){
   const key=String(path[path.length-1]||'');
   if(node.kind==='string'){
    const music=path.includes('gameplayMusicSettings')&&path.includes('variants')&&['url','narrationUrl','gameplayUrl'].includes(key);
-   const image=/^(image|imageUrl|portraitUrl|portrait|mapImageUrl|establishingShotUrl)$/i.test(key);
    const relative=path.slice(base.length),section=relative[0];
+   const namedPortrait=section==='npcs'&&relative.length===4&&relative[2]==='portraits';
+   const image=namedPortrait||/^(image|imageUrl|portraitUrl|portrait|mapImageUrl|establishingShotUrl)$/i.test(key);
    if(music||image)result.push({path,kind:music?'audio':'image',url:String(node.value),target:music?undefined:section==='npcs'||section==='premadeCharacters'?'NPC_PORTRAIT':section==='itemTypes'?'ITEM_IMAGE':section==='regions'?'REGION_MAP_IMAGE':section==='locations'?(relative[2]==='areas'?'AREA_IMAGE':'LOCATION_IMAGE'):undefined});
   }
   node.children.forEach(child=>walk(child.node,path.concat(child.key),depth+1));

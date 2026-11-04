@@ -12,9 +12,34 @@ Original Voyage Workbench code is licensed under **GNU GPL version 2 only** (`GP
 
 # Voyage Workbench
 
+The [October 29 Voyage compatibility audit](docs/VOYAGE_COMPATIBILITY_AUDIT_2026-10-29.md)
+maps the supplied changelogs to verified schema/API changes, implemented fixes,
+and remaining version/environment work. It does not automatically migrate worlds.
+
+The [compatibility completion checklist](docs/VOYAGE_COMPATIBILITY_COMPLETION_2026-10-29.md)
+documents offline V37 reference selection, reviewed legacy-field proposals under
+**Validation**, trait/Story Start reference analysis, and the explicitly deferred work.
+
+The [agent harness hardening report](docs/HARNESS_HARDENING_2026-11-01.md)
+documents shared tool enforcement, durable bounded execution receipts, host-owned
+local completion checks, and the remaining orchestration and verification limits.
+
+The [delegation and checkpoint-continuation follow-up](docs/AGENT_ORCHESTRATION_2026-11-01.md)
+adds opt-in same-provider read-only reviews on desktop, plus bounded checkpoint
+continuation on desktop restart and when reopening an Android project.
+
 The proposed Windows/Android successor architecture and the successful Android Codex runtime experiment are documented in [Lean hybrid implementation decisions](docs/LEAN_HYBRID_DECISIONS.md). The native experiment is a feasibility probe; the application described below remains the current implementation.
 
 A local Voyage world builder with exact-source JSON editing, nested record controls, durable projects, checkpoints, validation, reviewable Codex proposals and optional official Creator API integration.
+
+## Source-to-world creation
+
+Open **All tools → Create world** to attach Markdown research and build a complete
+world with shared source/canon records, planned and rendered region maps, artwork
+briefs, a cover, publishing copy, and the supplied v1.6.2 quality rubric. New V37
+creation seeds are generated from the bundled community schema; existing V36
+worlds are not relabelled. Image spending, uploads and final publication remain
+explicit approvals. See the [implementation, workflow and remaining limits](docs/SOURCE_TO_WORLD_2026-11-04.md).
 
 ## Install and run
 
