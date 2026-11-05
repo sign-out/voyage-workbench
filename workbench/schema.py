@@ -15,7 +15,7 @@ def check(value, schema, path='$', limit=100):
     def issue(message):
         if len(issues)<limit:issues.append(path+': '+message)
     if isinstance(schema,str):
-        valid={'string':isinstance(value,str),'number':isinstance(value,Number),'boolean':type(value)is bool,'null':value is None,'unknown':True,'any':True}.get(schema,True)
+        valid={'string':isinstance(value,str),'number':isinstance(value,Number),'boolean':type(value)is bool,'null':value is None,'unknown':True,'any':True,'undefined':False}.get(schema,True)
         if not valid:issue('expected '+schema)
         return issues
     if not isinstance(schema,dict):return issues
@@ -70,6 +70,23 @@ def validate(text, profile=None):
     state=parse(section(text,info['gameStatePath']))
     issues=[]
     refs = references() if profile is None else profile.get('sections', [])
+    def versions(codec):
+        if not isinstance(codec, dict):return []
+        if codec.get('_type') == 'literal' and type(codec.get('value')) is int:return [codec['value']]
+        if codec.get('_type') == 'intersection':return [version for part in codec.get('parts', []) for version in versions(part)]
+        return []
+    def root_versions(codec):
+        if not isinstance(codec, dict):return []
+        if codec.get('_type') in ('required', 'partial'):return versions(codec.get('fields', {}).get('heroesVersion'))
+        if codec.get('_type') == 'intersection':return [version for part in codec.get('parts', []) for version in root_versions(part)]
+        return []
+    expected = root_versions(profile.get('root')) if profile and 'root' in profile else [version for ref in refs if ref.get('section') == 'heroesVersion' for version in versions(ref.get('schema'))]
+    if expected and all(version == expected[0] for version in expected):
+        actual = state.get('heroesVersion')
+        try:matches = isinstance(actual, Number) and Decimal(actual.lexeme) == expected[0]
+        except InvalidOperation:matches = False
+        if not matches:
+            return ['Loaded community schema targets V'+str(expected[0])+'; this document has '+('heroesVersion '+actual.lexeme if isinstance(actual, Number) else 'no numeric heroesVersion')+'. Schema checks were skipped. Obtain matching references; do not change heroesVersion to silence this warning.']
     if profile is not None and 'root' in profile:
         issues.extend(check(state, profile['root']))
     for ref in refs:

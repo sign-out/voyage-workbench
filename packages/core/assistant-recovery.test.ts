@@ -37,6 +37,18 @@ test('disabled recovery and fatal scope, auth and cancellation errors never gran
  assert.equal(budget.attempts,0);
 });
 
+test('asynchronous journaled tools share the recovery budget and cannot recover cancellation or exhausted attempts',async()=>{
+ const budget=new AssistantRecoveryBudget({enabled:true,maxAttempts:1});
+ const corrected=await budget.toolAsync(async()=>{throw new Error('Invalid JSON');},()=>{});
+ assert.equal((corrected as any).recovery.attempt,1);
+ assert.equal(await budget.toolAsync(async()=>42,()=>{}),42);
+ await assert.rejects(()=>budget.toolAsync(async()=>{throw new Error('Invalid JSON');},()=>{}),/exhausted after 1/);
+ const canceled=new AssistantRecoveryBudget();let running=true;
+ await assert.rejects(()=>canceled.toolAsync(async()=>{running=false;throw new Error('Invalid JSON');},()=>{if(!running)throw new Error('Task canceled');}),/Task canceled/);
+ assert.equal(canceled.attempts,0);
+ await assert.rejects(()=>new AssistantRecoveryBudget({enabled:false,maxAttempts:1}).toolAsync(async()=>{throw new Error('Invalid JSON');},()=>{}),/disabled/);
+});
+
 test('task snapshots and completion preflight are available through the native document bridge',()=>{
  const settings={enabled:false,maxAttempts:2};
  const project=reduce(create('p','World','{"description":""}',1),{type:'prepareTask',id:'t',attempt:'a',kind:'plan',assistantRecovery:settings,fieldFill:{source:'{"description":""}',path:[],instructions:'Fill description'}});

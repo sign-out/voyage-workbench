@@ -50,3 +50,7 @@ test('systems collection focus distinguishes mechanics from narrator AI',()=>{
  assert.deepEqual(narrator.focusPaths,[['initialGameState','aiInstructions'],['initialGameState','generateNPCDetails']]);
  assert.equal(narrator.selectionMissing,false);
 });
+test('mechanics assistant context includes V37 trigger registries without renaming legacy data',()=>{
+ const source='{"heroesVersion":37,"triggerDefinitions":{"grant":{"script":"do not execute"}},"questTriggers":{"start":{}},"triggers":{"legacy":{}}}';
+ assert.deepEqual(editorSnapshot(source,{screen:'systems',section:'mechanics'})!.focusPaths,[['triggers'],['triggerDefinitions'],['questTriggers']]);
+});

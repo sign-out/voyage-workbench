@@ -1,4 +1,14 @@
-import {relationshipRules} from './relationships';
+import {structuralReferences} from './relationships';
+import {referenceVersion,referencesForVersion} from './references';
+export {normalizeReferences,referenceVersion,mergeReferenceSets} from './references';
+
+export function selectReferences(source:string,references:any[]):any[] {
+ try{const root=parse(source),world=at(root,statePath(root)),version=world.children.find(child=>child.key==='heroesVersion')?.node;return referencesForVersion(references,version?.kind==='number'?Number(source.slice(version.start,version.end)):null);}catch{return [];}
+}
+export function schemaGuidance(source:string,references:any[],section:string):any[] {
+ const selected=selectReferences(source,references),matches=selected.filter(entry=>entry.section===section).slice(0,3);
+ return matches.length?matches:[{section,schema:null,available:false,warning:selected.length?'This section has no matching cached schema. Preserve existing fields; do not infer a schema from another version.':'No matching cached schema coverage for this document. Obtain version-matched references; do not change heroesVersion to match the cache.'}];
+}
 export type Path = (string | number)[];
 export interface Node {kind:'object'|'array'|'string'|'number'|'boolean'|'null'; start:number; end:number; value?:string|boolean|null; children:{key:string|number; keyStart:number; node:Node}[]}
 export function parse(source:string):Node {
@@ -170,6 +180,12 @@ export function validate(source:string,references:any[]=[]):Issue[]{
   try{root=parse(source);}catch(e){return [{level:'error',path:[],message:String((e as Error).message)}];}
   const prefix=statePath(root),world=at(root,prefix);
   if(world.kind!=='object')return [{level:'error',path:prefix,message:'A world must be a JSON object.'}];
+  const selected=selectReferences(source,references);
+  if(references.some(entry=>Object.prototype.hasOwnProperty.call(entry,'schemaVersion'))){
+   if(!selected.length)issues.push({level:'warning',path:prefix.concat('heroesVersion'),message:'No matching cached schema coverage. Schema checks were skipped; preserve the version and obtain matching references.'});
+   else if(selected[0].schemaVersion===36)issues.push({level:'warning',path:prefix.concat('heroesVersion'),message:'Legacy V36-era wiki provides advisory section coverage only, not a verified complete V36 world codec.'});
+   references=selected;
+  }
   function check(n:Node,s:any,path:Path,depth=0){
     if(issues.length>=200||depth>128||!s)return;
     if(typeof s==='string'){if(['unknown','any'].indexOf(s)<0&&s!==n.kind)issues.push({level:'error',path,message:'Expected '+s+', found '+n.kind+'.'});return;}
@@ -188,9 +204,15 @@ export function validate(source:string,references:any[]=[]):Issue[]{
     }
   }
   const unique:Record<string,boolean>=Object.create(null);
-  references.forEach(ref=>{if(!ref.schema||unique[ref.section])return;const entry=world.children.filter(c=>c.key===ref.section)[0];if(entry){unique[ref.section]=true;check(entry.node,ref.schema,prefix.concat(ref.section));}});
-  const rules=relationshipRules.map(rule=>[rule.section,rule.field,rule.target]);
-  rules.forEach(rule=>{try{const records=at(world,[rule[0]]),targets=at(world,[rule[2]]);records.children.forEach(c=>{try{const value=at(c.node,[rule[1]]);if(value.kind==='string'&&value.value&&!targets.children.some(t=>t.key===value.value))issues.push({level:'warning',path:prefix.concat(rule[0],c.key,rule[1]),message:'Reference '+JSON.stringify(value.value)+' is not present in '+rule[2]+'. It may be supplied at runtime.'});}catch{}});}catch{}});
+  const expectedVersion=referenceVersion(references),versionNode=world.children.filter(child=>child.key==='heroesVersion')[0]?.node;
+  const actualVersion=versionNode?.kind==='number'?Number(source.slice(versionNode.start,versionNode.end)):undefined;
+  const versionMismatch=expectedVersion!==null&&actualVersion!==expectedVersion;
+  if(versionMismatch)issues.push({level:'warning',path:prefix.concat('heroesVersion'),message:'Loaded community schema targets V'+expectedVersion+'; this document has '+(actualVersion===undefined?'no numeric heroesVersion':'heroesVersion '+actualVersion)+'. Schema checks were skipped. Obtain matching references; do not change heroesVersion to silence this warning.'});
+  if(!versionMismatch)references.forEach(ref=>{if(!ref.schema||unique[ref.section])return;const entry=world.children.filter(c=>c.key===ref.section)[0];if(entry){unique[ref.section]=true;check(entry.node,ref.schema,prefix.concat(ref.section));}});
+  structuralReferences(world,prefix).forEach(link=>{
+   if(link.missing)issues.push({level:'warning',path:link.from,message:'Reference '+JSON.stringify(link.value)+' is not present in '+link.target+'. It may be supplied by a mod or at runtime.'});
+   if(link.self)issues.push({level:'warning',path:link.from,message:'Trait reference points to itself. Review the intended unlock/exclusion behavior; this advisory does not establish a runtime failure.'});
+  });
   issues.push({level:'warning',path:[],message:'Local checks use cached community references. Official Voyage validation is a separate connected action. Unknown fields are preserved; world scripts are never executed.'});return issues.slice(0,201);
 }
 export function search(source:string,query:string,limit=60){const root=parse(source),results:{path:Path;preview:string}[]=[];const needle=query.trim().toLowerCase();if(!needle)return results;

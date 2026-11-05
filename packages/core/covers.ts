@@ -60,9 +60,13 @@ export function coverReviewInput(brief:CoverBrief,images:CoverEvidence[]){
  return {prompt,images};
 }
 export function coverReviewRequest(route:TaskRoute,key:string,brief:CoverBrief,images:CoverEvidence[]){
+ const {prompt}=coverReviewInput(brief,images);
+ return visionReviewRequest(route,key,prompt,images);
+}
+export function visionReviewRequest(route:TaskRoute,key:string,prompt:string,images:CoverEvidence[]){
  validateEndpoint(route.baseUrl);
  if(!['openai','openai-responses','anthropic','gemini'].includes(route.protocol)||!route.model.trim())throw new Error('Choose an API profile and vision-capable text model for cover grading.');
- const {prompt}=coverReviewInput(brief,images);
+ if(typeof prompt!=='string'||!prompt.trim()||prompt.length>100000||!Array.isArray(images)||!images.length||images.length>10||images.some(image=>!image||typeof image.id!=='string'||image.id.length>200||typeof image.dataUrl!=='string'||image.dataUrl.length>3*1024*1024||!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(image.dataUrl)))throw new Error('Invalid or oversized visual evidence.');
  const headers:Record<string,string>={'Content-Type':'application/json'};let url=route.baseUrl.replace(/\/+$/,''),body:any;
  const parts=(make:(image:CoverEvidence)=>any[])=>{const results:any[]=[];images.forEach(image=>results.push(...make(image)));return results;};
  if(route.protocol==='anthropic'){

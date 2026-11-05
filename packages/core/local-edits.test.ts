@@ -1,8 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import workValidationReferences from './work-validation.json';
 import {create,reduce,hash,localEditMode,type Project} from './project';
 
-const source='{"title":"Before","exact":9007199254740993,"fraction":1.000,"other":"keep"}';
+const source='{"heroesVersion":37,"title":"Before","exact":9007199254740993,"fraction":1.000,"other":"keep"}';
 function running(mode?:string){
  let project=create('p','Local edit fixture',source,1);
  project=reduce(project,{type:'workOrder',baseHash:hash(source),order:{reviewedScope:true,objective:'Change title',requirements:[],allowedPaths:[['title']]}});
@@ -10,7 +11,7 @@ function running(mode?:string){
  project=reduce(project,{type:'taskRunning',taskId:'work',attempt:'attempt'});
  return reduce(project,{type:'taskEdit',taskId:'work',attempt:'attempt',action:'replace',path:['title'],source:'"After"'});
 }
-const complete=(project:Project)=>reduce(project,{type:'taskDone',taskId:'work',attempt:'attempt',text:'Updated title',beforeCheckpointId:'before',afterCheckpointId:'after'});
+const complete=(project:Project)=>reduce(project,{type:'taskDone',taskId:'work',attempt:'attempt',text:'Updated title',references:[...workValidationReferences,{section:'worldBackground',schema:'string'},{section:'heroesVersion',schema:{_type:'literal',value:37}},{section:'title',schema:'string'}],beforeCheckpointId:'before',afterCheckpointId:'after'});
 function scopedWork(source:string,path:(string|number)[]){
  let project=create('p','Validated work',source,1);
  project=reduce(project,{type:'workOrder',baseHash:hash(source),order:{reviewedScope:true,objective:'Update authored content',requirements:[],allowedPaths:[path]}});
@@ -18,7 +19,7 @@ function scopedWork(source:string,path:(string|number)[]){
  return reduce(project,{type:'taskRunning',taskId:'work',attempt:'attempt'});
 }
 test('schema-invalid staged combat settings remain an exact proposal instead of automatically applying',()=>{
- const source='{"shortId":"protected","initialGameState":{"worldBackground":"Before","combatSettings":{"minCombatXP":1,"baseCombatXP":2,"abilityCooldown":3,"abilityBonus":4,"npcDailyHealingAmount":5,"damageTypes":[],"damageTypePresentation":{}},"exact":9007199254740993,"fraction":1.000}}';
+ const source='{"shortId":"protected","initialGameState":{"heroesVersion":37,"worldBackground":"Before","combatSettings":{"minCombatXP":1,"baseCombatXP":2,"abilityCooldown":3,"abilityBonus":4,"npcDailyHealingAmount":5,"damageTypes":[],"damageTypePresentation":{}},"exact":9007199254740993,"fraction":1.000}}';
  const path=['initialGameState','combatSettings'];
  const pending=reduce(scopedWork(source,path),{type:'taskEdit',taskId:'work',attempt:'attempt',action:'replace',path,source:'"unsafe"'});
  const project=complete(pending);
@@ -31,7 +32,7 @@ test('schema-invalid staged combat settings remain an exact proposal instead of 
  assert.equal(valid.tasks[0].state,'APPLIED');assert.equal(valid.activeSource,source.replace('Before','After'));assert.equal(valid.candidates.length,0);
 });
 test('pre-existing imported validation errors also block auto-apply until manually reviewed or repaired',()=>{
- const source='{"initialGameState":{"worldBackground":"Before","combatSettings":"imported error","exact":9007199254740993,"fraction":1.000}}';
+ const source='{"initialGameState":{"heroesVersion":37,"worldBackground":"Before","combatSettings":"imported error","exact":9007199254740993,"fraction":1.000}}';
  const path=['initialGameState','worldBackground'];
  const project=complete(reduce(scopedWork(source,path),{type:'taskEdit',taskId:'work',attempt:'attempt',path,source:'"After"'}));
  assert.equal(project.activeSource,source);assert.equal(project.tasks[0].state,'PROPOSAL_READY');assert.match(project.tasks[0].localApplyBlockedReason!,/pre-existing imported errors/);

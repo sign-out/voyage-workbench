@@ -6,6 +6,8 @@ This repository contains the application source, tests, build scripts, bundled a
 
 Version **0.2.18** is a regular release of the existing application; provider and Voyage integrations retain their documented limitations. Android retains the full/offline default. See [release notes](docs/RELEASE_0.2.18_NOTES.md). Windows uses a self-signed certificate, so unknown-publisher or SmartScreen warnings may remain. Android retains the existing update-signing identity. Linux and the checksum manifest have detached signatures; public verification material is in `checksums.json`. A regular release does not establish public certificate trust or device-testing coverage.
 
+Branch test build **0.2.19** (`v0.2.19-test`) adds the integrated source-to-world workflow, atlas rendering, optional whole-package visual review, and creation-package copy/restore. It upgrades over 0.2.18 (Android version code 21) without merging this branch or replacing the stable release. See [test release notes and installation precautions](docs/RELEASE_0.2.19_TEST_NOTES.md).
+
 For source development, install Node.js 22 or newer, then run `npm ci`, `npm run build`, `npm run typecheck`, `npm test`, and `npm run dev`. The build generates the reference assets required by desktop service tests. Run `npm run desktop` for the Electron app. Android also requires a JDK, Android SDK, and separately prepared native/provider runtimes; see [development and packaging prerequisites](docs/PERSONAL_APPS.md). Packaging scripts currently expect locally prepared provider runtimes and retained dependency compliance inputs, which are not included in this source snapshot. Building from source does not reproduce the distributor's signing identity; never share private signing keys.
 
 Local project management: **Close project** returns to **Your projects** without deleting the project or its saved local draft. On phones, find it under **Files & sync** (the header’s three-dot menu); it is also available on the open project’s card. **Move to trash** removes a project from the active list. Select **Trash** in the project status filter to restore it or confirm **Delete permanently**, which removes the local project and its checkpoints, not the world on Voyage. Stop active tasks before trashing or deleting a project.
@@ -15,6 +17,22 @@ The project picker also has **Voyage worlds** and **Voyage mods**. Connect your 
 Original Voyage Workbench code is licensed under **GNU GPL version 2 only** (`GPL-2.0-only`), not "version 2 or later". See [LICENSE](LICENSE) and [licensing scope and dependency obligations](docs/LICENSING.md). Third-party software and reference material retain their own licenses; the application license does not relicense provider CLIs/SDKs, dependencies, or third-party content.
 
 # Voyage Workbench
+
+The [October 29 Voyage compatibility audit](docs/VOYAGE_COMPATIBILITY_AUDIT_2026-10-29.md)
+maps the supplied changelogs to verified schema/API changes, implemented fixes,
+and remaining version/environment work. It does not automatically migrate worlds.
+
+The [compatibility completion checklist](docs/VOYAGE_COMPATIBILITY_COMPLETION_2026-10-29.md)
+documents offline V37 reference selection, reviewed legacy-field proposals under
+**Validation**, trait/Story Start reference analysis, and the explicitly deferred work.
+
+The [agent harness hardening report](docs/HARNESS_HARDENING_2026-11-01.md)
+documents shared tool enforcement, durable bounded execution receipts, host-owned
+local completion checks, and the remaining orchestration and verification limits.
+
+The [delegation and checkpoint-continuation follow-up](docs/AGENT_ORCHESTRATION_2026-11-01.md)
+adds opt-in same-provider read-only reviews on desktop, plus bounded checkpoint
+continuation on desktop restart and when reopening an Android project.
 
 The proposed Windows/Android successor architecture and the successful Android Codex runtime experiment are documented in [Lean hybrid implementation decisions](docs/LEAN_HYBRID_DECISIONS.md). The native experiment is a feasibility probe; the application described below remains the current implementation.
 
@@ -31,6 +49,17 @@ Open **Coverage breakdown & unmapped content** for contributing records, unplace
 content, and broken spatial links. Opacity and layer controls are local display
 choices. Counts use the current working copy and explicit references; empty space
 may be intentional. See [counting rules and feature plan](docs/map-content-coverage.md).
+## Source-to-world creation
+
+Open **All tools → Create world** to attach Markdown research and build a complete
+world with shared source/canon records, planned and rendered region maps, artwork
+briefs, a cover, publishing copy, and the supplied v1.6.2 quality rubric. New V37
+creation seeds are generated from the bundled community schema; existing V36
+worlds are not relabelled. Image spending, uploads and final publication remain
+explicit approvals. See the [implementation, workflow and remaining limits](docs/SOURCE_TO_WORLD_2026-11-04.md).
+
+The [main integration note](docs/SOURCE_TO_WORLD_MAIN_INTEGRATION.md) describes
+preserved 0.2.18 safeguards and the stricter local matching-schema review gate.
 
 ## Install and run
 

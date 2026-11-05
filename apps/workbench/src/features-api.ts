@@ -2,7 +2,8 @@ import {request} from './host';import * as doc from '../../../packages/core/docu
 import {feature,saveFeature} from './feature-store';
 export {feature,saveFeature} from './feature-store';
 import {importLocal,library,registerRemote} from './asset-library';
-import {reusableRemote} from '../../../packages/core/asset-library';
+import {reusableRemote,inspectMedia} from '../../../packages/core/asset-library';
+import {creationReadiness,creationArtifactSpecs} from '../../../packages/core/world-creation';
 import {imageTargets} from '../../../packages/core/artwork';
 import {voyageCleanRejection,voyageRetryAfter} from '../../../packages/core/voyage-api';
 export interface UploadBinding {projectId:string;environment:string;worldId:string}
@@ -40,12 +41,12 @@ async function publicationJournal(projectId:string){
 const publicationQueues=new Map<string,Promise<unknown>>();
 export async function createWorldCopy(project:Project){
  const current=(await request('project',{id:project.id})).project as Project;
- if(current.draft||current.tasks.some(task=>['PREPARED','RUNNING'].includes(task.state)))throw new Error('Apply/discard the draft and finish the agent before creating a new world.');
+ if(current.draft||current.tasks.some(task=>['PREPARED','RUNNING'].includes(task.state))||current.creation?.jobs.some(job=>job.state==='running'))throw new Error('Apply/discard the draft and finish the agent and artwork jobs before creating a new world.');
  if(current.remote.operations.some(operation=>['PREPARED','SEND_ATTEMPTED','UNKNOWN'].includes(operation.state)))throw new Error('Reconcile the pending save before creating a new world.');
  const publication=await feature<PublicationOperation[]>('publication:'+current.id,[]);
  if(publication.some(pendingPublication))throw new Error('Resolve the recorded publication request before creating another world. Use the publication journal.');
  const details=await feature<string>('creation-details:'+current.id,'{}');
- const copy=await request('create',{name:current.name+' — new world',source:current.activeSource});
+ const copy=current.creation?await (await import('./creation-transfer')).copyCreationWorkspace(current):await request('create',{name:current.name+' — new world',source:current.activeSource});
  await saveFeature('creation-details:'+copy.project.id,details);
  return copy;
 }
@@ -91,6 +92,7 @@ async function runPublication(project:Project,kind:string,retry?:PublicationOper
     if(kind==='create'&&privateDraft(current,await feature<string>('creation-details:'+current.id,'{}'))!==op.body)throw new Error('Creation details changed. Do not replay the old request against changed content.');
    };
    await assertSource();
+ if(kind==='publish'&&current.creation){const references=(await request('references')).sections,report=creationReadiness(current.creation,current.activeSource,references,hash);if(report.state!=='static-ready')throw new Error('Creation package is not release-ready: '+report.blockers.slice(0,3).join(' '));for(const spec of creationArtifactSpecs(current.creation,current.activeSource,hash)){const job=current.creation.jobs.find(job=>job.id===spec.id&&job.specHash===spec.specHash&&job.state==='ready'),asset=job?.assetId?await feature<Asset|null>('asset:'+job.assetId,null):null;if(!asset||inspectMedia(asset.dataUrl).sha256!==job?.assetHash)throw new Error('Required creation artwork is missing or changed. Reinspect the publishing package.');}}
    if(kind==='create'){
     if(op.worldId)throw new Error('This project already has a linked draft.');
     if(!valid(await validateSource(current.activeSource)))throw new Error('Official draft validation must pass first.');

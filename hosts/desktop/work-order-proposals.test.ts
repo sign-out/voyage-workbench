@@ -11,7 +11,7 @@ test('flagged-note planning runs its frozen queue through notes, proposal and ou
  const directory=mkdtempSync(path.join(tmpdir(),'voyage-note-queue-'));let calls=0,proposalId='';
  const server=createServer(async(request,response)=>{
   let raw='';for await(const chunk of request)raw+=chunk;const body=JSON.parse(raw);calls++;
-  const call=(name:string,args:any)=>({id:'call-'+calls+'-'+name,type:'function',function:{name,arguments:JSON.stringify(args)}});
+  const call=(name:string,args:any)=>({id:'call-'+calls+'-'+name+'-'+(args.noteId||''),type:'function',function:{name,arguments:JSON.stringify(args)}});
   let message:any;
   if(calls===1){const input=body.messages.find((message:any)=>message.role==='user').content;assert.match(input,/BEGIN BUILDER NOTE QUEUE/);assert.match(input,/Deepen combat/);assert.match(input,/Rewrite background/);message={tool_calls:[call('world_notes',{path:[]})]};}
   else if(calls===2){assert.equal(JSON.parse(body.messages.at(-1).content).notes.length,2);message={tool_calls:[call('propose_work_order',{objective:'Improve the world',requirements:['Preserve exact numbers'],allowedPaths:[['combatSettings'],['character']]})]};}

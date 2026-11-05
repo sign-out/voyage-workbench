@@ -8,12 +8,17 @@ import workValidationReferences from './work-validation.json';
 import * as fieldFill from './field-fill';
 import {fieldFillSnapshot,fieldFillPrompt,parseFieldFill,type FieldFillSnapshot} from './field-fill';
 import * as doc from './document';
+import {prepareCreationTransfer} from './creation-transfer';
+import {executeWorldTool,canonicalToolRequest,validateToolArguments,completionEvidence,toolJournalLimits,type CompletionEvidence} from './agent-tools';
 import {editorSnapshot,type EditorSnapshot} from './assistant-context';
 import * as assistantContext from './assistant-context';
 import * as providers from './providers';
 import * as covers from './covers';
 import * as codexMedia from './codex-media';
+import * as creationVisual from './creation-visual';
 import * as harness from './harness';
+import * as orchestration from './agent-orchestration';
+import {taskPolicy,groupJournal,resumeIssue,orchestrationLimits,type TaskPolicy,type ResumeReceipt,type Delegation} from './agent-orchestration';
 import * as voyage from './voyage';
 import {worldIdentity} from './features';
 import type {TaskRoute} from './providers';
@@ -23,15 +28,20 @@ import {proposedOrder,type WorkOrder} from './work-orders';
 import * as authoring from './authoring';
 import {proposedArtwork,type ArtworkProposal} from './artwork-requests';
 import {gradingSnapshot,gradingPrompt,parseRubric,parseGradeReport,type Rubric,type GradingSnapshot,type GradeReport} from './world-grading';
+import * as creation from './world-creation';
+import {assignArtwork} from './artwork';
+import {mediaUrl} from './studio';
 export type {WorkOrder} from './work-orders';
 export interface ApprovedWorkOrder extends WorkOrder {approvalBaseHash?:string}
 export interface WorkOrderProposal {id:string;taskId:string;baseHash:string;order:WorkOrder;created:number;noteIds?:string[]}
 export type LocalEditMode='automatic'|'proposal-only';
 export function localEditMode(value:unknown=''):LocalEditMode {if(value==='')return 'automatic';if(value==='automatic'||value==='proposal-only')return value;throw new Error('Choose automatic local apply or proposal-only.');}
-export interface Task {editorContext?:EditorSnapshot;localEditMode?:LocalEditMode;localApplyBlockedReason?:string;id:string;attempt:string;kind:'plan'|'work';state:string;prompt:string;reply:string;baseSource:string;baseHash:string;stagedSource:string;workOrder:ApprovedWorkOrder;sourceNoteIds?:string[];builderNotes?:BuilderNote[];noteQueue?:NotePlanItem[];sessionId?:string;route?:TaskRoute;created:number;error?:string}
+export function resumeGuidance(project:Project,taskId:string,platform:string){const task=project.tasks.find(entry=>entry.id===taskId);const reason=task?resumeIssue(project,task,platform,hash):'Task not found.';return {allowed:!reason,reason};}
+export interface ToolReceipt {id:string;attempt:string;name:string;inputHash:string;beforeHash:string;afterHash:string;state:'pending'|'succeeded'|'rejected';result:any;created:number}
+export interface Task {creationId?:string;creationBriefHash?:string;preparedAt?:number;policy?:TaskPolicy;resumes?:ResumeReceipt[];resumeBlockedReason?:string;parentTaskId?:string;delegation?:Delegation;toolJournal?:ToolReceipt[];toolSummary?:{calls:number;rejected:number};completionEvidence?:CompletionEvidence;editorContext?:EditorSnapshot;localEditMode?:LocalEditMode;localApplyBlockedReason?:string;id:string;attempt:string;kind:'plan'|'work'|'review';state:string;prompt:string;reply:string;baseSource:string;baseHash:string;stagedSource:string;workOrder:ApprovedWorkOrder;sourceNoteIds?:string[];builderNotes?:BuilderNote[];noteQueue?:NotePlanItem[];sessionId?:string;route?:TaskRoute;created:number;error?:string}
 export interface NoteChangeReceipt {id:string;taskId:string;proposalId:string;noteIds:string[];title:string;beforeHash:string;afterHash:string;beforeCheckpointId:string;afterCheckpointId:string;created:number}
 export interface Candidate {id:string;title:string;source:string;baseHash:string;created:number;kind:string;sourceProposalId?:string;noteIds?:string[];importNote?:string;rejectedChanges?:doc.ChangeChoice[]}
-export interface Project {artworkProposals?:ArtworkProposal[];bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string;editorContext?:Pick<EditorSnapshot,'screen'|'label'|'focusPaths'>}[];workOrder:ApprovedWorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
+export interface Project {creation?:creation.CreationWorkspace;artworkProposals?:ArtworkProposal[];bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string;editorContext?:Pick<EditorSnapshot,'screen'|'label'|'focusPaths'>}[];workOrder:ApprovedWorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
 export interface Project {grading?:{rubric?:Rubric;reports:GradeReport[]}}
 export interface Project {chatPlan?:ChatPlan}
 export interface Task {grading?:GradingSnapshot;fieldFill?:FieldFillSnapshot}
@@ -96,6 +106,14 @@ export function reduce(project:Project,c:any):Project {
       p.bookmarks=[...bookmarks,{id:c.id,path:c.path.slice(),name:c.name.trim()}];break;
     }
     case 'removeBookmark':p.bookmarks=(p.bookmarks||[]).filter(bookmark=>bookmark.id!==c.id);break;
+    case 'compatibilityProposal':{
+      requireCurrent(p,c.baseHash);if(p.draft)throw new Error('Apply or discard the editor draft before preparing compatibility updates.');
+      if(typeof c.id!=='string'||!c.id||p.candidates.some(candidate=>candidate.id===c.id))throw new Error('Provide a unique proposal ID.');
+      const preview=authoring.compatibilityFieldUpdates(p.activeSource);
+      if(preview.blockers.length)throw new Error(preview.blockers.map(issue=>doc.label(issue.path)+': '+issue.message).join('\n'));
+      if(!preview.changes.length)throw new Error('No supported legacy fields need updating.');
+      p.candidates.unshift({id:c.id,title:'Review V37 legacy field updates (not a version migration)',source:preview.source,baseHash:c.baseHash,created:p.updated,kind:'authoring'});break;
+    }
     case 'builderContextDefault':if(typeof c.include!=='boolean')throw new Error('Choose whether to include builder context.');p.builderContextDefault=c.include;break;
     case 'authoringProposal':{
       requireCurrent(p,c.baseHash);if(p.draft)throw new Error('Apply or discard the editor draft before preparing authoring changes.');
@@ -132,6 +150,85 @@ export function reduce(project:Project,c:any):Project {
       t.noteQueue=t.noteQueue!.map(value=>value.noteId===c.noteId?{...value,state:c.state,explanation:c.explanation,...(c.state==='proposed'?{proposalId:c.proposalId}:{proposalId:undefined})}:value);
       if(c.state==='proposed')p.workOrderProposals=(p.workOrderProposals||[]).map(proposal=>proposal.id===c.proposalId?{...proposal,noteIds:Array.from(new Set([...(proposal.noteIds||[]),item.noteId]))}:proposal);
       p.builderNotes=(p.builderNotes||[]).map(note=>note.id===item.noteId&&note.revision===item.noteRevision?{...note,lastPlan:{state:c.state,explanation:c.explanation,...(c.state==='proposed'?{proposalId:c.proposalId}:{}),taskId:t.id,baseHash:t.baseHash,noteRevision:item.noteRevision,created:p.updated}}:note);break;
+    }
+    case 'configureCreation':{
+      requireCurrent(p,c.baseHash);if(p.draft||p.tasks.some(entry=>['PREPARED','RUNNING'].includes(entry.state))||p.creation?.jobs.some(job=>job.state==='running'))throw new Error('Finish current edits and jobs before replacing the creation brief.');
+      if(p.creation&&c.expectedRevision!==p.creation.revision)throw new Error('The creation workspace changed. Reload it.');
+      p.creation=creation.createWorkspace(c.workspace,hash);break;
+    }
+    case 'restoreCreation':{
+      requireCurrent(p,c.baseHash);if(p.creation||p.draft||p.status&&p.status!=='active'||p.tasks.length||p.remote.worldId)throw new Error('Restore into a fresh, unlinked local project.');
+      p.creation=prepareCreationTransfer(c.workspace,p.activeSource,hash,c.creationId);p.workOrder={objective:'',requirements:[],allowedPaths:[]};break;
+    }
+    case 'approveCreation':{
+      requireCurrent(p,c.baseHash);if(!p.creation||p.draft||p.status&&p.status!=='active'||p.tasks.some(entry=>['PREPARED','RUNNING'].includes(entry.state))||p.creation.jobs.some(job=>job.state==='running'))throw new Error('Open an active creation workspace without pending edits or running work.');
+      if(c.expectedRevision!==p.creation.revision)throw new Error('The creation brief changed. Review it again.');
+      const order=proposedOrder(p.activeSource,{objective:'Create a complete Voyage world: '+p.creation.brief.slice(0,4000),requirements:['Read all supplied sources and preserve canon with evidence.','Build substantial playable content and truthful publication details.','Plan complete coherent geography and actual map blueprints for every region and location.','Plan a cover and all requested artwork using supported destinations.','Apply the supplied v1.6.2 rubric; report missing evidence and unfinished work, never invent readiness.'],allowedPaths:[],wholeWorld:true});
+      p.workOrder={...order,reviewedScope:true,approvalBaseHash:hash(p.activeSource),creationId:p.creation.id};break;
+    }
+    case 'taskCreationUpdate':{
+      const current=task();if(current.kind!=='work'||current.state!=='RUNNING'||!p.creation||current.creationId!==p.creation.id||current.creationBriefHash!==creation.creationBriefHash(p.creation,hash))throw new Error('This task is not approved for the current creation brief.');
+      requireCurrent(p,current.baseHash);if(p.creation.jobs.some(job=>job.state==='running'))throw new Error('Wait for artwork jobs before changing their inputs.');
+      p.creation=creation.updateCreation(p.creation,c.section,c.source,current.stagedSource,hash,p.updated);break;
+    }
+    case 'creationJobStart':{
+      requireCurrent(p,c.baseHash);const workspace=p.creation;
+      if(!workspace||p.draft||p.status&&p.status!=='active'||p.tasks.some(entry=>['PREPARED','RUNNING'].includes(entry.state))||p.candidates.some(candidate=>candidate.kind==='agent'))throw new Error('Review world proposals and finish active edits before generating assets.');
+      if(c.expectedRevision!==workspace.revision)throw new Error('Creation inputs changed. Review the batch again.');
+      const spec=creation.creationArtifactSpecs(workspace,p.activeSource,hash).find(spec=>spec.id===c.id&&spec.specHash===c.specHash);
+      if(!spec||typeof c.attempt!=='string'||!c.attempt||c.attempt.length>100)throw new Error('Artwork inputs changed or attempt is invalid.');
+      const previous=workspace.jobs.find(job=>job.id===c.id);
+      if(previous?.state==='running'||previous?.state==='ready'&&previous.specHash===spec.specHash)throw new Error('This artifact is already running or ready.');
+      if(previous&&['uncertain','failed'].includes(previous.state)&&c.acknowledgeRetry!==true)throw new Error('Review the previous provider outcome before explicitly retrying.');
+      if(spec.kind==='image'&&(typeof c.routeHash!=='string'||!/^[a-f0-9]{64}$/.test(c.routeHash)))throw new Error('Freeze the approved image provider route.');
+      p.creation={...workspace,revision:workspace.revision+1,review:undefined,visualReview:undefined,jobs:workspace.jobs.filter(job=>job.id!==c.id).concat({id:spec.id,specHash:spec.specHash,state:'running',attempt:c.attempt,routeHash:c.routeHash,created:p.updated})};break;
+    }
+    case 'creationJobFinish':{
+      const workspace=p.creation,job=workspace?.jobs.find(job=>job.id===c.id&&job.attempt===c.attempt&&job.state==='running');if(!workspace||!job)throw new Error('Artwork attempt is no longer running.');
+      if(!['ready','uncertain','failed'].includes(c.state))throw new Error('Invalid artifact outcome.');
+      if(c.state==='ready'&&(typeof c.assetId!=='string'||!c.assetId||typeof c.assetHash!=='string'||!/^[a-f0-9]{64}$/.test(c.assetHash)))throw new Error('Ready artifacts need a saved asset and content hash.');
+      p.creation={...workspace,revision:workspace.revision+1,jobs:workspace.jobs.map(entry=>entry===job?{...entry,state:c.state,assetId:c.assetId,assetHash:c.assetHash,error:String(c.error||'').slice(0,2000)}:entry)};break;
+    }
+    case 'creationJobUrl':{
+      requireCurrent(p,c.baseHash);const workspace=p.creation,job=workspace?.jobs.find(job=>job.id===c.id&&job.state==='ready'),spec=workspace&&creation.creationArtifactSpecs(workspace,p.activeSource,hash).find(spec=>spec.id===c.id&&spec.specHash===job?.specHash);
+      if(!workspace||!job||!spec||p.draft||p.tasks.some(entry=>['PREPARED','RUNNING'].includes(entry.state)))throw new Error('Artifact inputs changed or the world is being edited.');
+      mediaUrl(c.url);if(!c.url.startsWith('https://'))throw new Error('Use the approved HTTPS image URL.');
+      const destination=creation.creationDestinations(p.activeSource).find(destination=>destination.id===spec.destinationId);if(!destination)throw new Error('Artwork destination changed.');
+      const assigned=assignArtwork(p.activeSource,'{}',destination.assignmentId,c.url);if(assigned.source!==p.activeSource)active(assigned.source);
+      p.creation={...workspace,revision:workspace.revision+1,review:undefined,jobs:workspace.jobs.map(entry=>entry===job?{...entry,url:c.url}:entry)};break;
+    }
+    case 'creationVisualBatch':{
+      const workspace=p.creation;if(!workspace||c.inputHash!==creation.creationVisualHash(workspace,p.activeSource,hash)||typeof c.routeHash!=='string'||!/^[a-f0-9]{64}$/.test(c.routeHash)||!Array.isArray(c.ids)||!c.ids.length||c.ids.length>creationVisual.creationVisualBatchSize)throw new Error('Visual batch must describe current package artifacts and its approved route.');
+      const specs=creation.creationArtifactSpecs(workspace,p.activeSource,hash);
+      if(new Set(c.ids).size!==c.ids.length||c.ids.some((id:string)=>!specs.some(spec=>spec.id===id&&workspace.jobs.some(job=>job.id===id&&job.specHash===spec.specHash&&job.state==='ready'))))throw new Error('Visual batch contains unknown or unfinished artifacts.');
+      const report=creationVisual.creationVisualReviewResult('codex',{text:JSON.stringify(c.report)},c.ids),previous=workspace.visualProgress;
+      const reports=previous&&previous.inputHash===c.inputHash&&previous.routeHash===c.routeHash?previous.reports:[];
+      if(reports.some(report=>report.assets.some(asset=>c.ids.includes(asset.id))))throw new Error('These artifacts already have saved visual findings.');
+      const issues=creation.creationVisualFindings(workspace,p.activeSource,hash).slice();
+      for(const finding of report.assets.filter(asset=>asset.status!=='pass')){const index=issues.findIndex(issue=>issue.id===finding.id);if(index<0)issues.push(finding);else issues[index]=finding;}
+      issues.sort((left,right)=>left.id<right.id?-1:left.id>right.id?1:0);
+      p.creation={...workspace,revision:workspace.revision+1,review:undefined,visualReview:workspace.visualReview?.outcome&&workspace.visualReview.outcome!=='pass'?workspace.visualReview:undefined,visualProgress:{inputHash:c.inputHash,routeHash:c.routeHash,reports:reports.concat(report),issues}};break;
+    }
+    case 'creationVisualReview':{
+      const workspace=p.creation;if(!workspace||c.scope!=='all-required-assets'||c.inputHash!==creation.creationVisualHash(workspace,p.activeSource,hash)||typeof c.report!=='string'||!c.report.trim()||c.report.length>100000)throw new Error('Visual review must describe the current complete asset set.');
+      const specs=creation.creationArtifactSpecs(workspace,p.activeSource,hash);if(!specs.length||specs.some(spec=>!workspace.jobs.some(job=>job.id===spec.id&&job.specHash===spec.specHash&&job.state==='ready'&&job.assetId&&job.assetHash)))throw new Error('Finish every required map and artwork job before recording full visual inspection.');
+      if(c.outcome!==undefined&&!['pass','fail','uncertain'].includes(c.outcome))throw new Error('Record a supported visual review outcome.');
+      let visualResolution=workspace.visualResolution;
+      if(c.resolveFindings===true){if(c.findingsHash!==creation.creationVisualFindingsHash(workspace,p.activeSource,hash)||typeof c.resolution!=='string'||c.resolution.trim().length<20||c.resolution.length>8000)throw new Error('Explicit visual resolution needs current findings and a meaningful documented rationale.');visualResolution={inputHash:c.inputHash,findingsHash:c.findingsHash,reason:c.resolution.trim(),created:p.updated};}
+      else if(c.resolution!==undefined||c.findingsHash!==undefined)throw new Error('Explicitly acknowledge resolution of the current visual findings.');
+      const unresolved=creation.creationUnresolvedVisualFindings({...workspace,visualResolution},p.activeSource,hash),inherited=c.resolveFindings===true?'pass':workspace.visualReview&&workspace.visualReview.inputHash===c.inputHash?workspace.visualReview.outcome:undefined;
+      const outcomes=[c.outcome,inherited,...unresolved.map(issue=>issue.status)],outcome=outcomes.includes('fail')?'fail':outcomes.includes('uncertain')?'uncertain':c.outcome||inherited;
+      p.creation={...workspace,revision:workspace.revision+1,review:undefined,visualResolution,visualReview:{inputHash:c.inputHash,report:c.report,created:p.updated,...(outcome?{outcome}:{})}};break;
+    }
+    case 'creationSetLock':{
+      requireCurrent(p,c.baseHash);const workspace=p.creation;if(!workspace||c.expectedRevision!==workspace.revision||typeof c.locked!=='boolean'||p.tasks.some(entry=>['PREPARED','RUNNING'].includes(entry.state))||workspace.jobs.some(job=>job.state==='running'))throw new Error('Review current idle creation inputs before changing locks.');
+      const next=JSON.parse(JSON.stringify(workspace)) as creation.CreationWorkspace;
+      if(c.mapId){const feature=next.maps.find(map=>map.id===c.mapId)?.features.find(feature=>feature.id===c.id);if(!feature)throw new Error('Map feature not found.');feature.locked=c.locked;}
+      else {const decision=next.design.decisions.find(decision=>decision.id===c.id);if(!decision)throw new Error('Canon decision not found.');decision.locked=c.locked;}
+      next.revision++;next.review=undefined;next.visualReview=undefined;p.creation=next;break;
+    }
+    case 'creationRecoverJobs':{
+      if(p.creation)p.creation={...p.creation,revision:p.creation.revision+1,jobs:p.creation.jobs.map(job=>job.state==='running'?{...job,state:'uncertain',error:'The host or page stopped. The provider may have completed this request; inspect assets before an explicit retry.'}:job)};break;
     }
     case 'memory':p.memory=String(c.text).slice(0,50000);break;
     case 'attachMod':doc.parse(c.source);p.attachments=(p.attachments||[]).filter(a=>a.id!==c.id).concat([{id:c.id,name:c.name,source:c.source}]);break;
@@ -199,16 +296,69 @@ export function reduce(project:Project,c:any):Project {
       const noteSnapshot=(includeNotes?p.builderNotes||[]:[]).map(note=>({...note,path:note.path.slice()}));
       const editorContext=fill||grading?undefined:editorSnapshot(p.activeSource,c.editorContext);
       const applyMode=c.localEditMode===undefined?'proposal-only':localEditMode(c.localEditMode);
-      p.tasks.unshift({assistantRecovery:assistantRecoverySettings(c.assistantRecovery),localEditMode:applyMode,...(editorContext?{editorContext}:{}),id:c.id,attempt:c.attempt,kind:c.kind,state:'PREPARED',prompt:taskPrompt,builderNotes:noteSnapshot,sourceNoteIds:c.kind==='work'?(p.workOrderProposals?.find(proposal=>proposal.id===p.workOrder.sourceProposalId)?.noteIds?.slice()||[]):[],...(queuedNotes?{noteQueue:queuedNotes}:{}),reply:'',baseSource,baseHash:hash(baseSource),stagedSource:baseSource,workOrder:fill?{objective:'',requirements:[],allowedPaths:[]}:p.workOrder,route:c.route,created:p.updated});
+      p.tasks.unshift({...(c.kind==='work'&&p.creation&&p.workOrder.creationId===p.creation.id?{creationId:p.creation.id,creationBriefHash:creation.creationBriefHash(p.creation,hash)}:{}),assistantRecovery:assistantRecoverySettings(c.assistantRecovery),preparedAt:p.updated,policy:taskPolicy(c.hostPlatform||'unknown',c.route,c,hash),localEditMode:applyMode,...(editorContext?{editorContext}:{}),id:c.id,attempt:c.attempt,kind:c.kind,state:'PREPARED',prompt:taskPrompt,builderNotes:noteSnapshot,sourceNoteIds:c.kind==='work'?(p.workOrderProposals?.find(proposal=>proposal.id===p.workOrder.sourceProposalId)?.noteIds?.slice()||[]):[],...(queuedNotes?{noteQueue:queuedNotes}:{}),reply:'',baseSource,baseHash:hash(baseSource),stagedSource:baseSource,workOrder:fill?{objective:'',requirements:[],allowedPaths:[]}:p.workOrder,route:c.route,created:p.updated});
+      p.tasks.slice(toolJournalLimits.retainedTasks).forEach(entry=>{if(entry.toolJournal&&!['PREPARED','RUNNING'].includes(entry.state)){entry.toolSummary={calls:entry.toolJournal.length,rejected:entry.toolJournal.filter(receipt=>receipt.state==='rejected').length};entry.toolJournal=undefined;}});
       if(grading)p.tasks[0].grading=grading;
       if(fill)p.tasks[0].fieldFill=fill;
       if(c.kind==='plan'&&!grading&&!fill)p.chat.push({role:'user',...(editorContext?{editorContext:{screen:editorContext.screen,label:editorContext.label,focusPaths:editorContext.focusPaths}}:{}),text:queuedNotes?'Address project notes · '+queuedNotes.length+' flagged notes':c.prompt});break;
     }
     case 'taskRunning':{const t=task();if(t.state!=='PREPARED')throw new Error('Task is not prepared.');t.state='RUNNING';break;}
-    case 'taskReply':{const t=task();if(t.state!=='RUNNING')throw new Error('Task is no longer running.');t.reply=c.text;break;}
+    case 'resumeTask':{
+      if(!c.attempt)throw new Error('Provide the interrupted task attempt.');
+      const t=task(),issue=resumeIssue(p,t,c.hostPlatform||'unknown',hash);if(issue)throw new Error(issue);
+      if(typeof c.newAttempt!=='string'||!c.newAttempt||c.newAttempt.length>100||c.newAttempt===t.attempt||t.resumes?.some(entry=>entry.attempt===c.newAttempt||entry.previousAttempt===c.newAttempt))throw new Error('Provide a fresh bounded task attempt.');
+      t.resumes=(t.resumes||[]).concat({previousAttempt:t.attempt,attempt:c.newAttempt,sourceHash:hash(t.stagedSource),created:p.updated,reply:t.reply.slice(0,4000)});
+      t.attempt=c.newAttempt;t.state='PREPARED';t.sessionId=undefined;t.reply='';t.error='';t.resumeBlockedReason='';t.preparedAt=p.updated;break;
+    }
+    case 'taskRecoveryBlocked':{const t=task();if(t.state==='INTERRUPTED')t.resumeBlockedReason=String(c.reason).slice(0,1000);break;}
+    case 'delegateTask':{
+      const parent=task();
+      if(parent.state!=='RUNNING'||parent.kind!=='work'||parent.parentTaskId||!parent.policy?.allowDelegation)throw new Error('This task cannot delegate.');
+      if(!orchestration.orchestrationCapabilities(parent.policy.hostPlatform,parent.route?.protocol).delegation||parent.policy.routeHash!==hash(JSON.stringify(parent.route||null)))throw new Error('Delegation capability or frozen route changed.');
+      if(p.tasks.filter(entry=>entry.parentTaskId===parent.id).length>=orchestrationLimits.children)throw new Error('This task reached its two-child review limit.');
+      if(!c.objective?.trim()||!Array.isArray(c.paths)||!c.paths.length||c.paths.length>10)throw new Error('Provide a review objective and existing scope paths.');
+      const source=parent.stagedSource,root=doc.statePath(doc.parse(source));
+      for(const path of c.paths){doc.at(doc.parse(source),path);if(!root.every((key,index)=>path[index]===key)||parent.workOrder.allowedPaths.length&&!parent.workOrder.allowedPaths.some(scope=>scope.every((key,index)=>path[index]===key)))throw new Error('Delegated scope exceeds the approved Work Order.');}
+      if(p.tasks.some(entry=>entry.id===c.id))throw new Error('Child task identity already exists.');
+      p.tasks.unshift({id:c.id,attempt:c.id,kind:'review',state:'PREPARED',parentTaskId:parent.id,delegation:{parentAttempt:parent.attempt,callId:c.callId,paths:c.paths.map((path:doc.Path)=>path.slice()),sourceHash:hash(source)},prompt:c.objective,reply:'',baseSource:source,baseHash:hash(source),stagedSource:source,workOrder:{objective:c.objective,requirements:[],allowedPaths:c.paths},route:parent.route?{...parent.route}:undefined,localEditMode:'proposal-only',created:p.updated});break;
+    }
+    case 'resolveDelegation':{
+      const parent=task();if(parent.state!=='RUNNING')throw new Error('Parent task stopped.');
+      const child=p.tasks.find(entry=>entry.id===c.childTaskId&&entry.parentTaskId===parent.id&&entry.delegation?.parentAttempt===parent.attempt);
+      if(!child||['PREPARED','RUNNING'].includes(child.state))throw new Error('Delegated review has not settled.');
+      const receipt=parent.toolJournal?.find(entry=>entry.id===child.delegation!.callId&&entry.attempt===parent.attempt);
+      if(!receipt)throw new Error('Delegated review receipt is missing.');if(receipt.state!=='pending')break;
+      const succeeded=child.state==='COMPLETED';let result:any=succeeded?{taskId:child.id,sourceHash:child.delegation!.sourceHash,summary:child.reply.slice(0,orchestrationLimits.summaryCharacters),advisory:true,official:false,readOnly:true}:{taskId:child.id,error:child.error?.slice(0,1000)||'Delegated review did not complete.',readOnly:true};
+      if(JSON.stringify(groupJournal(p,parent)).length+JSON.stringify(result).length>toolJournalLimits.totalCharacters){result={taskId:child.id,sourceHash:child.delegation!.sourceHash,summaryOmitted:true,advisory:true,official:false,readOnly:true,...(!succeeded?{error:'Delegated review did not complete.'}:{})};}
+      parent.toolJournal=parent.toolJournal!.map(entry=>entry===receipt?{...entry,state:succeeded?'succeeded':'rejected',result}:entry);break;
+    }
+    case 'taskReply':{const t=task();if(t.state!=='RUNNING')throw new Error('Task is no longer running.');t.reply=t.kind==='review'?String(c.text).slice(0,orchestrationLimits.summaryCharacters):c.text;break;}
     case 'taskSession':task().sessionId=c.sessionId;break;
+    case 'taskTool':{
+      const t=task();if(t.state!=='RUNNING'||!c.attempt||c.attempt!==t.attempt)throw new Error('Task attempt is no longer running.');
+      if(typeof c.callId!=='string'||!c.callId||c.callId.length>200||typeof c.name!=='string'||c.name.length>200)throw new Error('Provide a bounded tool name and call ID.');
+      const inputHash=hash(canonicalToolRequest(c.name,c.args)),journal=t.toolJournal||[],previous=journal.find(receipt=>receipt.id===c.callId&&receipt.attempt===t.attempt);
+      if(previous){if(previous.inputHash!==inputHash||previous.attempt!==t.attempt)throw new Error('Tool call ID was reused with different arguments or attempt.');break;}
+      const sharedJournal=groupJournal(p,t);
+      if(sharedJournal.length>=toolJournalLimits.calls||JSON.stringify(sharedJournal).length>toolJournalLimits.totalCharacters-4096)throw new Error('Task reached its tool-call or journal budget. Review evidence and start a new task explicitly.');
+      const beforeHash=hash(t.kind==='work'?t.stagedSource:t.baseSource);
+      const identity=hash(t.id+':'+t.attempt+':'+c.callId),proposalId=identity.slice(0,8)+'-'+identity.slice(8,12)+'-8'+identity.slice(13,16)+'-a'+identity.slice(17,20)+'-'+identity.slice(20,32);
+      let next=p,result:any,state:ToolReceipt['state']='succeeded';
+      try{
+        const execution=executeWorldTool(p,t,c.name,c.args,c.references||[],proposalId,hash);
+        result=execution.result;
+        const size=JSON.stringify(result).length;
+        if(size>toolJournalLimits.resultCharacters||JSON.stringify(sharedJournal).length+size>toolJournalLimits.totalCharacters-4096)throw new Error('Tool result exceeds the bounded journal budget. Read smaller paths or start a new task.');
+        if(execution.command){next=reduce(p,{...execution.command,taskId:t.id,attempt:t.attempt,callId:c.callId,sectionBaseSource:c.sectionBaseSource,sectionCheckpointId:c.sectionCheckpointId,references:c.references,hostPlatform:c.hostPlatform,now:p.updated});if(execution.command.type==='taskSectionCheckpoint')result={...result,checkpoint:next.tasks.find(entry=>entry.id===t.id)!.sectionCheckpoints?.slice(-1)[0]};if(execution.command.type==='delegateTask')state='pending';}
+      }catch(error){state='rejected';result={error:String((error as Error).message).slice(0,1000)};}
+      if(state==='succeeded'&&c.name==='creation_read'&&next.creation&&next.creation.documents.some(document=>document.id===c.args.section))next.creation=creation.recordCreationRead(next.creation,c.args.section,c.args.offset||0,result.text.length);
+      const current=next.tasks.find(entry=>entry.id===t.id&&entry.attempt===t.attempt)!;
+      current.toolJournal=journal.concat({id:c.callId,attempt:t.attempt,name:c.name,inputHash,beforeHash,afterHash:hash(current.kind==='work'?current.stagedSource:current.baseSource),state,result,created:p.updated});
+      return next;
+    }
     case 'taskEdit':{
       const t=task();if(t.kind!=='work'||t.state!=='RUNNING')throw new Error('Planning and interrupted tasks cannot edit a world.');
+      validateToolArguments('work','world_edit',{action:c.action??'replace',path:c.path,...(c.key!==undefined?{key:c.key}:{}),...(c.source!==undefined?{source:c.source}:{})});
       const scope=approvedScope(t.baseSource,t.workOrder);
       if(hash(t.baseSource)!==t.baseHash)throw new Error('The frozen Work Order source changed. Review and approve it again.');
       if(!Array.isArray(c.path)||!scope.allowedPaths.some(path=>path.every((key,index)=>c.path[index]===key)))throw new Error('This path is outside the approved Work Order scope.');
@@ -229,13 +379,16 @@ export function reduce(project:Project,c:any):Project {
       t.sectionCheckpoints=[...(t.sectionCheckpoints||[]),{id:c.sectionCheckpointId,sequence:(last?.sequence||0)+1,label:c.label.trim(),paths,sourceHash,preexistingErrors:result.preexistingErrors}];break;
     }
     case 'taskDone':{const t=task();if(t.state!=='RUNNING')throw new Error('Task is no longer running.');t.reply=c.text||t.reply;
+      if((t.toolJournal||[]).some(receipt=>receipt.state==='pending'))throw new Error('Wait for delegated work before completing this task.');
       if(t.fieldFill){t.fieldFill={...t.fieldFill,result:parseFieldFill(t.reply,t.fieldFill)};t.state='COMPLETED';}
       else if(t.grading){
         const report=parseGradeReport(t.reply,t.grading,t.baseSource,{id:t.id,taskId:t.id,sourceHash:t.baseHash,created:p.updated});
         p.grading={...p.grading,reports:[report,...(p.grading?.reports||[])].slice(0,20)};t.state='COMPLETED';
       }
+      else if(t.kind==='review'){t.reply=t.reply.slice(0,orchestrationLimits.summaryCharacters);t.state='COMPLETED';}
       else if(t.kind==='plan'){t.state='COMPLETED';p.chat.push({role:'assistant',text:t.reply});p.chat=p.chat.slice(-60);}
       else {
+        t.completionEvidence=completionEvidence(t,c.references||[],hash,p.updated);
         const candidate:Candidate={id:t.id,title:t.workOrder.objective.slice(0,100),source:t.stagedSource,baseHash:t.baseHash,created:p.updated,kind:'agent',...(t.workOrder.sourceProposalId?{sourceProposalId:t.workOrder.sourceProposalId,noteIds:t.sourceNoteIds?.slice()||[]}:{})};
         t.state='PROPOSAL_READY';p.candidates.unshift(candidate);
         if(t.localEditMode==='automatic'){
@@ -248,13 +401,14 @@ export function reduce(project:Project,c:any):Project {
             if(!t.localApplyBlockedReason){
               const errors=doc.validate(t.stagedSource,workValidationReferences).filter(issue=>issue.level==='error');
               if(errors.length)t.localApplyBlockedReason='Local validation blocked automatic apply: '+errors.length+' error(s); '+doc.label(errors[0].path)+': '+errors[0].message+' Review this proposal manually, including any pre-existing imported errors.';
-              else {acceptCandidate(candidate);t.state='APPLIED';}
+          else if(t.completionEvidence.state!=='pass')t.localApplyBlockedReason=t.completionEvidence.state==='blocked'?'Local validation or scope checks failed. Review the proposal and its completion evidence.':'Matching schema coverage or complete scope evidence is unavailable. Review the proposal; this is not a validation pass.';
+          else {acceptCandidate(candidate);t.state='APPLIED';}
             }
           }
         }
       }t.baseSource='';t.stagedSource='';t.builderNotes=[];break;}
-    case 'taskStop':{const t=task();if(['PREPARED','RUNNING'].indexOf(t.state)>=0){t.state=c.state||'CANCELED';t.error=c.error||'';t.builderNotes=[];}break;}
-    case 'recover':p.tasks.forEach(t=>{if(['PREPARED','RUNNING'].indexOf(t.state)>=0){t.state='INTERRUPTED';t.error='The host stopped. Restart explicitly from the saved Work Order.';}});break;
+    case 'taskStop':{const t=task();if(['PREPARED','RUNNING','INTERRUPTED'].includes(t.state)){t.state=c.state||'CANCELED';t.error=c.error||'';t.builderNotes=[];p.tasks.filter(child=>child.parentTaskId===t.id&&['PREPARED','RUNNING'].includes(child.state)).forEach(child=>{child.state='CANCELED';child.error='Parent task stopped.';});t.toolJournal=t.toolJournal?.map(receipt=>receipt.state==='pending'?{...receipt,state:'rejected',result:{error:'Parent task stopped.',taskId:receipt.result.taskId}}:receipt);}break;}
+    case 'recover':if(p.creation)p.creation={...p.creation,revision:p.creation.revision+1,jobs:p.creation.jobs.map(job=>job.state==='running'?{...job,state:'uncertain',error:'The host stopped; inspect provider outcome before explicitly retrying.'}:job)};p.tasks.forEach(t=>{if(['PREPARED','RUNNING','INTERRUPTED'].includes(t.state)){t.state='INTERRUPTED';t.error='The host stopped. Checkpoint continuation requires prior permission and fresh host checks.';t.toolJournal=t.toolJournal?.map(receipt=>receipt.state==='pending'?{...receipt,state:'rejected',result:{error:'Delegated review interrupted by host shutdown.',taskId:receipt.result.taskId}}:receipt);}});break;
     case 'remoteLink':if(p.remote.operations.some(o=>['PREPARED','SEND_ATTEMPTED','UNKNOWN'].indexOf(o.state)>=0))throw new Error('Reconcile the pending save first.');p.remote.environment=c.environment||'production';if(c.envelopeSource){doc.parse(c.envelopeSource);p.remote.envelopeSource=c.envelopeSource;}p.remote.validation=undefined;p.remote.worldId=c.worldId;p.remote.etag=c.etag;p.remote.baselineHash=c.baselineHash;break;
     case 'remoteValidation':p.remote.validation=c.result;break;
     case 'savePrepare':{
@@ -279,4 +433,4 @@ export function remotePayload(source:string,baseline?:string,worldId?:string):st
   if(!object.children.some(c=>c.key==='initialGameState'))throw new Error('Remote saves require the downloaded world envelope.');
   return '{"world":{'+fields.filter(k=>object.children.some(c=>c.key===k)).map(k=>JSON.stringify(k)+':'+doc.read(source,prefix.concat(k))).join(',')+'}}';
 }
-export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode,projectSummary,assistantRecoverySettings,assistantCompletionValidation} as any)[r.operation]||(fieldFill as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(harness as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}
+export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode,projectSummary,assistantRecoverySettings,assistantCompletionValidation,resumeGuidance} as any)[r.operation]||(fieldFill as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(creationVisual as any)[r.operation]||(harness as any)[r.operation]||(orchestration as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}

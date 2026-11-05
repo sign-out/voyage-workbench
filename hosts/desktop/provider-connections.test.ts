@@ -57,7 +57,7 @@ for(const [name,protocol] of presets)test(name+' connects, discovers models, pro
   await service.request('providerKey',{profileId:'provider',key:'test-secret'});
   assert.deepEqual(await service.request('providerModels',{profileId:'provider'}),[{id:'test-model',name:'test-model'}]);
   assert.equal((await service.request('providerTest',{profileId:'provider'})).ok,true);
-  const source='{"title":"Original","exact":9007199254740993,"fraction":1.000}';
+  const source='{"heroesVersion":37,"title":"Original","exact":9007199254740993,"fraction":1.000}';
   const {project}=await service.request('create',{name,source});
   const wait=async()=>{for(let attempt=0;attempt<200;attempt++){const current=service.store.project(project.id);if(!['PREPARED','RUNNING'].includes(current.tasks[0].state))return current;await new Promise(resolve=>setTimeout(resolve,15));}throw new Error('Task timed out');};
   await service.request('startAgent',{id:project.id,kind:'plan',prompt:'Discuss title'});

@@ -1,10 +1,33 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {CodexRpcError,readCodexAccount,Rpc,AgentHost} from './codex';
 import {CodexMedia,type MediaRpc} from './codex-media';
+import {Store} from './store';
+import {artworkDestinations} from '../../packages/core/artwork';
+
+test('native planner artwork uses durable replayable proposals and late or hidden tools cannot execute',async()=>{
+ const directory=mkdtempSync(path.join(tmpdir(),'voyage-native-artwork-')),store=new Store(directory);
+ let settled=0,closed=0;
+ const rpc:any={onEvent:()=>{},onTool:async()=>{},init:async()=>{},close:()=>{closed++;},request:async(method:string)=>method==='account/read'?{account:{type:'chatgpt'}}:method==='thread/start'?{thread:{id:'native-thread'}}:{}};
+ const host=new AgentHost(store,directory,()=>[]);host.createRpc=()=>rpc;
+ try{
+  const source=readFileSync('fixtures/lantern-coast.json','utf8'),id=store.create('Artwork',source).project!.id;
+  store.dispatch(id,{type:'prepareTask',kind:'plan',id:'task',attempt:'attempt',prompt:'Plan a cover'});
+  await host.run(id,'task',()=>{settled++;});
+  const destination=artworkDestinations(source).find(destination=>destination.target==='WORLD_COVER')!,args={destinationId:destination.id,prompt:'A misty harbor'};
+  const result=await rpc.onTool('propose_artwork',args,'artwork');
+  assert.deepEqual(result,{proposalId:result.proposalId,awaitingHumanApproval:true,activeWorldUnchanged:true,generated:false});
+  assert.deepEqual(await rpc.onTool('propose_artwork',args,'artwork'),result);
+  const planned=store.project(id);assert.equal(planned.activeSource,source);assert.equal(planned.artworkProposals!.length,1);assert.equal(planned.tasks[0].toolJournal!.length,1);
+  await assert.rejects(()=>rpc.onTool('world_edit',{action:'replace',path:[],source:'{}'},'hidden'),/unavailable/);
+  assert.equal(store.project(id).tasks[0].state,'FAILED');assert.equal(settled,1);assert.equal(closed,1);
+  await assert.rejects(()=>rpc.onTool('propose_artwork',args,'late'),/Task was stopped/);
+  assert.equal(store.project(id).tasks[0].toolJournal!.length,1);assert.equal(host.running.size,0);
+ }finally{host.cancel(store.list()[0].id as string,'task');store.close();rmSync(directory,{recursive:true,force:true});}
+});
 
 const routing=()=>new CodexRpcError('account/read',-32603,'workspace routing discovery failed');
 test('account recovery is bounded, account-only, and never forces credential refresh',async()=>{
@@ -44,7 +67,7 @@ test('recovered account permits only the explicitly requested turn; failed turns
   assert.deepEqual(calls,['account/read','account/read','thread/start','turn/start']);
  }
 });
-test('wire errors retain method and code; planner artwork dispatch only creates an approval proposal',async()=>{
+test('wire errors retain method and code; late tools after a failed run cannot execute',async()=>{
  const directory=mkdtempSync(path.join(tmpdir(),'voyage-account-wire-')),previous=process.env.VOYAGE_CODEX_BINARY;
  const fixture=`const rl=require('node:readline').createInterface({input:process.stdin});rl.on('line',line=>{const message=JSON.parse(line);if(message.id===undefined)return;const response=message.method==='account/read'?{error:{code:-32603,message:'workspace routing discovery failed'}}:{result:{}};console.log(JSON.stringify({id:message.id,...response}));});`;
  // Rpc invokes "app-server" from each work directory. Node runs that fixture on
@@ -62,17 +85,8 @@ test('wire errors retain method and code; planner artwork dispatch only creates 
   try{await host.run('project','task');}finally{Rpc.prototype.init=initialize;}
   assert.equal(commands.at(-1).state,'FAILED');assert.match(commands.at(-1).error,/one account-only retry/);
   assert.equal(commands.some(command=>command.type==='taskSession'),false);assert.equal(host.running.size,0);
-  const request={destinationId:'cover',prompt:'A misty harbor'};
-  await assert.rejects(taskRpc!.onTool('propose_artwork',request),/Task was stopped/);
-  const createRpc=host.createRpc;
-  const liveRpc:any={onEvent:()=>{},onTool:async()=>{},init:async()=>{},close:()=>{},request:async(method:string)=>method==='account/read'?{account:{type:'chatgpt'}}:method==='thread/start'?{thread:{id:'live-thread'}}:{}};
-  host.createRpc=()=>liveRpc;await host.run('project','task');
-  const result=await liveRpc.onTool('propose_artwork',request);
-  assert.match(result.proposalId,/^[0-9a-f-]{36}$/);assert.deepEqual(result,{proposalId:result.proposalId,awaitingHumanApproval:true,activeWorldUnchanged:true,generated:false});
-  assert.deepEqual(commands.at(-1),{type:'proposeArtwork',id:result.proposalId,taskId:'task',attempt:'attempt',request});
-  task.kind='work';await assert.rejects(liveRpc.onTool('propose_artwork',request),/unavailable for this stage/);
-  task.state='CANCELED';await assert.rejects(liveRpc.onTool('propose_artwork',request),/Task was stopped/);
-  host.createRpc=createRpc;
+  await assert.rejects(taskRpc!.onTool('propose_artwork',{destinationId:'cover',prompt:'A misty harbor'}),/Task was stopped/);
+  assert.equal(commands.some(command=>command.type==='taskTool'),false);
   for(const invalidation of ['cancel','new-attempt','cancel-after-thread']){
    task.kind='plan';task.state='RUNNING';task.attempt='attempt';const calls:string[]=[];let reads=0;const original=Rpc.prototype.request;
    Rpc.prototype.request=async function(method){

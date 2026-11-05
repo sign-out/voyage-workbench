@@ -15,7 +15,7 @@ public class WorkOrderSafetyCoreTest {
    context.setOptimizationLevel(-1);context.setLanguageVersion(Context.VERSION_ES6);context.setClassShutter(name->false);
    Scriptable scope=context.initSafeStandardObjects();
    context.evaluateString(scope,new String(Files.readAllBytes(Paths.get("src/main/assets/core-native.js")),StandardCharsets.UTF_8),"core",1,null);
-   String script="var source='{\"worldBackground\":\"Before\",\"combatSettings\":{\"minCombatXP\":0,\"baseCombatXP\":0,\"abilityCooldown\":0,\"abilityBonus\":0,\"npcDailyHealingAmount\":0,\"damageTypes\":[],\"damageTypePresentation\":{}},\"exact\":9007199254740993}';"
+   String script="var source='{\"heroesVersion\":37,\"worldBackground\":\"Before\",\"combatSettings\":{\"minCombatXP\":0,\"baseCombatXP\":0,\"abilityCooldown\":0,\"abilityBonus\":0,\"npcDailyHealingAmount\":0,\"damageTypes\":[],\"damageTypePresentation\":{}},\"exact\":9007199254740993}';"
     +"var project=VoyageCore.create('world','Safety',source,1);"
     +"project.workOrder={objective:'Legacy unrestricted order',requirements:[],allowedPaths:[]};"
     +"var rejected=false;try{VoyageCore.reduce(project,{type:'prepareTask',id:'legacy',attempt:'one',kind:'work'});}catch(error){rejected=true;}"
@@ -30,7 +30,7 @@ public class WorkOrderSafetyCoreTest {
     +"project=VoyageCore.reduce(project,{type:'prepareTask',id:'valid',attempt:'three',kind:'work',localEditMode:'automatic'});"
     +"project=VoyageCore.reduce(project,{type:'taskRunning',taskId:'valid',attempt:'three'});"
     +"project=VoyageCore.reduce(project,{type:'taskEdit',taskId:'valid',attempt:'three',path:['worldBackground'],source:'\"After\"'});"
-    +"project=VoyageCore.reduce(project,{type:'taskDone',taskId:'valid',attempt:'three',text:'Done'});"
+    +"project=VoyageCore.reduce(project,{type:'taskDone',taskId:'valid',attempt:'three',text:'Done',references:[{section:'heroesVersion',schema:{_type:'literal',value:37}},{section:'worldBackground',schema:'string'}]});"
     +"if(project.tasks[0].state!=='APPLIED'||project.activeSource!==source.replace('Before','After'))throw Error('Valid approved work failed or changed exact numbers');'safe';";
    assertEquals("safe",Context.toString(context.evaluateString(scope,script,"work-order-safety",1,null)));
   }finally {Context.exit();}

@@ -40,8 +40,8 @@ public class RecoveryBoundaryTest {
     }
     void ensureTaskRunning()throws Exception{if(!active)throw new Exception("Task stopped");}
     void requireTool(String name)throws Exception{ensureTaskRunning();if(!"allowed".equals(name))throw new Exception("Tool is unavailable for this stage");}
-    Object tool(String name,JSONObject args)throws Exception{calls++;if(stopDuringTool)active=false;if(args.get("error")!=null)throw new Exception(args.get("error").toString());return args;}
-   """+method(agent," JSONObject correctiveOpportunity(")+"\n"+method(agent," Object executeTool(")+"\n"+method(agent," String completionCorrection(")+"\n"+"""
+    Object tool(String name,JSONObject args,String callId)throws Exception{calls++;if(stopDuringTool)active=false;if(args.get("error")!=null)throw new Exception(args.get("error").toString());return args;}
+   """+method(agent," JSONObject correctiveOpportunity(")+"\n"+method(agent," Object executeTool(String name,Object arguments)throws")+"\n"+method(agent," Object executeTool(String name,Object arguments,String callId)")+"\n"+method(agent," String completionCorrection(")+"\n"+"""
     public static String run()throws Exception {
      AgentRecoveryHarness host=new AgentRecoveryHarness();
      for(int number=1;number<=3;number++){
@@ -88,12 +88,12 @@ public class RecoveryBoundaryTest {
 
  @Test public void everyProviderUsesTheSameNativeBudgetAndPreservesValidationDiagnostics()throws Exception {
   String agent=source("AgentService.java"),providers=source("Providers.java"),host=source("Host.java");
-  assertTrue(agent.contains("Object result=executeTool(p.getString(\"tool\"),p.opt(\"arguments\"))"));
-  assertTrue(providers.contains("agent.executeTool(call.getString(\"name\"),call.opt(\"args\"))"));
+  assertTrue(agent.contains("Object result=executeTool(p.getString(\"tool\"),p.opt(\"arguments\"),p.has(\"callId\")"));
+  assertTrue(providers.contains("agent.executeTool(call.getString(\"name\"),call.opt(\"args\"),\"turn-\"+turn+\":\"+call.getString(\"id\"))"));
   assertFalse(providers.contains("new Recovery("));
   assertEquals(1,agent.split("new Recovery\\(",-1).length-1);
-  assertTrue(method(agent," Object executeTool(").indexOf("requireTool(name)")<method(agent," Object executeTool(").indexOf("try{"));
-  assertTrue(agent.contains("case \"world_validate\":return store.core.doc(\"validate\",source,references());"));
+  assertTrue(method(agent," Object executeTool(String name,Object arguments,String callId)").indexOf("requireTool(name)")<method(agent," Object executeTool(String name,Object arguments,String callId)").indexOf("try{"));
+  assertTrue(agent.contains(".put(\"type\",\"taskTool\").put(\"callId\",callId).put(\"name\",name).put(\"args\",args)"));
   assertTrue(agent.contains("!attempt.equals(current.getString(\"attempt\"))"));
   assertTrue(agent.contains("if(nativeTurns>=80)"));
   assertTrue(providers.contains("turn<80"));

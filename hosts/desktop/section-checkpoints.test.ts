@@ -5,6 +5,34 @@ import os from 'node:os';
 import path from 'node:path';
 import {Store} from './store';
 import {hash} from '../../packages/core/project';
+import {dispatchWorldTool} from './world-tools';
+
+test('journaled section checkpoints commit once, use host storage, and roll back their receipts on storage failure',()=>{
+ const directory=mkdtempSync(path.join(os.tmpdir(),'voyage-journaled-sections-')),store=new Store(directory);
+ const source='{"heroesVersion":37,"title":"Before","description":"Original"}';
+ try{
+  const id=store.create('Journaled sections',source).project!.id;
+  store.dispatch(id,{type:'workOrder',baseHash:hash(source),order:{reviewedScope:true,objective:'Improve title and description',requirements:[],allowedPaths:[['title'],['description']]}});
+  store.dispatch(id,{type:'prepareTask',id:'task',attempt:'attempt',kind:'work'});
+  store.dispatch(id,{type:'taskRunning',taskId:'task',attempt:'attempt'});
+  const call=(callId:string,name:string,args:any)=>dispatchWorldTool(store,id,'task','attempt',callId,name,args);
+  call('edit-title','world_edit',{action:'replace',path:['title'],source:'"After"'});
+  const first=call('checkpoint-title','world_checkpoint',{label:'Title',paths:[['title']]});
+  assert.equal(first.checkpoint.sequence,1);assert.equal(store.history(id).length,1);
+  assert.deepEqual(call('checkpoint-title','world_checkpoint',{label:'Title',paths:[['title']]}),first);
+  assert.equal(store.history(id).length,1);
+  call('edit-description','world_edit',{action:'replace',path:['description'],source:'"Updated"'});
+  const before=store.get(id);
+  store.db.exec("CREATE TRIGGER fail_journaled_section BEFORE INSERT ON checkpoints BEGIN SELECT RAISE(ABORT,'simulated disk failure'); END");
+  assert.throws(()=>call('checkpoint-description','world_checkpoint',{label:'Description',paths:[['description']]}),/simulated disk/);
+  assert.deepEqual(store.get(id),before);assert.equal(store.history(id).length,1);
+  store.db.exec('DROP TRIGGER fail_journaled_section');
+  const next=call('checkpoint-description','world_checkpoint',{label:'Description',paths:[['description']]});
+  assert.equal(next.checkpoint.sequence,2);assert.equal(store.history(id).length,2);
+  assert.equal(store.project(id).activeSource,source);
+  assert.throws(()=>call('checkpoint-title','world_checkpoint',{label:'Changed replay',paths:[['title']]}),/reused/);
+ }finally{store.close();rmSync(directory,{recursive:true,force:true});}
+});
 
 test('section source and receipt persist atomically, ignore supplied baselines, and restore as proposals',()=>{
  const directory=mkdtempSync(path.join(os.tmpdir(),'voyage-sections-'));let store=new Store(directory);

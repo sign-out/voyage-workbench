@@ -14,9 +14,9 @@ public class LocalEditsTest {
    host.store.setting("localEditMode","");assertEquals("automatic",((JSONObject)host.request("localEditingSettings",new JSONObject())).getString("mode"));
    host.request("saveLocalEditingSettings",new JSONObject().put("mode","proposal-only"));assertEquals("proposal-only",host.store.setting("localEditMode"));
    host.request("saveLocalEditingSettings",new JSONObject().put("mode","automatic"));
-   String source="{\"title\":\"Before\",\"exact\":9007199254740993,\"fraction\":1.000}";
+   String source="{\"heroesVersion\":37,\"title\":\"Before\",\"exact\":9007199254740993,\"fraction\":1.000}";
    String id=host.store.create("Automatic native fixture",source).getJSONObject("project").getString("id");
-   host.store.dispatch(id,new JSONObject().put("type","workOrder").put("order",new JSONObject().put("objective","Change title").put("requirements",new JSONArray()).put("allowedPaths",new JSONArray().put(new JSONArray().put("title")))));
+   host.store.dispatch(id,new JSONObject().put("type","workOrder").put("baseHash",host.store.core.hash(source)).put("order",new JSONObject().put("reviewedScope",true).put("objective","Change title").put("requirements",new JSONArray()).put("allowedPaths",new JSONArray().put(new JSONArray().put("title")))));
    host.store.dispatch(id,new JSONObject().put("type","prepareTask").put("id","work").put("attempt","attempt").put("kind","work").put("localEditMode","automatic"));
    host.request("saveLocalEditingSettings",new JSONObject().put("mode","proposal-only"));
    host.store.dispatch(id,new JSONObject().put("type","taskRunning").put("taskId","work").put("attempt","attempt"));
