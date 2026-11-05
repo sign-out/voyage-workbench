@@ -30,6 +30,39 @@ The implementation uses the existing app-server protocol directly, not the
 `@openai/codex-sdk` npm package. CLI/SDK interfaces are not themselves image
 models: actual generation still depends on account/model access and usage limits.
 
+### November 5 CLI image follow-up
+
+The pinned 0.156.1 CLI exposes image creation as `image_gen.imagegen`, not a tool
+named `image_generation`. Dedicated media instructions now name that tool, allow
+its advertised code-mode wrapper for models that require it, and prohibit retries
+or replacement API scripts. The feature flag remains `features.image_generation`;
+it is separate from the tool's name. Inline media notifications are explicitly
+retained so actual `imageGeneration.result` bytes can be captured, rather than
+mistaking assistant prose or a saved-path hint for an artifact.
+
+Connections now discovers Codex models from the CLI instead of offering an
+unverified hardcoded model list. Image-input metadata survives normalization on
+both hosts. Artwork distinguishes the CLI orchestrator from the CLI-managed image
+engine, warns about incompatible saved selections, and offers a metadata-only
+setup check. Preflight accounts for the bundled runtime's ChatGPT sign-in,
+Free-plan exclusion, provider namespace support, and model image-input support;
+provider-level image support alone does not prove those conditions. Custom pins
+are retained, not silently replaced with a different model.
+
+Missing-image responses preserve a bounded model explanation; CLI image usage
+limits retain their reset-time evidence. Both remain failures requiring explicit
+retry. These changes do not introduce direct OpenAI API calls, reuse subscription
+credentials in REST, or claim a metadata check proves paid generation works.
+
+Follow-up validation: 568 application/core/host/rendered-UI tests, 10 compiled
+native harness tests, 26 release contracts, and 48 Android JVM tests pass, along
+with typecheck, production build, Capacitor sync, and Android application and
+instrumentation compilation. An isolated, unauthenticated 0.156.1 CLI probe
+accepts both media-thread configurations without starting a model turn. This
+checks protocol compatibility, not the user's Sol/Terra 6.1 account access or
+live image output. No paid generation, live Voyage write, new installer release,
+or physical-device instrumentation is claimed for this follow-up.
+
 ## Not completed: other on-device SDK runtimes
 
 **Historical image-pass status:** the subsequent explicit request selected fully

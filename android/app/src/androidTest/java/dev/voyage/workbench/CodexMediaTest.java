@@ -24,7 +24,8 @@ public class CodexMediaTest {
   public JSONObject request(String method,JSONObject params)throws Exception{
    if("initialize".equals(method))return new JSONObject();
    if("account/read".equals(method))return new JSONObject().put("account",new JSONObject().put("type","chatgpt"));
-   if("modelProvider/capabilities/read".equals(method))return new JSONObject().put("imageGeneration",capable);
+   if("modelProvider/capabilities/read".equals(method))return new JSONObject().put("imageGeneration",capable).put("namespaceTools",true);
+   if("model/list".equals(method))return new JSONObject().put("data",new JSONArray().put(new JSONObject().put("id","vision").put("isDefault",true).put("inputModalities",new JSONArray().put("text").put("image"))));
    if("thread/start".equals(method)){thread=params;started=true;return new JSONObject().put("thread",new JSONObject().put("id","media"));}
    if("turn/start".equals(method)){input=params;return new JSONObject();}
    throw new Exception("Unexpected request "+method);
@@ -38,6 +39,11 @@ public class CodexMediaTest {
   public void close(){closed=true;}
  }
  private Host host()throws Exception{return new Host(InstrumentationRegistry.getInstrumentation().getTargetContext());}
+ @Test public void modelNormalizationRetainsImageCapabilities()throws Exception{
+  JSONArray models=ModelCatalog.normalize(new JSONArray().put(new JSONObject().put("id","internal").put("model","vision").put("inputModalities",new JSONArray().put("text").put("image")).put("availabilityNux",new JSONObject().put("message","Account access notice"))));
+  assertEquals("vision",models.getJSONObject(0).getString("id"));assertEquals("image",models.getJSONObject(0).getJSONArray("inputModalities").getString(1));
+  assertEquals("Account access notice",models.getJSONObject(0).getJSONObject("availabilityNux").getString("message"));
+ }
  private JSONObject route()throws Exception{return new JSONObject().put("protocol","codex").put("model","");}
  @Test public void generatedImageUsesReferenceAndRestrictedThreadWithoutWorldEdits()throws Exception{
   Host host=host();Fake fake=new Fake();JSONObject result=CodexMedia.run(host,route(),"Draw one cover",new JSONArray().put(new JSONObject().put("id","reference").put("dataUrl",IMAGE)),true,(app,cwd)->fake);

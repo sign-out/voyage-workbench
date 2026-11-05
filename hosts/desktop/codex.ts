@@ -28,6 +28,18 @@ export async function readCodexAccount(rpc:Pick<Rpc,'request'>){
     }
   }
 }
+export async function readCodexModels(rpc:Pick<Rpc,'request'>){
+ const models:any[]=[];let cursor:string|undefined;
+ for(let page=0;page<20;page++){
+  const result=await rpc.request('model/list',{limit:100,...(cursor?{cursor}:{}),includeHidden:false},20000);
+  if(!Array.isArray(result.data))throw new Error('Codex CLI returned an invalid model catalog.');
+  models.push(...result.data);
+  if(!result.nextCursor)return modelCatalog(models);
+  if(result.nextCursor===cursor)throw new Error('Model catalog pagination did not advance.');
+  cursor=result.nextCursor;
+ }
+ throw new Error('Model catalog exceeds the supported page limit.');
+}
 export class Rpc {
   process:ChildProcessWithoutNullStreams;next=1;pending=new Map<number,{method:string;resolve:(r:any)=>void;reject:(e:Error)=>void;timer:ReturnType<typeof setTimeout>}>();
   onEvent:(method:string,params:any)=>void=()=>{};onTool:(tool:string,args:any,callId?:string)=>Promise<any>=async()=>{throw new Error('No tool handler');};
@@ -55,7 +67,7 @@ export class AgentHost {
   running=new Map<string,{rpc:Rpc;task:Task;threadId?:string;stop?:()=>void}>();loginRpc?:Rpc;login:any=null;
   createRpc=(home:string,cwd:string)=>new Rpc(home,cwd);
   constructor(public store:Store,public home:string,public references:()=>any[]){ }
-  async models(){const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();const models:any[]=[];let cursor:string|undefined;for(let page=0;page<20;page++){const result=await rpc.request('model/list',{limit:100,...(cursor?{cursor}:{}),includeHidden:false},20000);models.push(...result.data);if(!result.nextCursor)return modelCatalog(models);if(result.nextCursor===cursor)throw new Error('Model catalog pagination did not advance.');cursor=result.nextCursor;}throw new Error('Model catalog exceeds the supported page limit.');}finally{rpc.close();}}
+  async models(){const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();return await readCodexModels(rpc);}finally{rpc.close();}}
   async auth(){try{const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();const r=await readCodexAccount(rpc);return {available:true,account:r.account,login:this.login};}finally{rpc.close();}}catch(e){return {available:false,error:(e as Error).message,login:this.login};}}
   async loginStart(){this.loginRpc?.close();const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));this.loginRpc=rpc;rpc.onEvent=(method,p)=>{if(method==='account/login/completed'){this.login={...this.login,complete:p.success,error:p.error};rpc.close();}};await rpc.init();this.login=await rpc.request('account/login/start',{type:'chatgptDeviceCode'});return this.login;}
   async logout(){const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();await rpc.request('account/logout');this.login=null;}finally{rpc.close();}return {ok:true};}

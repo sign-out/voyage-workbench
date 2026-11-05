@@ -1,7 +1,7 @@
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {Rpc,readCodexAccount} from './codex';
-import {codexMediaInput,codexMediaThread,codexImageResult} from '../../packages/core/codex-media';
+import {Rpc,readCodexAccount,readCodexModels} from './codex';
+import {codexMediaInput,codexMediaThread,codexMediaPreflight,codexImageResult} from '../../packages/core/codex-media';
 import type {TaskRoute} from '../../packages/core/providers';
 
 export interface MediaRpc {
@@ -13,6 +13,19 @@ export interface MediaRpc {
 export class CodexMedia {
  busy=false;
  constructor(public home:string,public directory:string,public makeRpc:(home:string,cwd:string)=>MediaRpc=(home,cwd)=>new Rpc(home,cwd)){}
+ private async preflight(rpc:MediaRpc,route:TaskRoute,generation:boolean){
+  const account=await readCodexAccount(rpc);
+  if(!account.account)throw new Error('Sign into Codex in Connection first.');
+  const capabilities=generation?await rpc.request('modelProvider/capabilities/read'):{};
+  return codexMediaPreflight(account.account,capabilities,await readCodexModels(rpc),route.model,generation);
+ }
+ async check(route:TaskRoute){
+  if(route.protocol!=='codex')throw new Error('Choose Codex CLI for the artwork connection before checking its image setup.');
+  if(this.busy)throw new Error('A Codex image request is already running. Wait before checking its setup.');
+  this.busy=true;let rpc:MediaRpc|undefined;
+  try{rpc=this.makeRpc(this.home,path.join(this.directory,'media-tasks',randomUUID()));await rpc.init();return await this.preflight(rpc,route,true);}
+  finally{try{rpc?.close();}finally{this.busy=false;}}
+ }
  async run(route:TaskRoute,prompt:string,images:{id:string;dataUrl:string}[],generation:boolean){
   if(this.busy)throw new Error('A Codex image request is already running. Wait before starting another.');
   const input=codexMediaInput(prompt,images),cwd=path.join(this.directory,'media-tasks',randomUUID());
@@ -20,14 +33,12 @@ export class CodexMedia {
   let rpc:MediaRpc|undefined;
   try{
    rpc=this.makeRpc(this.home,cwd);await rpc.init();
-   const account=await readCodexAccount(rpc);
-   if(!account.account)throw new Error('Sign into Codex in Connection first.');
-   if(generation){const capabilities=await rpc.request('modelProvider/capabilities/read');if(!capabilities.imageGeneration)throw new Error('This Codex connection does not expose image generation. Choose a supported image provider; no API fallback was sent.');}
+   await this.preflight(rpc,route,generation);
    const thread=await rpc.request('thread/start',codexMediaThread(cwd,route.model,generation));
    const threadId=thread.thread.id;
    let image:any,text='',settled=false;
    const result=await new Promise<{text:string;image?:ReturnType<typeof codexImageResult>}>((resolve,reject)=>{
-    const finish=(error?:Error)=>{if(settled)return;settled=true;clearTimeout(timer);if(error){reject(error);return;}try{resolve({text,...(generation?{image:codexImageResult(image)}:{})});}catch(reason){reject(reason);}};
+    const finish=(error?:Error)=>{if(settled)return;settled=true;clearTimeout(timer);if(error){reject(error);return;}try{resolve({text,...(generation?{image:codexImageResult(image,text)}:{})});}catch(reason){reject(reason);}};
     const timer=setTimeout(()=>finish(new Error('Codex image request timed out. It may have consumed account usage; retry explicitly.')),10*60*1000);
     rpc!.onEvent=(method,params)=>{
      if(method==='host/exited'){finish(new Error('Codex stopped before returning image results.'));return;}

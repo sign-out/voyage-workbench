@@ -276,7 +276,8 @@
 .connection-catalog-grid button {display:flex;flex-direction:column;align-items:flex-start;text-align:left;white-space:normal;gap:6px;padding:14px;min-width:0}
 .connection-catalog-grid button span {font-size:12px;color:var(--muted);line-height:1.5}
 .provider-page .connection-card {scroll-margin-top:16px}
-.provider-page :is(.provider-fields,.stage-routes,.stage-route,label) {min-width:0}
+.provider-page :is(.provider-fields,.stage-routes,.stage-route,.stage-model-picker,label) {min-width:0}
+.stage-model-picker {overflow-wrap:anywhere}
 .model-picker {display:flex;flex-direction:column;gap:8px;min-width:0}
 .model-picker :is(select,input) {width:100%;min-width:0;max-width:100%;box-sizing:border-box}
 .provider-page :is(input,select,textarea) {min-width:0;max-width:100%;box-sizing:border-box}
