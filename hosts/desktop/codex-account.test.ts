@@ -58,13 +58,14 @@ test('recovered account permits only the explicitly requested turn; failed turns
   const rpc:MediaRpc={init:async()=>{},onEvent:()=>{},close:()=>{},request:async(method)=>{
    calls.push(method);
    if(method==='account/read'){if(++reads===1)throw routing();return {account:{type:'chatgpt'}};}
+   if(method==='model/list')return {data:[{id:'vision',isDefault:true,inputModalities:['text','image']}]};
    if(method==='thread/start')return {thread:{id:'thread'}};
    if(method==='turn/start'){if(failTurn)throw routing();queueMicrotask(()=>rpc.onEvent('turn/completed',{threadId:'thread',turn:{status:'completed',items:[{type:'agentMessage',text:'Inspected'}]}}));return {};}
    throw new Error('Unexpected method '+method);
   }};
   const media=new CodexMedia('/unused','/unused',()=>rpc),run=media.run({id:'codex',name:'Codex',protocol:'codex',model:'',baseUrl:'',stage:'artwork'},'Inspect',[],false);
   if(failTurn)await assert.rejects(run,/workspace routing discovery failed/);else assert.equal((await run).text,'Inspected');
-  assert.deepEqual(calls,['account/read','account/read','thread/start','turn/start']);
+  assert.deepEqual(calls,['account/read','account/read','model/list','thread/start','turn/start']);
  }
 });
 test('wire errors retain method and code; late tools after a failed run cannot execute',async()=>{

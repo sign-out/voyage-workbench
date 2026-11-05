@@ -1,5 +1,5 @@
-import type {Profile} from './providers';
-export interface ModelChoice {id:string;name:string;description?:string;isDefault?:boolean;source?:'fallback'}
+import type {Profile,Stage} from './providers';
+export interface ModelChoice {id:string;name:string;description?:string;isDefault?:boolean;source?:'fallback';inputModalities?:string[];availabilityNux?:{message:string}}
 export function modelCatalog(value:unknown):ModelChoice[]{
  if(!Array.isArray(value))throw new Error('Provider returned an invalid model catalog.');
  const found=new Map<string,ModelChoice>();
@@ -7,9 +7,9 @@ export function modelCatalog(value:unknown):ModelChoice[]{
   if(entry?.hidden===true)continue;
   const id=typeof entry==='string'?entry:entry?.model||entry?.id||entry?.name?.replace(/^models\//,'');
   if(typeof id!=='string'||!id.trim()||id.length>300||found.has(id))continue;
-  found.set(id,{id,name:typeof entry?.displayName==='string'?entry.displayName:typeof entry?.name==='string'&&entry.id?entry.name:id,...(typeof entry?.description==='string'?{description:entry.description.slice(0,1000)}:{}),...(entry?.isDefault===true?{isDefault:true}:{})});
+  found.set(id,{id,name:typeof entry?.displayName==='string'?entry.displayName:typeof entry?.name==='string'&&entry.id?entry.name:id,...(typeof entry?.description==='string'?{description:entry.description.slice(0,1000)}:{}),...(entry?.isDefault===true?{isDefault:true}:{}),...(Array.isArray(entry?.inputModalities)?{inputModalities:entry.inputModalities.filter((value:unknown)=>typeof value==='string'&&value.length<50).slice(0,10)}:{}),...(typeof entry?.availabilityNux?.message==='string'?{availabilityNux:{message:entry.availabilityNux.message.slice(0,1000)}}:{})});
  }
- return [...found.values()];
+ return Array.from(found.values());
 }
 export const claudeModelAliases:ModelChoice[]=[{id:'sonnet',name:'Sonnet (CLI alias)'},{id:'opus',name:'Opus (CLI alias)'},{id:'haiku',name:'Haiku (CLI alias)'}];
 const fallbackModels:Record<'openai'|'claude'|'grok',ModelChoice[]>={
@@ -45,12 +45,19 @@ const fallbackModels:Record<'openai'|'claude'|'grok',ModelChoice[]>={
  ]
 };
 export function modelChoicesForProfile(profile:Profile,discovered:ModelChoice[]=[]):ModelChoice[]{
+ if(profile.protocol==='codex')return discovered;
  const aliasesOnly=profile.protocol==='claude-code'&&discovered.length>0&&discovered.every(model=>claudeModelAliases.some(alias=>alias.id===model.id));
  if(discovered.length&&!aliasesOnly)return discovered;
  let hostname='';
  try{hostname=new URL(profile.baseUrl).hostname;}catch{}
- const family=profile.protocol==='codex'?'openai':profile.protocol==='claude-code'||profile.protocol==='anthropic'?'claude':
+ const family=profile.protocol==='claude-code'||profile.protocol==='anthropic'?'claude':
   ['openai','openai-responses'].includes(profile.protocol)?hostname==='api.x.ai'?'grok':hostname==='api.openai.com'?'openai':undefined:undefined;
  const suggestions=family?fallbackModels[family].map(model=>({...model,source:'fallback' as const})):[];
  return profile.protocol==='claude-code'?[...suggestions,...(aliasesOnly?discovered:claudeModelAliases)]:suggestions;
+}
+export function modelChoicesForStage(profile:Profile|undefined,discovered:ModelChoice[]|undefined,stage:Stage):ModelChoice[]{
+ if(!profile)return [];
+ if(stage==='artwork'&&profile.protocol!=='codex')return [];
+ const choices=modelChoicesForProfile(profile,discovered);
+ return stage==='artwork'?choices.filter(model=>!model.inputModalities||model.inputModalities.includes('image')):choices;
 }
