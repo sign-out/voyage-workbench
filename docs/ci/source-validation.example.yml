@@ -1,0 +1,41 @@
+name: Source validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      XDG_CONFIG_HOME: ${{ runner.temp }}/voyage-config
+      XDG_CACHE_HOME: ${{ runner.temp }}/voyage-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Shared, host, provider, and rendered UI tests
+        run: xvfb-run -a npx tsx --test --test-concurrency=1 packages/core/*.test.ts hosts/desktop/*.test.ts hosts/provider/*.test.ts apps/workbench/src/*.test.tsx
+      - run: npm run test:harness
+      - run: npm run test:release
+      - run: node --test tools/voyage-api-authenticated.test.cjs
+      - run: python3 -m unittest discover -s tests

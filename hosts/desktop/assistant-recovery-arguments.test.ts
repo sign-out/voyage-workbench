@@ -13,8 +13,8 @@ test('malformed tool JSON gets a bounded corrective turn without reexecuting pre
   try{
    const project=service.store.create('Arguments','{"title":"Original"}').project!;
    service.store.dispatch(project.id,{type:'prepareTask',id:'task',attempt:'one',kind:'plan',assistantRecovery:{enabled,maxAttempts:1},route:{id:'fixture',name:'Fixture',protocol:'openai',baseUrl:'https://example.invalid/v1',model:'fixture'}});
-   const tool=service.providers.tool.bind(service.providers);
-   service.providers.tool=(projectId,taskId,name,args)=>{if(args?.path?.[0]==='title')reads++;return tool(projectId,taskId,name,args);};
+   const execute=service.providers.executeTool.bind(service.providers);
+   service.providers.executeTool=async(projectId,taskId,attempt,callId,name,args)=>{if(args?.path?.[0]==='title')reads++;return execute(projectId,taskId,attempt,callId,name,args);};
    globalThis.fetch=async(_url,options)=>{
     const body=JSON.parse(String(options?.body));requests++;
     if(requests===1)return new Response(JSON.stringify({choices:[{message:{tool_calls:[{id:'valid',function:{name:'world_read',arguments:'{"path":["title"]}'}},{id:'bad',function:{name:'world_read',arguments:'{"path":['}}]}}]}));

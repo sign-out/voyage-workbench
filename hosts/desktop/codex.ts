@@ -1,3 +1,4 @@
+import {dispatchWorldTool} from './world-tools';
 import {spawn,type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {existsSync,mkdirSync,writeFileSync} from 'node:fs';
@@ -8,7 +9,8 @@ import {AssistantRecoveryBudget} from '../../packages/core/assistant-recovery';
 import {assistantCompletionValidation} from '../../packages/core/project';
 import * as doc from '../../packages/core/document';
 import {modelCatalog} from '../../packages/core/model-catalog';
-import {readBuilderNotes,type Task} from '../../packages/core/project';
+import {type Task} from '../../packages/core/project';
+import {taskToolCapabilities} from '../../packages/core/agent-orchestration';
 const disabled=['shell_tool','unified_exec','plugins','remote_plugin','apps','hooks','browser_use','browser_use_external','computer_use','view_image','multi_agent','multi_agent_v2','workspace_dependencies','skill_search','skill_mcp_dependency_install','image_generation','memories','goals','sleep_tool','recommended_plugins','code_mode','code_mode_only'];
 export function binary(){const custom=process.env.VOYAGE_CODEX_BINARY;if(custom&&existsSync(custom))return custom;
   const dirs=(process.env.PATH||'').split(path.delimiter).concat([path.join(os.homedir(),'.local','bin'),path.join(os.homedir(),'.t3','tools','codex','0.156.1','bin'),path.join(process.env.APPDATA||'','npm')]);
@@ -28,7 +30,7 @@ export async function readCodexAccount(rpc:Pick<Rpc,'request'>){
 }
 export class Rpc {
   process:ChildProcessWithoutNullStreams;next=1;pending=new Map<number,{method:string;resolve:(r:any)=>void;reject:(e:Error)=>void;timer:ReturnType<typeof setTimeout>}>();
-  onEvent:(method:string,params:any)=>void=()=>{};onTool:(tool:string,args:any)=>Promise<any>=async()=>{throw new Error('No tool handler');};
+  onEvent:(method:string,params:any)=>void=()=>{};onTool:(tool:string,args:any,callId?:string)=>Promise<any>=async()=>{throw new Error('No tool handler');};
   constructor(home:string,cwd:string){mkdirSync(home,{recursive:true});mkdirSync(cwd,{recursive:true});
     writeFileSync(path.join(home,'config.toml'),'approval_policy="never"\nsandbox_mode="read-only"\nweb_search="disabled"\nproject_doc_max_bytes=0\n[features]\n'+disabled.map(k=>k+'=false').join('\n')+'\ncode_mode_host=true\n');
     const env:NodeJS.ProcessEnv={};for(const key of ['HOME','USERPROFILE','PATH','LANG','SYSTEMROOT','WINDIR','COMSPEC','APPDATA','LOCALAPPDATA','TEMP','TMP'])if(process.env[key])env[key]=process.env[key];env.CODEX_HOME=home;
@@ -42,26 +44,28 @@ export class Rpc {
   send(m:any){if(!this.process.stdin.writable)throw new Error('Codex is not running.');this.process.stdin.write(JSON.stringify(m)+'\n');}
   request(method:string,params:any={},timeout=60000):Promise<any>{const id=this.next++;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(new Error(method+' timed out.'));},timeout);this.pending.set(id,{method,resolve,reject,timer});try{this.send({id,method,params});}catch(e){clearTimeout(timer);this.pending.delete(id);reject(e);}});}
   async init(){const r=await this.request('initialize',{clientInfo:{name:'voyage_workbench',version:'0.1.0'},capabilities:{experimentalApi:true}});this.send({method:'initialized',params:{}});return r;}
-  private async answer(m:any){try{if(m.method!=='item/tool/call')throw new Error('This host does not allow '+m.method);const result=await this.onTool(m.params.tool,m.params.arguments);this.send({id:m.id,result:{success:true,contentItems:[{type:'inputText',text:JSON.stringify(result)}]}});}catch(e){try{this.send({id:m.id,result:{success:false,contentItems:[{type:'inputText',text:String((e as Error).message)}]}});}catch{}}}
+  private async answer(m:any){try{if(m.method!=='item/tool/call')throw new Error('This host does not allow '+m.method);const result=await this.onTool(m.params.tool,m.params.arguments,String(m.params.callId??m.id));this.send({id:m.id,result:{success:true,contentItems:[{type:'inputText',text:JSON.stringify(result)}]}});}catch(e){try{this.send({id:m.id,result:{success:false,contentItems:[{type:'inputText',text:String((e as Error).message)}]}});}catch{}}}
   close(){this.process.kill();setTimeout(()=>{if(this.process.exitCode===null)this.process.kill('SIGKILL');},1500).unref();}
 }
 export {toolDefinitions} from '../../packages/core/providers';
 import {toolDefinitions,agentSystem} from '../../packages/core/providers';
 import {assistantPacket} from '../../packages/core/assistant-context';
 export class AgentHost {
-  running=new Map<string,{rpc:Rpc;task:Task;threadId?:string}>();loginRpc?:Rpc;login:any=null;
+  executeTool=async(projectId:string,taskId:string,attempt:string,callId:string,name:string,args:any)=>dispatchWorldTool(this.store,projectId,taskId,attempt,callId,name,args);
+  running=new Map<string,{rpc:Rpc;task:Task;threadId?:string;stop?:()=>void}>();loginRpc?:Rpc;login:any=null;
   createRpc=(home:string,cwd:string)=>new Rpc(home,cwd);
   constructor(public store:Store,public home:string,public references:()=>any[]){ }
   async models(){const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();const models:any[]=[];let cursor:string|undefined;for(let page=0;page<20;page++){const result=await rpc.request('model/list',{limit:100,...(cursor?{cursor}:{}),includeHidden:false},20000);models.push(...result.data);if(!result.nextCursor)return modelCatalog(models);if(result.nextCursor===cursor)throw new Error('Model catalog pagination did not advance.');cursor=result.nextCursor;}throw new Error('Model catalog exceeds the supported page limit.');}finally{rpc.close();}}
   async auth(){try{const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();const r=await readCodexAccount(rpc);return {available:true,account:r.account,login:this.login};}finally{rpc.close();}}catch(e){return {available:false,error:(e as Error).message,login:this.login};}}
   async loginStart(){this.loginRpc?.close();const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));this.loginRpc=rpc;rpc.onEvent=(method,p)=>{if(method==='account/login/completed'){this.login={...this.login,complete:p.success,error:p.error};rpc.close();}};await rpc.init();this.login=await rpc.request('account/login/start',{type:'chatgptDeviceCode'});return this.login;}
   async logout(){const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();await rpc.request('account/logout');this.login=null;}finally{rpc.close();}return {ok:true};}
-  async run(projectId:string,taskId:string){const project=this.store.project(projectId),task=project.tasks.find(t=>t.id===taskId);if(!task)throw new Error('Task not found.');
-    const cwd=path.join(this.store.directory,'tasks',task.id);mkdirSync(cwd,{recursive:true});writeFileSync(path.join(cwd,'world.json'),task.baseSource);
-    let rpc:Rpc;try{rpc=this.createRpc(this.home,cwd);}catch(e){this.store.dispatch(projectId,{type:'taskStop',taskId,state:'FAILED',error:(e as Error).message});return;}
+  async run(projectId:string,taskId:string,onSettled:()=>void=()=>{}){const project=this.store.project(projectId),task=project.tasks.find(t=>t.id===taskId);if(!task)throw new Error('Task not found.');
+    const cwd=path.join(this.store.directory,'tasks',task.id);mkdirSync(cwd,{recursive:true});writeFileSync(path.join(cwd,'world.json'),task.kind==='work'?task.stagedSource:task.baseSource);
+    let rpc:Rpc;try{rpc=this.createRpc(this.home,cwd);}catch(e){this.store.dispatch(projectId,{type:'taskStop',taskId,state:'FAILED',error:(e as Error).message});onSettled();return;}
     this.running.set(task.id,{rpc,task});this.store.dispatch(projectId,{type:'taskRunning',taskId,attempt:task.attempt});let reply='',lastFlush=0,done=false;
     const recovery=new AssistantRecoveryBudget(task.assistantRecovery);
-    const finish=(error?:string)=>{if(done)return;done=true;clearTimeout(timeout);try{this.store.dispatch(projectId,error?{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error}:{type:'taskDone',taskId,attempt:task.attempt,text:reply});}catch(failure){try{this.store.dispatch(projectId,{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error:(failure as Error).message});}catch{}}if(this.running.get(task.id)?.rpc===rpc)this.running.delete(task.id);rpc.close();};
+    const finish=(error?:string)=>{if(done)return;done=true;clearTimeout(timeout);try{this.store.dispatch(projectId,error?{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error}:{type:'taskDone',taskId,attempt:task.attempt,text:reply});}catch(failure){try{this.store.dispatch(projectId,{type:'taskStop',taskId,attempt:task.attempt,state:'FAILED',error:(failure as Error).message});}catch{}}if(this.running.get(task.id)?.rpc===rpc)this.running.delete(task.id);rpc.close();onSettled();};
+    this.running.get(task.id)!.stop=()=>finish('Stopped by user.');
     const ensureRunning=()=>{const current=this.store.project(projectId).tasks.find(current=>current.id===taskId);if(done||this.running.get(taskId)?.rpc!==rpc||current?.state!=='RUNNING'||current.attempt!==task.attempt)throw new Error('Task was stopped.');};
     const timeout=setTimeout(()=>finish('The task exceeded its 30-minute limit. Restart explicitly if needed.'),30*60*1000);timeout.unref();
     rpc.onEvent=(method,p)=>{
@@ -77,32 +81,15 @@ export class AgentHost {
       }
       if(method==='host/exited'){clearTimeout(timeout);finish('Codex stopped before finishing.');}
     };
-    const executeTool=(name:string,args:any)=>{const current=this.store.project(projectId).tasks.find(t=>t.id===task.id)!;const source=current.kind==='work'?current.stagedSource:current.baseSource;
-      if(name==='world_read'){const s=doc.read(source,args.path);if(s.length>100000)throw new Error('This section is too large for a single read. Use world_children and read smaller paths.');return {source:s};}
-      if(name==='world_children'){const result=doc.describe(source,args.path);return {kind:result.kind,children:result.children.slice(0,500),truncated:result.children.length>500};}
-      if(name==='world_search')return doc.search(source,args.query);
-      if(name==='world_validate')return doc.validate(source,this.references());
-      if(name==='world_schema')return this.references().filter(r=>r.section===args.section).slice(0,3);
-      if(name==='world_notes')return readBuilderNotes(current.builderNotes||[],args.path,args.offset||0);
-      if(name==='record_note_plan'){this.store.dispatch(projectId,{type:'recordNotePlan',taskId,attempt:task.attempt,noteId:args.noteId,state:args.state,explanation:args.explanation,proposalId:args.proposalId});return {recorded:true,awaitingHumanReview:true};}
-      if(name==='propose_artwork'){if(current.kind!=='plan')throw new Error('Tool is unavailable for this stage');const id=randomUUID();this.store.dispatch(projectId,{type:'proposeArtwork',id,taskId,attempt:task.attempt,request:args});return {proposalId:id,awaitingHumanApproval:true,activeWorldUnchanged:true,generated:false};}
-      if(name==='propose_work_order'){const id=randomUUID();this.store.dispatch(projectId,{type:'proposeWorkOrder',id,taskId,attempt:task.attempt,order:args});return {proposalId:id,awaitingHumanApproval:true,activeWorldUnchanged:true};}
-      if(name==='world_checkpoint'){const saved=this.store.dispatch(projectId,{type:'taskSectionCheckpoint',taskId,attempt:task.attempt,label:args.label,paths:args.paths});return {checkpoint:saved.project!.tasks.find(value=>value.id===taskId)!.sectionCheckpoints!.at(-1),staged:true,activeWorldUnchanged:true,localOnly:true};}
-      if(name==='world_edit'){this.store.dispatch(projectId,{...args,type:'taskEdit',taskId,attempt:task.attempt});return {staged:true,activeWorldUnchanged:true};}
-      throw new Error('Unknown tool');
-    };
-    rpc.onTool=async(name,args)=>{
-      try{ensureRunning();if(!toolDefinitions(task.kind==='work',!!task.grading,!!task.fieldFill).some(tool=>tool.name===name))throw new Error('Tool is unavailable for this stage.');return recovery.tool(()=>{if(!args||typeof args!=='object'||Array.isArray(args))throw new Error('Tool arguments must be an object. Correct the tool argument JSON.');return executeTool(name,args);},ensureRunning);}
-      catch(error){finish((error as Error).message);throw error;}
-    };
+    rpc.onTool=async(name,args,callId)=>{try{ensureRunning();if(!toolDefinitions(task.kind==='work',taskToolCapabilities(task)).some(tool=>tool.name===name))throw new Error('Tool is unavailable for this stage.');return await recovery.toolAsync(()=>this.executeTool(projectId,taskId,task.attempt,callId||randomUUID(),name,args),ensureRunning);}catch(error){finish((error as Error).message);throw error;}};
     try{await rpc.init();const account=await readCodexAccount(rpc);if(!account.account)throw new Error('Sign into Codex in Connection first.');
       ensureRunning();
-      const result=await rpc.request('thread/start',{cwd,...(task.route?.model?{model:task.route.model}:{}),approvalPolicy:'never',sandbox:'read-only',dynamicTools:toolDefinitions(task.kind==='work',!!task.grading,!!task.fieldFill),environments:[],developerInstructions:agentSystem(task.kind==='work',!!task.grading,!!task.fieldFill)});
+      const result=await rpc.request('thread/start',{cwd,...(task.route?.model?{model:task.route.model}:{}),approvalPolicy:'never',sandbox:'read-only',dynamicTools:toolDefinitions(task.kind==='work',taskToolCapabilities(task)),environments:[],developerInstructions:agentSystem(task.kind==='work',taskToolCapabilities(task))});
       ensureRunning();
       this.running.get(task.id)!.threadId=result.thread.id;this.store.dispatch(projectId,{type:'taskSession',taskId,attempt:task.attempt,sessionId:result.thread.id});
       const packet=assistantPacket(project,task);
       await rpc.request('turn/start',{threadId:result.thread.id,input:[{type:'text',text:JSON.stringify(packet),text_elements:[]}]});
     }catch(e){clearTimeout(timeout);finish((e as Error).message);}
   }
-  cancel(projectId:string,taskId:string){this.store.dispatch(projectId,{type:'taskStop',taskId,state:'CANCELED'});const entry=this.running.get(taskId);entry?.rpc.close();this.running.delete(taskId);return this.store.get(projectId);}
+  cancel(projectId:string,taskId:string){this.store.dispatch(projectId,{type:'taskStop',taskId,state:'CANCELED'});const entry=this.running.get(taskId);if(entry?.stop)entry.stop();else entry?.rpc.close();this.running.delete(taskId);return this.store.get(projectId);}
 }

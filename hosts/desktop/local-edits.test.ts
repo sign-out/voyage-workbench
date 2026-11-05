@@ -16,7 +16,7 @@ test('local mode persists and automatic application atomically retains a restora
   await service.request('saveLocalEditingSettings',{mode:'proposal-only'});service.store.close();service=new Service(directory,resources,secrets);
   assert.deepEqual(await service.request('localEditingSettings'),{mode:'proposal-only'});
   await service.request('saveLocalEditingSettings',{mode:'automatic'});
-  const source='{"title":"Before","exact":9007199254740993,"fraction":1.000}',project=(await service.request('create',{name:'Local fixture',source})).project;
+  const source='{"heroesVersion":37,"title":"Before","exact":9007199254740993,"fraction":1.000}',project=(await service.request('create',{name:'Local fixture',source})).project;
   service.store.dispatch(project.id,{type:'workOrder',baseHash:hash(source),order:{reviewedScope:true,objective:'Change title',requirements:[],allowedPaths:[['title']]}});
   service.store.dispatch(project.id,{type:'prepareTask',id:'work',attempt:'attempt',kind:'work',localEditMode:(await service.request('localEditingSettings')).mode});
   await service.request('saveLocalEditingSettings',{mode:'proposal-only'});

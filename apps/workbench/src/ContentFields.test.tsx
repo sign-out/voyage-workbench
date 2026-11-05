@@ -15,3 +15,9 @@ test('older cached references without categories still group known world fields'
 test('grouped content uses friendly names, real counts and advanced disclosures without inventing state',()=>{
  const markup=renderToStaticMarkup(<ContentFields fields={fields} references={references} path={['initialGameState']} grouped onNavigate={()=>{}}/>);assert.equal((markup.match(/<button/g)||[]).length,fields.length);assert.ok(markup.includes('customExtension'));assert.ok(markup.includes('AI Instructions'));assert.ok(markup.includes('content-advanced'));assert.ok(!markup.includes('shortId'));assert.ok(!markup.includes('loadStatus'));
 });
+test('current trigger registries stay in Mechanics alongside legacy triggers',()=>{
+ const entries=['triggers','triggerDefinitions','questTriggers'].map(key=>({key,kind:'object',preview:'Object'}));
+ const groups=groupContentFields(entries,[]);
+ assert.deepEqual(groups.find(group=>group.id==='mechanics')?.fields,entries);
+ assert.equal(groups.flatMap(group=>group.fields).length,3);
+});

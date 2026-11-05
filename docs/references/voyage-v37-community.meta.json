@@ -1,0 +1,11 @@
+{
+  "source": "https://api.unofficial.voyage/schema.json",
+  "retrieved": "2026-10-29",
+  "sha256": "7a100f7c5f77709380179156b455fa8e229f17f039616ea5abe66ad95d744352",
+  "bundledSha256": "87bd05ef32e3272c90c3e46a28f1c6efec4e2996f9b10d7632b95c0190db054e",
+  "bundledTransformation": "A trailing newline was added; the upstream fingerprint is retained separately.",
+  "heroesVersion": 37,
+  "authority": "Community codec; not official Latitude certification",
+  "environment": "unverified",
+  "license": "Upstream license not independently established; retained as compatibility reference evidence"
+}

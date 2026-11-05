@@ -1,0 +1,10 @@
+{
+  "source": "https://api-alpha.aidungeon.com/creator/v1/openapi.json",
+  "retrieved": "2026-10-29",
+  "version": "1.3.0-preview",
+  "environment": "alpha",
+  "sha256": "2e002a431201777891dcd8eff01129613b14940e4c1d77af4a7b13efe8258340",
+  "bundledSha256": "fec24661deb4308f352ab8cb72d69d44298caa8f7c1004b41141e7c2a225e1ca",
+  "bundledTransformation": "A trailing newline was added; the upstream fingerprint is retained separately.",
+  "scope": "Read-only contract snapshot; not a successful authenticated operation or Production contract"
+}

@@ -34,4 +34,8 @@ export class AssistantRecoveryBudget {
   ensureRunning();
   try{return execute();}catch(error){ensureRunning();return this.correctiveOpportunity(error);}
  }
+ async toolAsync<T>(execute:()=>Promise<T>,ensureRunning:()=>void):Promise<T|ReturnType<AssistantRecoveryBudget['correctiveOpportunity']>> {
+  ensureRunning();
+  try{return await execute();}catch(error){ensureRunning();return this.correctiveOpportunity(error);}
+ }
 }

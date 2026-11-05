@@ -32,3 +32,11 @@ test('mod analysis separates identical authored values, conflicts, ancestor conf
  assert.equal(report.findings.filter(finding=>finding.kind==='conflict').length,2);assert.equal(report.findings.filter(finding=>finding.kind==='shared').length,1);assert.deepEqual(report.unknown,['unknown','pinned']);
  assert.equal(studio.modConflicts([{id:'a',source:'{"x":1}'},{id:'b',source:'{"x":2}'}],0).truncated,true);
 });
+test('named NPC portrait slots are assignable without touching other portraits or unknown fields',()=>{
+ const source='{"heroesVersion":37,"npcs":{"guide":{"name":"Guide","portraitUrl":"https://example.com/base.png","portraits":{"happy":"https://example.com/happy.png","angry":"https://example.com/angry.png"},"portraitHistory":["https://example.com/prior.png"]}},"custom":{"portraits":{"unrelated":"text"}},"exact":9007199254740993}';
+ const portraits=studio.assetSlots(source).filter(slot=>slot.path.includes('portraits'));
+ assert.equal(portraits.length,2);
+ assert.ok(portraits.every(slot=>slot.target==='NPC_PORTRAIT'));
+ const changed=studio.assignAsset(source,['npcs','guide','portraits','happy'],'https://example.com/new.png');
+ assert.equal(changed,source.replace('https://example.com/happy.png','https://example.com/new.png'));
+});

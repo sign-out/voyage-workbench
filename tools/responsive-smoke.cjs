@@ -525,7 +525,7 @@ app.whenReady().then(async()=>{
   const created=await service.request('create',{name:'A world title long enough to exceed any phone header width',source});
   window=new BrowserWindow({show:false,frame:false,width:412,height:915,webPreferences:{preload:path.resolve('build/desktop/preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
   window.webContents.session.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_details,callback)=>callback({cancel:true}));
-  const localMethods=new Set(['projects','project','references','featureGet','featureSet','assetKeys','command','history','localEditingSettings','providerSettings','connection','deleteProject','remoteWorlds','downloadWorld']);
+  const localMethods=new Set(['projects','project','references','featureGet','featureSet','assetKeys','command','history','localEditingSettings','providerSettings','orchestrationCapabilities','connection','deleteProject','remoteWorlds','downloadWorld']);
   ipcMain.handle('workbench',async(event,method,payload)=>{
    if(event.sender!==window.webContents)throw Error('Unknown test frame');
    if(method==='auth')return {available:false};
