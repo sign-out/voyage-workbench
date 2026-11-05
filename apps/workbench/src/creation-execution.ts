@@ -3,6 +3,7 @@ import {creationArtifactSpecs,creationBriefHash,creationWorldHash,creationInputH
 import {creationMapSvg,mapRegion} from '../../../packages/core/creation-map';
 import {resolveRoute,type TaskRoute} from '../../../packages/core/providers';
 import {inspectMedia} from '../../../packages/core/asset-library';
+import {creationArchiveLimits} from '../../../packages/core/creation-transfer';
 import {request} from './host';
 import {saveAsset,feature,prepareUpload,sendUpload,type Asset,type Upload} from './features-api';
 
@@ -87,12 +88,17 @@ export async function uploadCreationAssets(projectId:string,onProject:(result:an
 export async function creationPackage(project:Project,references:any[]){
  if(!project.creation)throw new Error('No creation workspace.');
  const {creationReadiness}=await import('../../../packages/core/world-creation');
- const assets:Asset[]=[];
- for(const spec of creationArtifactSpecs(project.creation,project.activeSource,hash)){
+ const specs=creationArtifactSpecs(project.creation,project.activeSource,hash);
+ if(specs.length>creationArchiveLimits.artifacts)throw new Error('A creation package supports at most 612 current map/artwork artifacts. Export the world separately.');
+ const workspace={...project.creation,jobs:project.creation.jobs.filter(job=>specs.some(spec=>spec.id===job.id))};
+ const assets:Asset[]=[];let artworkBytes=0;
+ for(const spec of specs){
   const job=project.creation.jobs.find(job=>job.id===spec.id&&job.specHash===spec.specHash&&job.state==='ready');
-  if(job?.assetId){const asset=await feature<Asset|null>('asset:'+job.assetId,null);if(!asset||inspectMedia(asset.dataUrl).sha256!==job.assetHash)throw new Error('A required local asset is missing or changed.');assets.push(asset);}
+  if(job?.assetId){const asset=await feature<Asset|null>('asset:'+job.assetId,null);if(!asset||inspectMedia(asset.dataUrl).sha256!==job.assetHash)throw new Error('A required local asset is missing or changed.');if(!assets.some(saved=>saved.id===asset.id)){artworkBytes+=inspectMedia(asset.dataUrl).bytes;if(artworkBytes>creationArchiveLimits.artworkBytes)throw new Error('A restorable package supports at most 96 MiB of unique artwork. Export the world separately or reduce image sizes.');assets.push(asset);}}
  }
- return {format:'voyage-workbench-creation-package/v1',worldSource:project.activeSource,creationDetails:creationDetails(project),creation:project.creation,assets,readiness:creationReadiness(project.creation,project.activeSource,references,hash),inputHash:creationInputHash(project.creation,project.activeSource,hash),notice:'Workbench archive, not a Voyage world import. Export world JSON separately. No publication has been performed.'};
+ const bundle={format:'voyage-workbench-creation-package/v1',worldSource:project.activeSource,creationDetails:creationDetails(project),creation:workspace,assets,readiness:creationReadiness(workspace,project.activeSource,references,hash),inputHash:creationInputHash(workspace,project.activeSource,hash),notice:'Workbench archive of current creation artifacts, not a Voyage world import or a full job-history backup. Export world JSON separately. No publication has been performed.'};
+ if(new Blob([JSON.stringify(bundle)]).size>creationArchiveLimits.archiveBytes)throw new Error('A restorable creation package must be at most 128 MiB. Export the world separately or reduce image sizes.');
+ return bundle;
 }
 export function creationDetails(project:Project){
  const workspace=project.creation;if(!workspace)throw new Error('No creation workspace.');

@@ -5,7 +5,8 @@ import {referenceVersion} from './references';
 import {artworkDestinations,imageTargets} from './artwork';
 import {mapInspect,publicationInspect} from './features';
 import {worldCreationRubric as rubric} from './world-creation-rubric';
-import {validateCreationMaps,mapBlueprintIssues,mapRegion,type CreationMap} from './creation-map';
+import {validateCreationMaps,mapBlueprintIssues,mapRegion,creationMapRendererVersion,type CreationMap} from './creation-map';
+import type {CreationVisualResult,CreationVisualFinding} from './creation-visual';
 
 export {rubric as worldCreationRubric};
 export interface SourceDocument {id:string;name:string;text:string;hash:string}
@@ -23,7 +24,9 @@ export interface CreationWorkspace {
  version:1;id:string;revision:number;brief:string;documents:SourceDocument[];rubricHash:string;profile:string;
  design:CreationDesign;publication:CreationPublication;maps:CreationMap[];artwork:CreationArtwork[];jobs:CreationJob[];
  sourceReads?:{documentId:string;hash:string;ranges:number[][]}[];
- review?:CreationReview;visualReview?:{inputHash:string;report:string;created:number};
+ review?:CreationReview;visualReview?:{inputHash:string;report:string;created:number;outcome?:'pass'|'fail'|'uncertain'};
+ visualProgress?:{inputHash:string;routeHash:string;reports:CreationVisualResult[];issues?:CreationVisualFinding[]};
+ visualResolution?:{inputHash:string;findingsHash:string;reason:string;created:number};
 }
 type Hasher=(source:string)=>string;
 function text(value:unknown,label:string,maximum=12000,empty=false):asserts value is string {if(typeof value!=='string'||value.length>maximum||!empty&&!value.trim())throw new Error(`${label} must be ${empty?'0':'1'}–${maximum} characters.`);}
@@ -36,7 +39,7 @@ export function createWorkspace(input:any,hasher:Hasher):CreationWorkspace {
  const documents=input.documents.map((document:any)=>{
   fields(document,['id','name','text']);identifier(document.id);text(document.name,'Document name',200);text(document.text,'Source document',1024*1024);total+=document.text.length;
   if(ids.includes(document.id))throw new Error('Document IDs must be unique.');ids.push(document.id);
-  if(['rubric','help','summary','design','publication','maps','artwork','review','visualReview','readiness','destinations'].includes(document.id))throw new Error('Choose a source document ID that is not a reserved section name.');
+  if(['rubric','help','summary','design','publication','maps','artwork','review','visualReview','visualProgress','visualResolution','readiness','destinations'].includes(document.id))throw new Error('Choose a source document ID that is not a reserved section name.');
   return {...document,hash:hasher(document.text)};
  });
  if(!documents.length||total>4*1024*1024)throw new Error('Attach source documents, up to four million characters total.');
@@ -68,6 +71,10 @@ export function creationWorldHash(source:string,hasher:Hasher){
 export function creationDestinations(source:string){const base=doc.statePath(doc.parse(source));return artworkDestinations(source).map(destination=>({...destination,assignmentId:destination.id,id:destination.target==='WORLD_COVER'?'creation-cover':JSON.stringify(destination.path?.slice(base.length))}));}
 export function creationInputHash(workspace:CreationWorkspace,source:string,hasher:Hasher){return hasher(JSON.stringify({sourceHash:hasher(source),briefHash:creationBriefHash(workspace,hasher),design:workspace.design,publication:workspace.publication,maps:workspace.maps,artwork:workspace.artwork,jobs:workspace.jobs.filter(job=>job.state==='ready').map(({id,specHash,assetId,assetHash,url})=>({id,specHash,assetId,assetHash,url}))}));}
 export function creationVisualHash(workspace:CreationWorkspace,source:string,hasher:Hasher){return hasher(JSON.stringify({worldHash:creationWorldHash(source,hasher),briefHash:creationBriefHash(workspace,hasher),design:creativeDesign(workspace.design),publication:workspace.publication,maps:workspace.maps,artwork:workspace.artwork,assets:workspace.jobs.filter(job=>job.state==='ready').map(({id,specHash,assetId,assetHash})=>({id,specHash,assetId,assetHash}))}));}
+function visualFindingsAt(workspace:CreationWorkspace,inputHash:string){const progress=workspace.visualProgress;return progress?.inputHash===inputHash?(progress.issues||progress.reports.flatMap(report=>report.assets)).filter(asset=>asset.status!=='pass'):[];}
+export function creationVisualFindings(workspace:CreationWorkspace,source:string,hasher:Hasher){return visualFindingsAt(workspace,creationVisualHash(workspace,source,hasher));}
+export function creationVisualFindingsHash(workspace:CreationWorkspace,source:string,hasher:Hasher){const inputHash=creationVisualHash(workspace,source,hasher);return hasher(JSON.stringify({inputHash,findings:visualFindingsAt(workspace,inputHash)}));}
+export function creationUnresolvedVisualFindings(workspace:CreationWorkspace,source:string,hasher:Hasher){const inputHash=creationVisualHash(workspace,source,hasher),findings=visualFindingsAt(workspace,inputHash);return workspace.visualResolution?.findingsHash===hasher(JSON.stringify({inputHash,findings}))?[]:findings;}
 export function creationArtifactSpecs(workspace:CreationWorkspace,source:string,hasher:Hasher){
  const destinations=creationDestinations(source),worldHash=creationWorldHash(source,hasher),world=mapInspect(source);
  const common=hasher(JSON.stringify({worldHash,design:creativeDesign(workspace.design),briefHash:creationBriefHash(workspace,hasher)}));
@@ -75,7 +82,7 @@ export function creationArtifactSpecs(workspace:CreationWorkspace,source:string,
  for(const region of world.regions){
   let blueprint:any;try{blueprint=mapRegion(source,workspace.maps,region.key,world);}catch{continue;}
   const destination=destinations.find(item=>item.target==='REGION_MAP_IMAGE'&&item.id===JSON.stringify(['regions',region.key,'images','map','imageUrl']));if(!destination)continue;
-  const id='map:'+region.key;specs.push({id,kind:'map',label:region.name,destinationId:destination.id,prompt:'Deterministic map crop from the shared geographic blueprint.',regionKey:region.key,specHash:hasher(JSON.stringify({common,blueprint,id,renderer:'cartography-v1'}))});
+  const id='map:'+region.key;specs.push({id,kind:'map',label:region.name,destinationId:destination.id,prompt:'Deterministic atlas crop from the shared geographic blueprint.',regionKey:region.key,specHash:hasher(JSON.stringify({common,blueprint,id,renderer:creationMapRendererVersion}))});
  }
  for(const artwork of workspace.artwork){
   const destination=destinations.find(item=>item.id===artwork.destinationId&&item.target&&item.target!=='REGION_MAP_IMAGE');
@@ -90,8 +97,8 @@ export function readCreation(workspace:CreationWorkspace,section:string,offset:n
  let value:string;
  if(section==='rubric')value=JSON.stringify(rubric,null,2);
  else if(section==='help')value=creationInstructions;
- else if(section==='summary')value=JSON.stringify({id:workspace.id,revision:workspace.revision,brief:workspace.brief,profile:workspace.profile,rubricHash:workspace.rubricHash,briefHash:creationBriefHash(workspace,hasher),documents:workspace.documents.map(({id,name,text,hash})=>({id,name,characters:text.length,lines:text.split('\n').length,hash})),sections:['design','publication','maps','artwork','review'],jobs:workspace.jobs},null,2);
- else if(['design','publication','maps','artwork','review','visualReview'].includes(section))value=JSON.stringify((workspace as any)[section]??null,null,2);
+ else if(section==='summary')value=JSON.stringify({id:workspace.id,revision:workspace.revision,brief:workspace.brief,profile:workspace.profile,rubricHash:workspace.rubricHash,briefHash:creationBriefHash(workspace,hasher),documents:workspace.documents.map(({id,name,text,hash})=>({id,name,characters:text.length,lines:text.split('\n').length,hash})),sections:['design','publication','maps','artwork','review','visualReview','visualProgress','visualResolution'],jobs:workspace.jobs},null,2);
+ else if(['design','publication','maps','artwork','review','visualReview','visualProgress','visualResolution'].includes(section))value=JSON.stringify((workspace as any)[section]??null,null,2);
  else {const document=workspace.documents.find(document=>document.id===section);if(!document)throw new Error('Unknown creation section or document ID.');value=document.text;}
  return {section,offset,text:value.slice(offset,offset+12000),nextOffset:offset+12000<value.length?offset+12000:null,totalCharacters:value.length,untrusted:true};
 }
@@ -171,6 +178,8 @@ export function creationReadiness(workspace:CreationWorkspace,source:string,refe
  if(!fresh)blockers.push('Rubric review is missing or belongs to an older package.');
  if(review&&(review.criteria.length!==rubric.criteria.length||review.criteria.some(criterion=>criterion.grade==='NE')))blockers.push('Required criterion evidence is incomplete; unknown grades cannot be certified away.');
  const visualFresh=workspace.visualReview?.inputHash===creationVisualHash(workspace,source,hasher);
+ const unresolvedVisuals=creationUnresolvedVisualFindings(workspace,source,hasher);
+ if(unresolvedVisuals.length||visualFresh&&workspace.visualReview?.outcome&&workspace.visualReview.outcome!=='pass')blockers.push('Whole-package visual review has unresolved defects or uncertainties. Inspect and repair the findings before reassessment, or explicitly document a human resolution.');
  const versionNode=world.children.find(child=>child.key==='heroesVersion')?.node;
  const version=versionNode?.kind==='number'?Number(source.slice(versionNode.start,versionNode.end)):null;
  const gates=rubric.gates.map((gate:any)=>{const assessment=review?.gates.find(entry=>entry.id===gate.id);let status=assessment?.status||'NE';if(issues.some(issue=>issue.gate===gate.id))status='FAIL';if(['G9','G20'].includes(gate.id)&&!visualFresh)status='NE';if(gate.id==='G1'&&(version===null||referenceVersion(doc.selectReferences(source,references))!==version))status='NE';return {id:gate.id,name:gate.name,status,reason:assessment?.reason||'No current assessment.',defects:issues.filter(issue=>issue.gate===gate.id)};});
@@ -215,5 +224,7 @@ design = {tone,artDirection,timeframe,assumptions:string[],decisions:[{id,kind:c
 Build substantial world content: characters/appearances/relationships, factions, geography/culture, lore, coherent mechanics with declared owners, useful player creation, actionable starts, repeatable activity and meaningful choices. Populate NPC visualDescription, location/area visualTags and area descriptions. No unchosen player speech, intent or feelings. Counts alone are not quality.
 publication = {title,blurb,description,tags:string[]}; truthful blurb with player role, hook and first feasible action; no unsupported official/IP/mechanics claims.
 maps = [{id,realm,west,north,columns,rows,background,land,water,forest,ink,features:[{id,kind,points:[[x,y]],label?,locationKey?}]}]. Six-digit hex palette. Each map covers an existing realm grid, north at top; 1–8 rows/columns. Feature points use global cell coordinates from [0,0] top-left to [columns,rows] bottom-right. Kinds land/water/forest are polygons (>=3 points); road/river polylines (>=2); mountain uses peak points; settlement/landmark uses first point. Include all regions and authored locations. Region cell = [region.x-west,north-region.y]. Location point = [cell.x+.5+location.x/regionSize,cell.y+.5-location.y/regionSize]. Describe faithful terrain, coasts, waterways, routes and landmarks, not just dots. These become actual continuous, deterministically rendered region maps. They are not diffusion art or 8K object-rendering claims.
+Map style defaults to atlas with continuous terrain patterns, shaded relief and route styling. Optional style:schematic selects the simpler renderer; neither renderer invents unplanned geography. Textures stay anchored in global coordinates.
 artwork = [{id,destinationId,prompt}]. Call creation_read(destinations) for supported IDs, including creation-cover. Include cover and portraits/scenes required by the agreed scope. Maps are automatic from blueprints, never separate invented region image prompts. Use consistent source-faithful art direction, not interchangeable generic fantasy.
+Before grading visual gates, read creation_read(visualReview), page creation_read(visualProgress) for actual per-image findings, and inspect any creation_read(visualResolution). Failed or uncertain model findings remain blocking until changed inputs are inspected or a human explicitly resolves them with a current documented rationale. These tools cannot start model vision calls, erase negative findings or authorize paid retries. Repair concrete content/map/artwork-brief defects; leave missing regeneration or review as explicit follow-up obligations.
 review = {criteria:[{id,grade:0..4|NE,reason,paths:JSONPath[]}],gates:[{id,status:PASS|FAIL|NE|PASS_WITH_DOCUMENTED_EXCEPTION,reason,paths:JSONPath[]}],coverDiagnostic:number|null,titleDiagnostic:number|null,blurbDiagnostic:number|null}. Read the full supplied rubric. Use the precommitted path; no score gaming. Missing necessary evidence is NE, not zero or waived. G20 exception applies only when documented. Real image inspection is required; text-only claims cannot clear G9/G20. Explain claimed feature ownership and limits. Static readiness is not official acceptance, playtesting or predicted popularity. Use creation_read(readiness) for host-owned blockers and repair them; never declare completed while artifacts are missing.`;

@@ -27,3 +27,9 @@ test('locked scene features preserve both their geometry and coordinate frame',(
  const result=workspace();result.maps[0].features[2].locked=true;const maps=structuredClone(result.maps);maps[0].features[2].points=[[.6,.5]];assert.throws(()=>updateCreation(result,'maps',JSON.stringify(maps),source,hash,1),/locked/);
  const frame=structuredClone(result.maps);frame[0].west=1;assert.throws(()=>updateCreation(result,'maps',JSON.stringify(frame),source,hash,1),/locked/);
 });
+test('atlas styling adds globally anchored terrain texture, road casing and relief without remote resources',()=>{
+ const map=structuredClone(blueprint);map.features.push({id:'woods',kind:'forest',points:[[.1,.1],[.3,.1],[.3,.3]]},{id:'peaks',kind:'mountain',points:[[.2,.2]]},{id:'trail',kind:'road',points:[[0,.4],[1,.4]]});
+ const atlas=creationMapSvg(map),schematic=creationMapSvg({...map,style:'schematic'});
+ assert.match(atlas,/patternUnits="userSpaceOnUse"/);assert.match(atlas,/stroke-dasharray/);assert.match(atlas,/fill-opacity=".23"/);assert.doesNotMatch(atlas,/<image|<script|<filter|https:|href=/);
+ assert.doesNotMatch(schematic,/<pattern|stroke-dasharray/);assert.ok(atlas.length>schematic.length);assert.throws(()=>validateCreationMaps([{...map,style:'external-renderer'}]),/styling/);
+});

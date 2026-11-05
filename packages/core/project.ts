@@ -8,12 +8,14 @@ import workValidationReferences from './work-validation.json';
 import * as fieldFill from './field-fill';
 import {fieldFillSnapshot,fieldFillPrompt,parseFieldFill,type FieldFillSnapshot} from './field-fill';
 import * as doc from './document';
+import {prepareCreationTransfer} from './creation-transfer';
 import {executeWorldTool,canonicalToolRequest,validateToolArguments,completionEvidence,toolJournalLimits,type CompletionEvidence} from './agent-tools';
 import {editorSnapshot,type EditorSnapshot} from './assistant-context';
 import * as assistantContext from './assistant-context';
 import * as providers from './providers';
 import * as covers from './covers';
 import * as codexMedia from './codex-media';
+import * as creationVisual from './creation-visual';
 import * as harness from './harness';
 import * as orchestration from './agent-orchestration';
 import {taskPolicy,groupJournal,resumeIssue,orchestrationLimits,type TaskPolicy,type ResumeReceipt,type Delegation} from './agent-orchestration';
@@ -154,6 +156,10 @@ export function reduce(project:Project,c:any):Project {
       if(p.creation&&c.expectedRevision!==p.creation.revision)throw new Error('The creation workspace changed. Reload it.');
       p.creation=creation.createWorkspace(c.workspace,hash);break;
     }
+    case 'restoreCreation':{
+      requireCurrent(p,c.baseHash);if(p.creation||p.draft||p.status&&p.status!=='active'||p.tasks.length||p.remote.worldId)throw new Error('Restore into a fresh, unlinked local project.');
+      p.creation=prepareCreationTransfer(c.workspace,p.activeSource,hash,c.creationId);p.workOrder={objective:'',requirements:[],allowedPaths:[]};break;
+    }
     case 'approveCreation':{
       requireCurrent(p,c.baseHash);if(!p.creation||p.draft||p.status&&p.status!=='active'||p.tasks.some(entry=>['PREPARED','RUNNING'].includes(entry.state))||p.creation.jobs.some(job=>job.state==='running'))throw new Error('Open an active creation workspace without pending edits or running work.');
       if(c.expectedRevision!==p.creation.revision)throw new Error('The creation brief changed. Review it again.');
@@ -191,10 +197,28 @@ export function reduce(project:Project,c:any):Project {
       const assigned=assignArtwork(p.activeSource,'{}',destination.assignmentId,c.url);if(assigned.source!==p.activeSource)active(assigned.source);
       p.creation={...workspace,revision:workspace.revision+1,review:undefined,jobs:workspace.jobs.map(entry=>entry===job?{...entry,url:c.url}:entry)};break;
     }
+    case 'creationVisualBatch':{
+      const workspace=p.creation;if(!workspace||c.inputHash!==creation.creationVisualHash(workspace,p.activeSource,hash)||typeof c.routeHash!=='string'||!/^[a-f0-9]{64}$/.test(c.routeHash)||!Array.isArray(c.ids)||!c.ids.length||c.ids.length>creationVisual.creationVisualBatchSize)throw new Error('Visual batch must describe current package artifacts and its approved route.');
+      const specs=creation.creationArtifactSpecs(workspace,p.activeSource,hash);
+      if(new Set(c.ids).size!==c.ids.length||c.ids.some((id:string)=>!specs.some(spec=>spec.id===id&&workspace.jobs.some(job=>job.id===id&&job.specHash===spec.specHash&&job.state==='ready'))))throw new Error('Visual batch contains unknown or unfinished artifacts.');
+      const report=creationVisual.creationVisualReviewResult('codex',{text:JSON.stringify(c.report)},c.ids),previous=workspace.visualProgress;
+      const reports=previous&&previous.inputHash===c.inputHash&&previous.routeHash===c.routeHash?previous.reports:[];
+      if(reports.some(report=>report.assets.some(asset=>c.ids.includes(asset.id))))throw new Error('These artifacts already have saved visual findings.');
+      const issues=creation.creationVisualFindings(workspace,p.activeSource,hash).slice();
+      for(const finding of report.assets.filter(asset=>asset.status!=='pass')){const index=issues.findIndex(issue=>issue.id===finding.id);if(index<0)issues.push(finding);else issues[index]=finding;}
+      issues.sort((left,right)=>left.id<right.id?-1:left.id>right.id?1:0);
+      p.creation={...workspace,revision:workspace.revision+1,review:undefined,visualReview:workspace.visualReview?.outcome&&workspace.visualReview.outcome!=='pass'?workspace.visualReview:undefined,visualProgress:{inputHash:c.inputHash,routeHash:c.routeHash,reports:reports.concat(report),issues}};break;
+    }
     case 'creationVisualReview':{
       const workspace=p.creation;if(!workspace||c.scope!=='all-required-assets'||c.inputHash!==creation.creationVisualHash(workspace,p.activeSource,hash)||typeof c.report!=='string'||!c.report.trim()||c.report.length>100000)throw new Error('Visual review must describe the current complete asset set.');
       const specs=creation.creationArtifactSpecs(workspace,p.activeSource,hash);if(!specs.length||specs.some(spec=>!workspace.jobs.some(job=>job.id===spec.id&&job.specHash===spec.specHash&&job.state==='ready'&&job.assetId&&job.assetHash)))throw new Error('Finish every required map and artwork job before recording full visual inspection.');
-      p.creation={...workspace,revision:workspace.revision+1,visualReview:{inputHash:c.inputHash,report:c.report,created:p.updated}};break;
+      if(c.outcome!==undefined&&!['pass','fail','uncertain'].includes(c.outcome))throw new Error('Record a supported visual review outcome.');
+      let visualResolution=workspace.visualResolution;
+      if(c.resolveFindings===true){if(c.findingsHash!==creation.creationVisualFindingsHash(workspace,p.activeSource,hash)||typeof c.resolution!=='string'||c.resolution.trim().length<20||c.resolution.length>8000)throw new Error('Explicit visual resolution needs current findings and a meaningful documented rationale.');visualResolution={inputHash:c.inputHash,findingsHash:c.findingsHash,reason:c.resolution.trim(),created:p.updated};}
+      else if(c.resolution!==undefined||c.findingsHash!==undefined)throw new Error('Explicitly acknowledge resolution of the current visual findings.');
+      const unresolved=creation.creationUnresolvedVisualFindings({...workspace,visualResolution},p.activeSource,hash),inherited=c.resolveFindings===true?'pass':workspace.visualReview&&workspace.visualReview.inputHash===c.inputHash?workspace.visualReview.outcome:undefined;
+      const outcomes=[c.outcome,inherited,...unresolved.map(issue=>issue.status)],outcome=outcomes.includes('fail')?'fail':outcomes.includes('uncertain')?'uncertain':c.outcome||inherited;
+      p.creation={...workspace,revision:workspace.revision+1,review:undefined,visualResolution,visualReview:{inputHash:c.inputHash,report:c.report,created:p.updated,...(outcome?{outcome}:{})}};break;
     }
     case 'creationSetLock':{
       requireCurrent(p,c.baseHash);const workspace=p.creation;if(!workspace||c.expectedRevision!==workspace.revision||typeof c.locked!=='boolean'||p.tasks.some(entry=>['PREPARED','RUNNING'].includes(entry.state))||workspace.jobs.some(job=>job.state==='running'))throw new Error('Review current idle creation inputs before changing locks.');
@@ -409,4 +433,4 @@ export function remotePayload(source:string,baseline?:string,worldId?:string):st
   if(!object.children.some(c=>c.key==='initialGameState'))throw new Error('Remote saves require the downloaded world envelope.');
   return '{"world":{'+fields.filter(k=>object.children.some(c=>c.key===k)).map(k=>JSON.stringify(k)+':'+doc.read(source,prefix.concat(k))).join(',')+'}}';
 }
-export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode,projectSummary,assistantRecoverySettings,assistantCompletionValidation,resumeGuidance} as any)[r.operation]||(fieldFill as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(harness as any)[r.operation]||(orchestration as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}
+export function nativeRequest(json:string):string {const r=JSON.parse(json);if(r.operation==='create')return JSON.stringify(create(r.id,r.name,r.source,r.now));if(r.operation==='reduce')return JSON.stringify(reduce(r.project,r.command));if(r.operation==='hash')return JSON.stringify(hash(r.source));if(r.operation==='payload')return JSON.stringify(remotePayload(r.source,r.baseline,r.worldId));const method=({readBuilderNotes,localEditMode,projectSummary,assistantRecoverySettings,assistantCompletionValidation,resumeGuidance} as any)[r.operation]||(fieldFill as any)[r.operation]||(assistantContext as any)[r.operation]||(authoring as any)[r.operation]||(doc as any)[r.operation]||(providers as any)[r.operation]||(voyage as any)[r.operation]||(covers as any)[r.operation]||(codexMedia as any)[r.operation]||(creationVisual as any)[r.operation]||(harness as any)[r.operation]||(orchestration as any)[r.operation];if(typeof method!=='function')throw new Error('Unknown document operation');return JSON.stringify(method.apply(null,r.args||[]));}

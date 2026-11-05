@@ -41,12 +41,12 @@ async function publicationJournal(projectId:string){
 const publicationQueues=new Map<string,Promise<unknown>>();
 export async function createWorldCopy(project:Project){
  const current=(await request('project',{id:project.id})).project as Project;
- if(current.draft||current.tasks.some(task=>['PREPARED','RUNNING'].includes(task.state)))throw new Error('Apply/discard the draft and finish the agent before creating a new world.');
+ if(current.draft||current.tasks.some(task=>['PREPARED','RUNNING'].includes(task.state))||current.creation?.jobs.some(job=>job.state==='running'))throw new Error('Apply/discard the draft and finish the agent and artwork jobs before creating a new world.');
  if(current.remote.operations.some(operation=>['PREPARED','SEND_ATTEMPTED','UNKNOWN'].includes(operation.state)))throw new Error('Reconcile the pending save before creating a new world.');
  const publication=await feature<PublicationOperation[]>('publication:'+current.id,[]);
  if(publication.some(pendingPublication))throw new Error('Resolve the recorded publication request before creating another world. Use the publication journal.');
  const details=await feature<string>('creation-details:'+current.id,'{}');
- const copy=await request('create',{name:current.name+' — new world',source:current.activeSource});
+ const copy=current.creation?await (await import('./creation-transfer')).copyCreationWorkspace(current):await request('create',{name:current.name+' — new world',source:current.activeSource});
  await saveFeature('creation-details:'+copy.project.id,details);
  return copy;
 }

@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {hash,type Project} from '../../../packages/core/project';
-import {creationArtifactSpecs,creationReadiness,creationVisualHash,worldCreationRubric} from '../../../packages/core/world-creation';
+import {creationArtifactSpecs,creationReadiness,creationVisualHash,creationVisualFindingsHash,creationUnresolvedVisualFindings,worldCreationRubric} from '../../../packages/core/world-creation';
 import {creationMapSvg} from '../../../packages/core/creation-map';
 import {defaultCoverGrader} from '../../../packages/core/covers';
 import {resolveRoute,type TaskRoute} from '../../../packages/core/providers';
@@ -13,20 +13,31 @@ import {coverEvidence} from './cover-evidence';
 import {AgentRunOptions,type RunOptions} from './AgentRunOptions';
 import {generateCreationAssets,renderCreationRegion,uploadCreationAssets,creationPackage,creationDetails} from './creation-execution';
 import {saveAsset} from './features-api';
+import {restoreCreationArchive} from './creation-transfer';
+import {creationVisualRoute,creationVisualBatchSize} from '../../../packages/core/creation-visual';
+import {reviewCreationVisuals,creationVisualPreview} from './creation-visual';
 
-type Props={project:Project;references:any[];command:(command:any)=>Promise<any>;receive:(result:any)=>void;onReview:()=>void;onPublish:()=>void;onNew:()=>Promise<void>;disabled?:boolean};
-export function WorldCreationWorkspace({project,references,command,receive,onReview,onPublish,onNew,disabled=false}:Props){
+type Props={project:Project;references:any[];command:(command:any)=>Promise<any>;receive:(result:any)=>void;onReview:()=>void;onPublish:()=>void;onNew:()=>Promise<void>;onRestore?:(project:Project)=>Promise<void>;disabled?:boolean};
+export function WorldCreationWorkspace({project,references,command,receive,onReview,onPublish,onNew,onRestore,disabled=false}:Props){
  const workspace=project.creation;
  const [brief,setBrief]=useState(workspace?.brief||''),[documents,setDocuments]=useState<{id:string;name:string;text:string}[]>(workspace?.documents.map(({id,name,text})=>({id,name,text}))||[]),[profile,setProfile]=useState(workspace?.profile||'universal');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[allowImages,setAllowImages]=useState(false),[maximumImages,setMaximumImages]=useState(8),[route,setRoute]=useState<TaskRoute>(),[visualReport,setVisualReport]=useState('');
  const [runOptions,setRunOptions]=useState<RunOptions>({autoResume:false,allowDelegation:false}),[capabilities,setCapabilities]=useState({checkpointResume:false,delegation:false});
  const [assets,setAssets]=useState<Record<string,Asset>>({});
  const [allVisualsInspected,setAllVisualsInspected]=useState(false);
+ const [resolveVisualFindings,setResolveVisualFindings]=useState(false),[visualResolution,setVisualResolution]=useState('');
+ const [reviewRunning,setReviewRunning]=useState(false),stopVisualReview=useRef(false);
  const automatic=useRef<{taskId:string;route?:TaskRoute;maximumImages:number}|null>(null),assetBusy=useRef(false),stopAssets=useRef(false),mounted=useRef(true),latest=useRef(project);latest.current=project;
  const running=project.tasks.find(task=>!task.parentTaskId&&['PREPARED','RUNNING'].includes(task.state));
  const report=useMemo(()=>{if(!workspace)return null;try{return creationReadiness(workspace,project.activeSource,references,hash);}catch(reason){return {error:(reason as Error).message};}},[workspace,project.activeSource,references]);
  const specs=useMemo(()=>{if(!workspace)return [];try{return creationArtifactSpecs(workspace,project.activeSource,hash);}catch{return [];}},[workspace,project.activeSource]);
  const readiness=report&&'state' in report?report:null;
+ const visualInputHash=workspace?creationVisualHash(workspace,project.activeSource,hash):'';
+ const visualFindingsHash=workspace?creationVisualFindingsHash(workspace,project.activeSource,hash):'';
+ const unresolvedVisuals=workspace?creationUnresolvedVisualFindings(workspace,project.activeSource,hash):[];
+ const hasVisualIssues=unresolvedVisuals.length>0||workspace?.visualReview?.inputHash===visualInputHash&&!!workspace.visualReview.outcome&&workspace.visualReview.outcome!=='pass';
+ useEffect(()=>{setAllVisualsInspected(false);},[visualInputHash]);
+ useEffect(()=>{setResolveVisualFindings(false);setVisualResolution('');},[visualFindingsHash]);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;stopAssets.current=true;automatic.current=null;};},[]);
  useEffect(()=>{let active=true;void request('providerSettings').then(result=>{try{if(active)setRoute(resolveRoute(result.settings,'artwork'));}catch{if(active)setRoute(undefined);}}).catch(()=>{});void request('orchestrationCapabilities').then(result=>{if(active)setCapabilities(result);}).catch(()=>{});return()=>{active=false;};},[project.id,busy]);
  useEffect(()=>{let active=true;const ids=workspace?.jobs.filter(job=>job.state==='ready'&&job.assetId).map(job=>job.assetId!).slice(0,80)||[];void Promise.all(ids.map(id=>feature<Asset|null>('asset:'+id,null))).then(items=>{if(active)setAssets(Object.fromEntries(items.filter((item):item is Asset=>!!item).map(item=>[item.id,item])));}).catch(reason=>{if(active)setError((reason as Error).message);});return()=>{active=false;};},[workspace?.jobs]);
@@ -74,6 +85,17 @@ export function WorldCreationWorkspace({project,references,command,receive,onRev
   if(base.length){let source=current.activeSource;const parent=base.slice(0,-1);for(const [key,value] of Object.entries(details))source=put(source,parent,key,JSON.stringify(value));await command({type:'stage',id:crypto.randomUUID(),title:'Creation publication details',source,kind:'publication'});onReview();}
   else {const key='creation-details:'+current.id,previous=await request('featureGet',{key});let merged=previous?JSON.parse(JSON.parse(previous)):{};merged={...merged,...details};await request('featureSet',{key,expected:previous,value:JSON.stringify(JSON.stringify(merged))});onPublish();}
  }
+ async function reviewAllVisuals(){
+  const current=latest.current;if(!current.creation)return;
+  const selected=creationVisualRoute((await request('providerSettings')).settings),inputHash=creationVisualHash(current.creation,current.activeSource,hash),progress=current.creation.visualProgress;
+  const saved=progress?.inputHash===inputHash&&progress.routeHash===hash(JSON.stringify(selected))?new Set(progress.reports.flatMap(report=>report.assets.map(asset=>asset.id))):new Set<string>();
+  const count=creationArtifactSpecs(current.creation,current.activeSource,hash).filter(spec=>!saved.has(spec.id)).length,maximumBatches=Math.ceil(count/creationVisualBatchSize);
+  if(!window.confirm(`Send saved image previews, artifact briefs and bounded research excerpts to ${selected.name} / ${selected.model||'provider default'} for up to ${maximumBatches} visual-review requests? Charges or account usage may apply. ${saved.size} saved findings can be reused. Lost responses are not retried automatically. Nothing will be generated, uploaded to Voyage or published.`))return;
+  stopVisualReview.current=false;setReviewRunning(true);
+  try{const result=await reviewCreationVisuals(current.id,{route:selected,maximumBatches},{invoke:request,loadAsset:id=>feature<Asset|null>('asset:'+id,null),preview:creationVisualPreview,onProject:receive,shouldStop:()=>stopVisualReview.current||!mounted.current});
+   if(mounted.current){setVisualReport(result.report);setAllVisualsInspected(false);setNotice(`Whole-package model visual review: ${result.outcome}. ${result.requests} new requests. Findings are saved; rubric review and any required repairs remain separate.`);}
+  }finally{if(mounted.current)setReviewRunning(false);}
+ }
  async function gradeCover(){
   if(!workspace)return;const cover=specs.find(spec=>spec.destinationId==='creation-cover');
   const job=workspace.jobs.find(job=>job.id===cover?.id&&job.specHash===cover?.specHash&&job.state==='ready'),asset=job?.assetId?await feature<Asset|null>('asset:'+job.assetId,null):null;if(!asset)throw new Error('Generate and save a cover first.');
@@ -85,6 +107,7 @@ export function WorldCreationWorkspace({project,references,command,receive,onRev
  return <div className="content-page world-creation">
   <div className="page-heading"><div><div className="eyebrow">SOURCE → FINISHED WORLD</div><h2>Create a Voyage world</h2><p>Research, playable content, planned and rendered maps, artwork, cover and publishing copy in one saved workspace.</p></div><button disabled={busy||!!running} onClick={()=>void act(onNew)}>New V37 creation project</button></div>
   <p>Construction is local and reviewable. Generation may incur charges. Uploading, creating remote drafts and publishing remain separate approvals. New V37 seeds come from the bundled community schema—not a migration of your existing world.</p>
+  <label>Restore an exported creation package into a new local project<input type="file" accept=".json,application/json" disabled={!!locked} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)void act(async()=>{if(file.size>128*1024*1024)throw new Error('Creation archives must be at most 128 MiB.');if(!window.confirm('Restore source documents, world, plans and local artwork into a new unlinked project? Prior approvals and reviews will not be trusted. Nothing will be sent to Voyage.'))return;const restored=await restoreCreationArchive(await file.text());if(onRestore)await onRestore(restored.project);else setNotice('Restored creation project '+restored.project.name+'. Open it from the project list; source coverage and reviews require fresh assessment.');});}}/></label>
   {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   <section className="connection-card"><h3>1. Creative request and source material</h3>
    <label>What world should the assistant create?<textarea rows={5} value={brief} disabled={!!locked} onChange={event=>setBrief(event.target.value)} placeholder="Create a Voyage world based on … Faithfully adapt the attached research, including characters, geography, culture, tone and appearance. Plan and create its maps, cover and publishing blurb."/></label>
@@ -112,10 +135,14 @@ export function WorldCreationWorkspace({project,references,command,receive,onRev
     <details><summary>Canon, assumptions and source evidence</summary><pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(workspace.design,null,2)}</pre></details>
     <details><summary>Lock approved canon decisions</summary>{workspace.design.decisions.map(decision=><label key={decision.id}><input type="checkbox" checked={decision.locked===true} disabled={!!locked} onChange={event=>void act(async()=>{await command({type:'creationSetLock',baseHash:hash(project.activeSource),expectedRevision:workspace.revision,id:decision.id,locked:event.target.checked});})}/>{decision.kind}: {decision.text}</label>)}</details>
     <details><summary>Lock approved map features</summary>{workspace.maps.map(map=><fieldset key={map.id}><legend>{map.id}</legend>{map.features.map(feature=><label key={feature.id}><input type="checkbox" checked={feature.locked===true} disabled={!!locked} onChange={event=>void act(async()=>{await command({type:'creationSetLock',baseHash:hash(project.activeSource),expectedRevision:workspace.revision,mapId:map.id,id:feature.id,locked:event.target.checked});})}/>{feature.label||feature.id} · {feature.kind}</label>)}</fieldset>)}</details>
-    <button disabled={!!locked} onClick={()=>void act(gradeCover)}>Run paid cover diagnostic</button>
+    <div className="button-row"><button disabled={!!locked||!specs.length||!readiness||readiness.pending.length>0} onClick={()=>void act(reviewAllVisuals)}>Review every image with AI</button><button disabled={!!locked} onClick={()=>void act(gradeCover)}>Run paid cover diagnostic</button></div>
+    <p>AI visual review is opt-in and can consume provider/account usage. It inspects up to four 768px image previews per request, saves completed findings, and preserves defects and uncertainties. It does not generate replacements or certify canon fidelity.</p>
+    {reviewRunning&&<button onClick={()=>{stopVisualReview.current=true;setNotice('Stopping after the current review batch. Completed findings will be preserved.');}}>Stop after current visual-review batch</button>}
+    {workspace.visualProgress&&<details><summary>Saved per-image visual findings and repair instructions</summary><pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(workspace.visualProgress,null,2)}</pre></details>}
     <label>Whole-package visual inspection report<textarea rows={5} value={visualReport} onChange={event=>setVisualReport(event.target.value)} placeholder="Inspect the actual cover, maps and other required artwork. Record source fidelity, geographic consistency, visual identity, cropping defects and remaining uncertainties. A cover-only diagnostic is insufficient."/></label>
     <label><input type="checkbox" checked={allVisualsInspected} onChange={event=>setAllVisualsInspected(event.target.checked)}/>I inspected the actual cover, every required map and the other required images—not only their prompts or a cover diagnostic.</label>
-    <button disabled={!!locked||!allVisualsInspected||!visualReport.trim()||!readiness||readiness.pending.length>0} onClick={()=>void act(async()=>{await command({type:'creationVisualReview',scope:'all-required-assets',inputHash:creationVisualHash(workspace,project.activeSource,hash),report:visualReport});setAllVisualsInspected(false);setNotice('Visual evidence recorded for this exact package. Rubric gates still require an evidence-backed assessment.');})}>Record my visual inspection</button>
+    {hasVisualIssues&&<fieldset><legend>Unresolved visual findings remain blocking</legend><p>Recording another report does not clear model findings. Repair the actual inputs and reassess, or explicitly document why the current findings are resolved or do not apply.</p><label><input type="checkbox" checked={resolveVisualFindings} onChange={event=>setResolveVisualFindings(event.target.checked)}/>I explicitly resolve the current visual findings after inspecting the actual images.</label><label>Resolution rationale (at least 20 characters)<textarea rows={3} value={visualResolution} disabled={!resolveVisualFindings} onChange={event=>setVisualResolution(event.target.value)}/></label></fieldset>}
+    <button disabled={!!locked||!allVisualsInspected||!visualReport.trim()||!readiness||readiness.pending.length>0||resolveVisualFindings&&visualResolution.trim().length<20} onClick={()=>void act(async()=>{await command({type:'creationVisualReview',scope:'all-required-assets',inputHash:creationVisualHash(workspace,project.activeSource,hash),report:visualReport,...(hasVisualIssues&&resolveVisualFindings?{resolveFindings:true,findingsHash:visualFindingsHash,resolution:visualResolution}:{})});setAllVisualsInspected(false);setResolveVisualFindings(false);setNotice('Visual evidence recorded for this exact package. Unresolved findings remain blocking unless explicitly resolved; rubric gates require a fresh evidence-backed assessment.');})}>Record my visual inspection</button>
     <button disabled={!!locked} onClick={()=>void act(()=>build(true))}>Have assistant review and repair rubric defects</button>
     {readiness&&<><p><strong>{readiness.state}</strong> · source-only rubric interval {readiness.score.lower}–{readiness.score.upper}/100</p><ul>{readiness.blockers.slice(0,80).map((message,index)=><li key={index}>{message}</li>)}</ul><details><summary>Gate evidence, entity census and exact defects</summary><pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(readiness,null,2)}</pre></details></>}
     {report&&'error' in report&&<p role="alert">Assessment unavailable: {report.error}</p>}

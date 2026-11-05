@@ -55,10 +55,15 @@ geometry therefore continues across region edges. Labels are off by default.
 Checks identify uncovered/overlapping regions, missing location markers, wrong
 realm relationships, and disagreement with Voyage's region-local coordinates.
 
-This first renderer is **schematic cartography**, not a promise of illustrated
-8K maps, building meshes, individual-tree edits, elevation simulation, road-network
-solving, or pixel-perfect franchise artwork. Geography and source-faithful quality
-still require meaningful agent design and review.
+The default **atlas** renderer adds globally anchored paper/forest/water patterns,
+coastline emphasis, shaded mountain relief, settlement details and cased/dashed
+roads. A blueprint may explicitly select `style: "schematic"` for simpler maps.
+Textures and strokes use global coordinates, so region crops match the full atlas
+instead of restarting patterns at tile boundaries. A renderer-version hash makes
+older map jobs stale without pretending their existing pixels were upgraded.
+This is illustrated vector cartography, not diffusion-painted 8K maps, building
+meshes, elevation simulation, road-network solving or pixel-perfect franchise art.
+Geography and source-faithful quality still require meaningful design and review.
 
 Artwork briefs resolve to stable destinations across bare GameState and downloaded
 world envelopes. Cover/portrait/scene generation uses the existing Artwork route.
@@ -106,11 +111,25 @@ explicit implementation of that override, not an invented automatic waiver.
 Agents cannot mark jobs generated or clear missing image evidence by asserting
 that prompts look good. Actual visual inspection is required. The existing paid
 cover diagnostic can inspect cover crops; it does not inspect all secondary art
-or establish G20 alone. This version provides an explicit user-recorded
-whole-package visual inspection step. The assistant can then review that evidence
-and repair/grade the package. New relevant content or changed pixels invalidate
-old evidence; URL assignment alone does not invalidate an otherwise identical
-visual inspection.
+or establish G20 alone. **Review every image with AI** now sends saved image previews,
+artifact briefs and bounded source excerpts to the configured vision-capable text
+route, after displaying its identity and maximum request count for approval.
+Each request inspects up to four 768px PNG previews; saved per-image findings survive
+interruptions and are reused only for the same package hash and route. Responses
+must cover exactly the supplied artifact IDs. There is no fallback, automatic
+retry, automatic replacement-image generation or implicit public upload.
+
+Partial failed/uncertain findings immediately invalidate earlier rubric authority
+and remain blocking, including after an interrupted batch or a route change.
+Recording a manual report cannot silently erase them. Repairing changed inputs
+requires fresh inspection; a human can also explicitly resolve current findings
+with a hash-bound, documented rationale. Manual whole-package inspection remains
+available without a model call. The assistant can read paginated `visualProgress`
+findings, repair the authored content/briefs, then grade the package. Regeneration
+and another paid review require their own approvals. New relevant content or
+changed pixels invalidate old evidence; URL assignment alone does not invalidate
+an otherwise identical inspection. Model review is limited-resolution evidence,
+not exhaustive source verification, objective quality proof or rubric certification.
 
 Semantic canon fidelity, agency, enjoyable mechanics, visual specificity and the
 rubric's detailed subdiagnostics still require competent review. Structural checks
@@ -142,8 +161,9 @@ is not enabled by this feature.
    the same open project, the foreground coordinator then renders maps and, only
    if approved, generates the bounded image batch. Continue missing batches from
    the saved workspace rather than restarting completed jobs.
-4. Inspect the canon, maps and artwork. Use the explicit cover diagnostic if
-   desired, record full visual inspection, and run assistant rubric review/repair.
+4. Inspect the canon, maps and artwork. Explicitly approve **Review every image
+   with AI**, or record a manual full visual inspection. Use the separate cover
+   diagnostic if desired, and run assistant rubric review/repair.
    An 85/100 total is insufficient if section floors, gates, evidence or artifacts
    remain incomplete.
 5. Prepare publication details in **Publish**. For an enveloped project this stages
@@ -159,13 +179,22 @@ is not enabled by this feature.
 You can export the exact world JSON at any time. A separate Workbench package
 archive contains the exact world text as a string, publication details, sources,
 design, blueprints, local image bytes and the current readiness report. Incomplete
-exports preserve their blockers. The archive is not a Voyage-import JSON and is
-currently for inspection/backup/manual recovery, not a one-click archive restore.
-It includes source documents: do not treat it as the public release artifact.
+exports preserve their blockers. **Restore an exported creation package** validates
+the research hashes, world paths, blueprint inputs, exact world text and saved
+artwork bytes before creating a fresh unlinked project. Shared identical assets
+are deduplicated; conflicting duplicate IDs are rejected. Package limits are
+128 MiB encoded and 96 MiB of unique artwork. Export enforces the same limits and
+keeps current artifacts rather than obsolete job-history entries; it is not a
+complete execution-history backup.
+The archive is not a Voyage-import JSON and includes source documents: do not
+treat it as the public release artifact.
 
 The standard blank-world/import flows are unchanged. “Save as new Voyage world”
-still creates a separate local copy under the existing copy contract; use the
-creation project's “Create private draft” path to retain its creation workspace.
+still creates a separate local copy, now retaining the validated creation workspace
+and current local artwork. Copy/restore both give it a fresh creation identity,
+drop remote links and upload receipts, and require fresh source-read coverage,
+review and work-order approval. Incomplete provider requests remain failed/uncertain
+and cannot authorize automatic retries. The original project is not modified.
 
 ## Execution limits and remaining work
 
@@ -177,10 +206,11 @@ creation project's “Create private draft” path to retain its creation worksp
   the bounded shared journal. Large source collections may require explicit
   follow-up tasks. There is no hidden unlimited agent loop or enforced token/dollar
   budget. The image-request cap is per explicitly approved foreground batch.
-- Full-package automated multimodal review, a source-aware quality-repair loop
-  with its own approved budget, authenticated desktop-worker control from Android,
-  archive restoration, richer illustrative cartography, and declared mod-registry
-  extensions are separate follow-ups. Do not label these implemented.
+- A fully automatic source-aware quality-repair loop with its own approved budget,
+  authenticated desktop-worker control from Android, diffusion-painted map detail,
+  and declared mod-registry extensions remain separate follow-ups. The atlas
+  renderer, optional batched model visual review, and creation copy/restore are
+  implemented; they do not establish live Voyage acceptance or flawless canon fidelity.
 - Live provider quality, a full supplied-research adaptation, official Voyage
   acceptance/publication and Android device behavior
   need integration exercises on configured hosts. Mock-provider, static-render and

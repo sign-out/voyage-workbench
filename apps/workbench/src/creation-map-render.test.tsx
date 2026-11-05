@@ -14,6 +14,7 @@ test('actual raster maps share edge geometry and creation controls prepare publi
    import {createRoot} from 'react-dom/client';
    import {WorldCreationWorkspace} from './WorldCreationWorkspace';
    import {renderCreationRegion} from './creation-execution';
+   import {creationMapSvg} from '../../../packages/core/creation-map';
    import {project as fixture} from '../../../tests/creation-fixture';
    import {reduce} from '../../../packages/core/project';
    import {defaultSettings} from '../../../packages/core/providers';
@@ -38,10 +39,15 @@ test('actual raster maps share edge geometry and creation controls prepare publi
     const project=fixture(),source=JSON.parse(project.activeSource);source.regions.east={name:'East',realm:'realm',x:1,y:0,images:{map:{imageUrl:''}}};project.activeSource=JSON.stringify(source);
     project.creation.maps[0].columns=2;project.creation.maps[0].features[0].points=[[0,0],[2,0],[2,1],[0,1]];
     project.creation.maps[0].features.push({id:'crossing-road',kind:'road',points:[[.2,.5],[1.8,.5]]});
+    project.creation.maps[0].features.push({id:'seam-forest',kind:'forest',points:[[.7,.1],[1.3,.1],[1.3,.3],[.7,.3]]},{id:'seam-mountain',kind:'mountain',points:[[1,.7]]});
     const left=await renderCreationRegion(project.activeSource,project,'region'),right=await renderCreationRegion(project.activeSource,project,'east');
     async function pixels(dataUrl){const image=new Image();image.src=dataUrl;await image.decode();if(image.naturalWidth!==1000||image.naturalHeight!==1000)throw Error('Wrong region dimensions');const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=1000;const context=canvas.getContext('2d');context.drawImage(image,0,0);return context;}
-    const first=await pixels(left),second=await pixels(right);
-    for(const vertical of [100,497,500,503,900])if(JSON.stringify([...first.getImageData(999,vertical,1,1).data])!==JSON.stringify([...second.getImageData(0,vertical,1,1).data]))throw Error('Map edge discontinuity at '+vertical);
+    const first=await pixels(left),second=await pixels(right),image=new Image();image.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(creationMapSvg(project.creation.maps[0]));await image.decode();
+    const full=document.createElement('canvas');full.width=2000;full.height=1000;const whole=full.getContext('2d');whole.drawImage(image,0,0);
+    for(const vertical of [100,135,200,299,497,500,503,675,700,735,900])for(const horizontal of [5,300,975,994,999]){
+     if(JSON.stringify([...first.getImageData(horizontal,vertical,1,1).data])!==JSON.stringify([...whole.getImageData(horizontal,vertical,1,1).data]))throw Error('West map differs from global atlas at '+horizontal+','+vertical);
+     const local=999-horizontal;if(JSON.stringify([...second.getImageData(local,vertical,1,1).data])!==JSON.stringify([...whole.getImageData(1000+local,vertical,1,1).data]))throw Error('East map differs from global atlas at '+local+','+vertical);
+    }
     return {left:left.slice(0,22),right:right.slice(0,22)};
    };
   `,resolveDir:path.resolve('apps/workbench/src'),loader:'tsx'},bundle:true,platform:'browser',format:'iife',write:false});

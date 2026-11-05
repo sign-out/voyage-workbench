@@ -116,3 +116,21 @@ test('built native Android checkpoint continuation preserves staged source and p
  assert.equal(project.tasks[0].state,'PREPARED');assert.equal(project.tasks[0].stagedSource,staged);assert.equal(project.tasks[0].toolJournal[0].attempt,'attempt');assert.equal(project.tasks[0].resumes.length,1);
  assert.equal(request({operation:'orchestrationCapabilities',args:['android','openai']}).delegation,false);
 });
+test('built native creation restoration preserves research and exact world text without importing task or remote authority',()=>{
+ let original=request({operation:'create',id:'original',name:'Original',source,now:1});
+ original=reduce(original,{type:'configureCreation',baseHash:request({operation:'hash',source}),workspace:{id:'creation',brief:'Build the supplied island setting.',documents:[{id:'research',name:'Research.md',text:'A coastal island.'}]}});
+ let restored=request({operation:'create',id:'restored',name:'Restored',source,now:1});
+ restored=reduce(restored,{type:'restoreCreation',baseHash:request({operation:'hash',source}),workspace:original.creation,creationId:'fresh-creation'});
+ assert.equal(restored.activeSource,source);assert.match(restored.activeSource,/9007199254740993/);assert.equal(restored.creation.id,'fresh-creation');assert.deepEqual(restored.creation.documents,original.creation.documents);
+ assert.equal(restored.remote.worldId,'');assert.deepEqual(restored.tasks,[]);assert.equal(restored.workOrder.approvalBaseHash,undefined);assert.equal(restored.creation.review,undefined);
+});
+test('built native vision functions preserve pixel inputs, freeze routes and reject incomplete findings',()=>{
+ const settings={profiles:[{id:'vision',name:'Vision',protocol:'openai',baseUrl:'https://example.com/v1',model:'vision'}],routes:{building:{profileId:'vision',model:'vision'},planning:{profileId:'vision',model:'vision'},map:{profileId:'vision',model:'vision'},artwork:{profileId:'',model:''}}};
+ const route=request({operation:'creationVisualRoute',args:[settings]});
+ assert.throws(()=>request({operation:'creationVisualRoute',args:[settings,{...route,model:'unapproved'}]}),/route changed/);
+ const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jf1sAAAAASUVORK5CYII=',wire=request({operation:'visionReviewRequest',args:[route,'','Inspect the actual pixels',[{id:'cover',dataUrl:png}]]});
+ assert.equal(JSON.parse(wire.body).messages[0].content[2].image_url.url,png);
+ const report={assets:[{id:'cover',status:'uncertain',observations:'A small face is visible.',sourceFidelity:'Identity cannot be established at this resolution.',fix:'Inspect the original image before resolving identity.'}],summary:'Uncertainty retained.'};
+ assert.equal(request({operation:'creationVisualReviewResult',args:['codex',{text:JSON.stringify(report)},['cover']]}).assets[0].status,'uncertain');
+ assert.throws(()=>request({operation:'creationVisualReviewResult',args:['codex',{text:JSON.stringify(report)},['other']]}),/missing or duplicate/);
+});
