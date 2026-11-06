@@ -41,7 +41,7 @@ export function resumeGuidance(project:Project,taskId:string,platform:string){co
 export interface ToolReceipt {id:string;attempt:string;name:string;inputHash:string;beforeHash:string;afterHash:string;state:'pending'|'succeeded'|'rejected';result:any;created:number}
 export interface Task {creationId?:string;creationBriefHash?:string;preparedAt?:number;policy?:TaskPolicy;resumes?:ResumeReceipt[];resumeBlockedReason?:string;parentTaskId?:string;delegation?:Delegation;toolJournal?:ToolReceipt[];toolSummary?:{calls:number;rejected:number};completionEvidence?:CompletionEvidence;editorContext?:EditorSnapshot;localEditMode?:LocalEditMode;localApplyBlockedReason?:string;id:string;attempt:string;kind:'plan'|'work'|'review';state:string;prompt:string;reply:string;baseSource:string;baseHash:string;stagedSource:string;workOrder:ApprovedWorkOrder;sourceNoteIds?:string[];builderNotes?:BuilderNote[];noteQueue?:NotePlanItem[];sessionId?:string;route?:TaskRoute;created:number;error?:string}
 export interface NoteChangeReceipt {id:string;taskId:string;proposalId:string;noteIds:string[];title:string;beforeHash:string;afterHash:string;beforeCheckpointId:string;afterCheckpointId:string;created:number}
-export interface Candidate {id:string;title:string;source:string;baseHash:string;created:number;kind:string;sourceProposalId?:string;noteIds?:string[];importNote?:string;rejectedChanges?:doc.ChangeChoice[]}
+export interface Candidate {id:string;title:string;source:string;baseHash:string;created:number;kind:string;sourceProposalId?:string;noteIds?:string[];importNote?:string;rejectedChanges?:doc.ChangeChoice[];remoteSave?:{operationId:string;readbackHash:string;etag:string}}
 export interface Project {creation?:creation.CreationWorkspace;artworkProposals?:ArtworkProposal[];bookmarks?:{id:string;path:doc.Path;name:string}[];builderContextDefault?:boolean;id:string;name:string;activeSource:string;originalSource?:string;status?:'active'|'archived'|'trashed';memory?:string;attachments?:{id:string;name:string;source:string}[];workOrderProposals?:WorkOrderProposal[];builderNotes?:BuilderNote[];noteChanges?:NoteChangeReceipt[];sourceRevision:number;draft:null|{path:doc.Path;text:string;baseHash:string};candidates:Candidate[];tasks:Task[];chat:{role:string;text:string;editorContext?:Pick<EditorSnapshot,'screen'|'label'|'focusPaths'>}[];workOrder:ApprovedWorkOrder;remote:{environment?:string;envelopeSource?:string;worldId:string;etag:string;baselineHash:string;operations:any[];validation?:any};updated:number}
 export interface Project {grading?:{rubric?:Rubric;reports:GradeReport[]}}
 export interface Project {chatPlan?:ChatPlan}
@@ -58,6 +58,15 @@ export function assistantCompletionValidation(project:Project,task:Task,text:str
 let nativeHasher:((source:string)=>string)|undefined;
 export function setHasher(fn:(source:string)=>string){nativeHasher=fn;}
 export const hash=(source:string)=>nativeHasher?nativeHasher(source):sha256(source);
+const voyageEditableFields=['shortId','title','description','advancedDescription','discordThreadUrl','image','isLocked','isMod','isUnremixable','tags','visibility','initialGameState'];
+export function alignSaveReadback(current:string,downloaded:string):string {
+ let aligned=doc.alignImport(current,downloaded).source;
+ const currentRoot=doc.parse(current),base=doc.statePath(currentRoot);
+ if(!base.length)return aligned;
+ const parent=base.slice(0,-1),world=doc.at(currentRoot,parent),received=doc.at(doc.parse(aligned),parent);
+ for(const child of world.children)if(!voyageEditableFields.includes(String(child.key))&&!doc.packageReadOnlyFields.includes(String(child.key))&&!received.children.some(entry=>entry.key===child.key))aligned=doc.insert(aligned,parent,child.key,doc.read(current,parent.concat(child.key)));
+ return aligned;
+}
 export function create(id:string,name:string,source:string,now:number):Project {doc.parse(source);return {id,name,activeSource:source,originalSource:source,status:'active',memory:'',attachments:[],sourceRevision:0,draft:null,candidates:[],tasks:[],chat:[],workOrder:{objective:'',requirements:[],allowedPaths:[]},remote:{worldId:'',etag:'',baselineHash:'',operations:[]},updated:now};}
 export function projectSummary(project:Project){
  const envelope=worldIdentity(project.remote.envelopeSource||'',project.name),world=worldIdentity(project.activeSource,envelope.title);
@@ -76,6 +85,14 @@ export function reduce(project:Project,c:any):Project {
   function active(source:string,protectMetadata=true){doc.parse(source);if(protectMetadata)doc.assertPackageMetadataUnchanged(p.activeSource,source);p.builderNotes=reconcileNotes(p.builderNotes||[],p.activeSource,source,c.type==='edit'?c.path:c.type==='applyDraft'?p.draft?.path:undefined);p.activeSource=source;p.sourceRevision++;p.draft=null;}
   function acceptCandidate(candidate:Candidate){
     requireCurrent(p,candidate.baseHash);const before=p.activeSource,selected=doc.selectChanges(before,candidate.source,candidate.rejectedChanges);
+    if(candidate.remoteSave){
+      const binding=candidate.remoteSave,operation=p.remote.operations.find(entry=>entry.id===binding.operationId),readback=operation?.readback;
+      if(!operation||operation.state!=='UNKNOWN'||!readback||binding.readbackHash!==hash(readback.source)||binding.etag!==readback.etag||readback.environment!==(p.remote.environment||'production')||readback.worldId!==p.remote.worldId||candidate.source!==alignSaveReadback(before,readback.source))throw new Error('The Voyage read-back changed. Review the current remote draft again.');
+      if(candidate.rejectedChanges?.length)throw new Error('Resolving a save requires accepting the complete downloaded snapshot. Reject this proposal to keep your local world unchanged.');
+      active(selected,false);operation.state='ACCEPTED';operation.updated=p.updated;operation.acceptedSourceHash=hash(p.activeSource);operation.detail='You explicitly accepted the reviewed Voyage draft. It differs from the original submission; no write was resent.';
+      p.remote.etag=readback.etag;p.remote.baselineHash=hash(p.activeSource);p.remote.envelopeSource=readback.source;p.remote.validation=undefined;
+      p.candidates=p.candidates.filter(value=>value.id!==candidate.id);return;
+    }
     active(candidate.kind==='import'&&p.remote.worldId?doc.preserveVoyageFields(before,selected).source:selected,!['import','remote'].includes(candidate.kind));
     if(candidate.sourceProposalId&&candidate.noteIds?.length&&before!==p.activeSource)p.noteChanges=[...(p.noteChanges||[]),{id:candidate.id,taskId:candidate.id,proposalId:candidate.sourceProposalId,noteIds:candidate.noteIds.slice(),title:candidate.title,beforeHash:hash(before),afterHash:hash(p.activeSource),beforeCheckpointId:c.beforeCheckpointId||'',afterCheckpointId:c.afterCheckpointId||'',created:p.updated}];
     p.candidates=p.candidates.filter(value=>value.id!==candidate.id);
@@ -244,7 +261,7 @@ export function reduce(project:Project,c:any):Project {
     case 'insert':requireCurrent(p,c.baseHash);active(doc.insert(p.activeSource,c.path,c.key,c.source));break;
     case 'remove':requireCurrent(p,c.baseHash);active(doc.remove(p.activeSource,c.path));break;
     case 'stage':{doc.parse(c.source);const aligned=!c.kind||['import','remote'].includes(c.kind)?doc.alignImport(p.activeSource,c.source,(!c.kind||c.kind==='import')&&!!p.remote.worldId):{source:c.source,note:''};p.candidates.unshift({id:c.id,title:c.title,source:aligned.source,importNote:aligned.note,baseHash:c.baseHash||hash(p.activeSource),created:p.updated,kind:c.kind||'import'});break;}
-    case 'candidateChange':{const candidate=p.candidates.find(candidate=>candidate.id===c.id);if(!candidate)throw new Error('Proposal no longer exists.');requireCurrent(p,candidate.baseHash);if(c.candidateHash!==hash(candidate.source))throw new Error('The proposal changed. Reload its diff.');if(typeof c.reject!=='boolean'||!doc.diff(p.activeSource,candidate.source,1,0,{kind:c.kind,path:c.path}).changes.some(change=>change.kind===c.kind&&JSON.stringify(change.path)===JSON.stringify(c.path)))throw new Error('This diff change no longer exists.');const choices=(candidate.rejectedChanges||[]).filter(choice=>choice.kind!==c.kind||JSON.stringify(choice.path)!==JSON.stringify(c.path));if(c.reject)choices.push({path:c.path.slice(),kind:c.kind});p.candidates=p.candidates.map(value=>value.id===c.id?{...value,rejectedChanges:choices}:value);break;}
+    case 'candidateChange':{const candidate=p.candidates.find(candidate=>candidate.id===c.id);if(!candidate)throw new Error('Proposal no longer exists.');if(candidate.remoteSave)throw new Error('Review this read-back as a complete snapshot, or reject it to keep local content.');requireCurrent(p,candidate.baseHash);if(c.candidateHash!==hash(candidate.source))throw new Error('The proposal changed. Reload its diff.');if(typeof c.reject!=='boolean'||!doc.diff(p.activeSource,candidate.source,1,0,{kind:c.kind,path:c.path}).changes.some(change=>change.kind===c.kind&&JSON.stringify(change.path)===JSON.stringify(c.path)))throw new Error('This diff change no longer exists.');const choices=(candidate.rejectedChanges||[]).filter(choice=>choice.kind!==c.kind||JSON.stringify(choice.path)!==JSON.stringify(c.path));if(c.reject)choices.push({path:c.path.slice(),kind:c.kind});p.candidates=p.candidates.map(value=>value.id===c.id?{...value,rejectedChanges:choices}:value);break;}
     case 'reject':p.candidates=p.candidates.filter(v=>v.id!==c.id);break;
     case 'accept':{const candidate=p.candidates.filter(value=>value.id===c.id)[0];if(!candidate)throw new Error('Proposal no longer exists.');acceptCandidate(candidate);break;}
     case 'proposeArtwork':{
@@ -418,9 +435,21 @@ export function reduce(project:Project,c:any):Project {
       requireCurrent(p,c.baseHash);if(p.draft)throw new Error('Apply or discard the editor draft first.');if((c.etag&&p.remote.etag!==c.etag)||(c.worldId&&p.remote.worldId!==c.worldId))throw new Error('Remote revision changed. Validate again.');if(!p.remote.worldId||!p.remote.etag)throw new Error('Download a Voyage world before saving it.');
       p.remote.operations.unshift({id:c.id,state:'PREPARED',environment:p.remote.environment||'production',source:p.activeSource,payload:c.payload,sourceHash:hash(p.activeSource),expectedEtag:p.remote.etag,created:p.updated});p.remote.operations=p.remote.operations.slice(0,20);break;
     }
+    case 'saveReview':{
+      requireCurrent(p,c.baseHash);if(p.draft)throw new Error('Apply or discard the editor draft before reviewing Voyage changes.');
+      const operation=p.remote.operations.find(entry=>entry.id===c.operationId);
+      if(!operation||!['SEND_ATTEMPTED','UNKNOWN'].includes(operation.state)||c.payloadHash!==hash(operation.payload)||c.environment!==(p.remote.environment||'production')||c.environment!==operation.environment||c.worldId!==p.remote.worldId)throw new Error('The pending Voyage save or its binding changed. Reconcile it again.');
+      voyage.voyageRevision(c.etag);if(doc.at(doc.parse(c.source),doc.statePath(doc.parse(c.source))).kind!=='object')throw new Error('The downloaded Voyage GameState must be an object.');const payload=remotePayload(c.source,undefined,c.worldId),comparison=voyage.compareRemoteWorlds(operation.payload,payload);
+      if(comparison.matches)throw new Error('The remote draft already matches; reconcile this save instead.');
+      if(typeof c.id!=='string'||!c.id||p.candidates.some(candidate=>candidate.id===c.id))throw new Error('Provide a unique review ID.');
+      operation.state='UNKNOWN';operation.updated=p.updated;operation.comparison=comparison;operation.detail='Voyage returned '+comparison.total+' differences. Review the downloaded draft before accepting it; no write was resent.';
+      operation.readback={source:c.source,etag:c.etag,environment:c.environment,worldId:c.worldId,checkedAt:p.updated};
+      p.candidates=p.candidates.filter(candidate=>candidate.remoteSave?.operationId!==operation.id);
+      p.candidates.unshift({id:c.id,title:'Review Voyage save changes',source:alignSaveReadback(p.activeSource,c.source),baseHash:c.baseHash,created:p.updated,kind:'remote',remoteSave:{operationId:operation.id,readbackHash:hash(c.source),etag:c.etag},importNote:'This is the downloaded Voyage draft, not an automatic retry. Server-generated triggers, omitted empty fields or defaults may explain differences, but all changes remain reviewable. Accept the complete snapshot to adopt it and resolve the pending save, or reject to keep your local world and the unresolved save. History preserves your pre-acceptance content. Accepting does not upload or publish anything.'});break;
+    }
     case 'saveState':{const o=p.remote.operations.filter(o=>o.id===c.id)[0];if(!o)throw new Error('Save operation not found.');
       const allowed:Record<string,string[]>={PREPARED:['SEND_ATTEMPTED','REJECTED'],SEND_ATTEMPTED:['UNKNOWN','REJECTED','CONFIRMED'],UNKNOWN:['UNKNOWN','CONFIRMED','REJECTED']};
-      if(!allowed[o.state]||allowed[o.state].indexOf(c.state)<0)throw new Error('Invalid save transition.');o.state=c.state;o.detail=c.detail||'';o.updated=p.updated;if(c.comparison)o.comparison=c.comparison;
+      if(!allowed[o.state]||allowed[o.state].indexOf(c.state)<0)throw new Error('Invalid save transition.');o.state=c.state;o.detail=c.detail||'';o.updated=p.updated;if(c.comparison){o.comparison=c.comparison;delete o.readback;p.candidates=p.candidates.filter(candidate=>candidate.remoteSave?.operationId!==o.id);}
       if(c.state==='CONFIRMED'){p.remote.etag=c.etag;p.remote.baselineHash=o.sourceHash;try{p.remote.envelopeSource=doc.read(o.payload,['world']);}catch{}}break;
     }
     default:throw new Error('Unknown project operation: '+c.type);
@@ -430,7 +459,7 @@ export function remotePayload(source:string,baseline?:string,worldId?:string):st
   if(!doc.statePath(doc.parse(source)).length){if(!baseline||!doc.statePath(doc.parse(baseline)).length)throw new Error('Remote saves require the downloaded world envelope. Re-import the Alpha world to recover its metadata.');source=doc.alignImport(baseline,source).source;}
   if(worldId){const root=doc.parse(source),world=doc.at(root,doc.statePath(root).slice(0,-1)),identity=world.children.find(child=>child.key==='shortId');if(identity&&identity.node.value!==worldId)throw new Error('The document shortId differs from the linked Voyage world. Import it as a separate project.');}
   if(baseline&&worldId&&doc.statePath(doc.parse(baseline)).length){const root=doc.parse(baseline),world=doc.at(root,doc.statePath(root).slice(0,-1)),identity=world.children.find(child=>child.key==='shortId');if(identity&&identity.node.value!==worldId)throw new Error('The preserved Voyage envelope belongs to another world. Re-import the Alpha world before saving.');source=doc.preserveVoyageFields(baseline,source).source;}
-  const root=doc.parse(source);const fields=['shortId','title','description','advancedDescription','discordThreadUrl','image','isLocked','isMod','isUnremixable','tags','visibility','initialGameState'];
+  const root=doc.parse(source);const fields=voyageEditableFields;
   let prefix=doc.statePath(root).slice(0,-1);const object=doc.at(root,prefix);
   if(!object.children.some(c=>c.key==='initialGameState'))throw new Error('Remote saves require the downloaded world envelope.');
   return '{"world":{'+fields.filter(k=>object.children.some(c=>c.key===k)).map(k=>JSON.stringify(k)+':'+doc.read(source,prefix.concat(k))).join(',')+'}}';
