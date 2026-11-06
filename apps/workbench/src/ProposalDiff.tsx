@@ -5,6 +5,10 @@ export function ImportReplacementNotice(){
  return <p className="import-note" role="status">This imports world/GameState data, not a JSON Schema. It is a replacement proposal, not a merge or schema migration: existing fields absent from the imported document can be proposed for removal. Nothing changes until you accept. To keep both worlds, close this project first and import the file as a new local project.</p>;
 }
 
+export function ProposalFormattingNotice(){
+ return <p className="import-note" role="status">Formatting-only differences are kept automatically: current object key order, whitespace and equivalent value spellings do not need review. Only actual value changes are listed. Added or removed fields and array reordering still need review.</p>;
+}
+
 export function ProposalDiff({change}:{change:Change}){
  const [showExact,setShowExact]=useState(false);
  const order=useMemo(()=>change.kind==='order'?{before:parse(change.before).children.map(child=>child.key),after:parse(change.after).children.map(child=>child.key)}:null,[change.kind,change.before,change.after]);

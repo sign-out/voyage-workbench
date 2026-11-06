@@ -16,6 +16,11 @@ Do not uninstall Android merely to update: uninstalling can remove local data.
   Authored-world changes are shown first, with separate inspectable runtime,
   scaffolding, compatibility and API metadata categories. Classification never
   silently excludes selected changes.
+- **Keep minification noise automatically:** local assistant, restore and older
+  proposals also retain current object-key ordering and equivalent value
+  spelling without hundreds of order-only review rows. Real field additions,
+  removals and array reordering remain visible. Exact remote-save recovery
+  remains a separate complete-snapshot review.
 - **Merge or Replace explicitly:** Merge is the default and retains omitted
   branches, including generated/runtime records and unknown fields. Replace
   clearly warns about removals. Keep individual changes or an entire category

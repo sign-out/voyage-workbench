@@ -11,24 +11,7 @@ export function importOptions(value:any={mode:'merge'}):ImportOptions {
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>key!=='mode')||!['merge','replace'].includes(value.mode))throw new Error('Choose merge or replace for this import.');
  return {mode:value.mode};
 }
-function numericKey(raw:string){
- const match=/^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(raw)!;
- const authoredExponent=Number(match[4]||0);if(!Number.isSafeInteger(authoredExponent))return raw;
- let digits=(match[2]+(match[3]||'')).replace(/^0+/,''),exponent=authoredExponent-(match[3]||'').length;
- if(!Number.isSafeInteger(exponent))return raw;
- if(!digits)return match[1]+'0';
- const tail=/0+$/.exec(digits)?.[0].length||0;digits=digits.slice(0,digits.length-tail);exponent+=tail;
- return Number.isSafeInteger(exponent)?match[1]+digits+'e'+exponent:raw;
-}
-function same(before:string,after:string,oldNode:doc.Node,newNode:doc.Node):boolean {
- if(oldNode.kind!==newNode.kind)return false;
- if(before.slice(oldNode.start,oldNode.end)===after.slice(newNode.start,newNode.end))return true;
- if(oldNode.kind==='number')return numericKey(before.slice(oldNode.start,oldNode.end))===numericKey(after.slice(newNode.start,newNode.end));
- if(oldNode.kind!=='object'&&oldNode.kind!=='array')return oldNode.value===newNode.value;
- if(oldNode.children.length!==newNode.children.length)return false;
- const next:Record<string,doc.Node>=Object.create(null);newNode.children.forEach(child=>next[String(child.key)]=child.node);
- return oldNode.children.every(child=>!!next[String(child.key)]&&same(before,after,child.node,next[String(child.key)]));
-}
+const same=doc.sameValues;
 function worldRoot(source:string){
  const root=doc.parse(source),path=doc.statePath(root),node=doc.at(root,path);
  if(node.kind!=='object')throw new Error('Import requires an object GameState.');

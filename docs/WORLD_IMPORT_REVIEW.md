@@ -45,6 +45,13 @@ distinguishes negative zero. No floating-point parse/stringify rewrite occurs.
 Accepted imports preserve existing spelling for equivalent values; changed
 values retain incoming numeric source. Object formatting may change.
 
+The same automatic retention applies to local assistant, restore and older
+persisted proposals: key reordering or minification does not become a review row
+or require a Keep current click. Preview, validation, export and acceptance use
+the same selected values. Added or removed fields, changed strings and array
+reordering remain real changes. Exact remote-save recovery is deliberately
+separate and still adopts the complete reviewed server snapshot.
+
 Review opens with authored-world counts and per-system totals. Inspect changed
 characters, triggers, geography, instructions and other systems without paging
 through omitted runtime fields. The other categories remain inspectable:

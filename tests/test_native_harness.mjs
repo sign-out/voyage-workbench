@@ -14,6 +14,10 @@ const references=[{section:'heroesVersion',schema:{_type:'literal',value:37}},{s
 const source='{"heroesVersion":37,"value":1,"list":[],"exact":9007199254740993}';
 
 test('native import merge, replace and read-only summary preserve omitted GameState and numeric spelling',()=>{
+ const pretty='{\n "itemSettings":{"currencyName":"coin","tiers":{}},"parties":{"":{"arcs":{},"quests":{}}},"number":1.2300e+42\n}',compact='{"number":123e40,"parties":{"":{"quests":{},"arcs":{}}},"itemSettings":{"tiers":{},"currencyName":"coin"}}';
+ assert.equal(request({operation:'proposalDiff',args:[pretty,compact]}).total,0);assert.equal(request({operation:'selectProposalChanges',args:[pretty,compact]}),pretty);
+ const changed=compact.replace('"coin"','"silver"');let legacy=request({operation:'create',id:'legacy',name:'Legacy',source:pretty,now:1});legacy.candidates=[{id:'old',kind:'import',source:changed,baseHash:request({operation:'hash',source:pretty}),created:1}];
+ legacy=reduce(legacy,{type:'accept',id:'old'});assert.equal(request({operation:'read',args:[legacy.activeSource,['number']]}),'1.2300e+42');assert.equal(request({operation:'read',args:[legacy.activeSource,['itemSettings','currencyName']]}),'"silver"');assert.equal(request({operation:'diff',args:[pretty,legacy.activeSource]}).total,1);
  const before='{"shortId":"WORLD","initialGameState":{"heroesVersion":37,"value":1,"party":{"exact":9007199254740993}}}',incoming='{"value":2}';
  let project=request({operation:'create',id:'p',name:'Import',source:before,now:1});project=reduce(project,{type:'stage',id:'import',kind:'import',source:incoming});
  assert.equal(project.candidates[0].importOptions.mode,'merge');assert.equal(request({operation:'read',args:[project.candidates[0].source,['initialGameState','party','exact']]}),'9007199254740993');
