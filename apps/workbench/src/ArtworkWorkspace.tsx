@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {coverRecommendation} from '../../../packages/core/voyage-compatibility';
+import {publicationDefaults} from '../../../packages/core/features';
 import {useVoyageConnection} from './CompatibilityStatus';
 import {artworkDestinations,artworkPrompt,assignArtwork,imageTargets,type ArtworkDestination} from '../../../packages/core/artwork';
 import {resolveRoute} from '../../../packages/core/providers';
@@ -34,7 +35,7 @@ export function ArtworkWorkspace({project,apply,onCover,onDirtyChange,command,in
  const key='artwork-studio:'+project.id,destinations=artworkDestinations(project.activeSource,details),destination=destinations.find(item=>item.id===selected);
  const categories=['All artwork',...new Set(destinations.map(item=>item.category))];
  const visible=destinations.filter(item=>(category==='All artwork'||item.category===category)&&(item.label+' '+item.category).toLowerCase().includes(search.toLowerCase()));
- useEffect(()=>{let active=true;void Promise.all([feature<string>('creation-details:'+project.id,'{}'),feature<Generation[]>(key,[])]).then(([saved,history])=>{if(active){setDetails(saved);setJobs(history);}}).catch(reason=>{if(active)setError(reason.message);}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[project.id]);
+ useEffect(()=>{let active=true;void Promise.all([feature<string>('creation-details:'+project.id,'{}'),feature<Generation[]>(key,[])]).then(([saved,history])=>{if(active){setDetails(publicationDefaults(project,saved));setJobs(history);}}).catch(reason=>{if(active)setError(reason.message);}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[project.id]);
  useEffect(()=>{
   if(loading||!initialDestinationId||initialSelection.current===initialDestinationId)return;
   initialSelection.current=initialDestinationId;
@@ -43,6 +44,7 @@ export function ArtworkWorkspace({project,apply,onCover,onDirtyChange,command,in
   setSelected(target.id);setPrompt(artworkPrompt(target,coverSize?environment:undefined,connection?.contract));setNotice('Portrait brief prepared for '+target.label+'. Review it, then approve generation below. No image request has been sent.');
  },[loading,initialDestinationId,project.id]);
  const waiting=jobs.some(job=>job.state==='generating');
+ useEffect(()=>{if(!dirty&&!busy&&destination&&!asset&&!proposalId)setPrompt(artworkPrompt(destination,coverSize?environment:undefined,connection?.contract));},[project.activeSource,selected,details,environment,connection?.contract]);
  useEffect(()=>{
   if(busy||!waiting)return;
   let active=true,pending=false;
@@ -82,7 +84,7 @@ export function ArtworkWorkspace({project,apply,onCover,onDirtyChange,command,in
    if(JSON.stringify(effective)!==JSON.stringify(route))throw new Error('The Artwork provider or model changed. Review the connection and approve again.');
    if(latest.current.id!==project.id||latest.current.activeSource!==source||latest.current.draft||latest.current.status&&latest.current.status!=='active')throw new Error('The world changed or is no longer editable. Review the destination again.');
    setActivity({destination:destination.label,purpose:destination.category,started,phase:'generating',provider:route.name,model:route.model});sent=true;
-   const result=await request('imageGenerate',{prompt,route,...(reference&&asset?{referenceDataUrl:asset.dataUrl}:{})});
+   const result=await request('imageGenerate',{prompt,route,...(reference&&asset?{referenceDataUrl:asset.dataUrl}:{})},{label:'Generating artwork for '+destination.label+' · '+route.name+' · '+(route.model||'configured default'),projectId:project.id});
    setActivity({destination:destination.label,purpose:destination.category,started,phase:'saving',provider:route.name,model:route.model});
    const saved=await saveAsset({dataUrl:result.dataUrl,prompt,name:destination.label+' · '+destination.category,route:result.route});
    job.assetId=saved.id;job.state='generated';setAsset(saved);setDirty(false);

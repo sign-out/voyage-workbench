@@ -9,7 +9,7 @@ import {defaultSettings,validateSettings,validateEndpoint,resolveRoute,imageRout
 import {Store} from './store';import {AgentHost} from './codex';
 import {readFileSync,existsSync,copyFileSync,mkdirSync} from 'node:fs';import path from 'node:path';import os from 'node:os';import {randomUUID} from 'node:crypto';
 import * as doc from '../../packages/core/document';import {hash,remotePayload,localEditMode,assistantRecoverySettings} from '../../packages/core/project';
-import {voyageRevision,invalidRevisionFailure,compareRemoteWorlds} from '../../packages/core/voyage';
+import {serverAdditions,voyageRevision,invalidRevisionFailure,compareRemoteWorlds} from '../../packages/core/voyage';
 import {voyageHttp} from './voyage-http';
 import {voyageCleanRejection} from '../../packages/core/voyage-api';
 import {voyageEnvironment,voyageProfile,inspectVoyageContract} from '../../packages/core/voyage-compatibility';
@@ -138,7 +138,7 @@ export class Service {
     if(review&&p.draft)throw new Error('Apply or discard the editor draft before reviewing Voyage changes.');
     if(op.state==='UNKNOWN'&&invalidRevisionFailure(op.detail||'')){this.recoverInvalidRevision(id);return this.store.get(id);}
     if(op.state==='PREPARED'){this.store.dispatch(id,{type:'saveState',id:op.id,state:'REJECTED',detail:'No network dispatch was recorded. You may start a new save.'});return this.store.get(id);}
-    const remote=await this.voyage('GET','/worlds/'+encodeURIComponent(p.remote.worldId),undefined,undefined,undefined,environment);const source=this.unwrapWorld(remote.text);const comparison=compareRemoteWorlds(op.payload,remotePayload(source));
+    const remote=await this.voyage('GET','/worlds/'+encodeURIComponent(p.remote.worldId),undefined,undefined,undefined,environment);const source=this.unwrapWorld(remote.text);const comparison=compareRemoteWorlds(op.payload,remotePayload(source));const latest=this.store.project(id);if(!comparison.matches&&!latest.draft&&latest.remote.etag===op.expectedEtag&&hash(latest.activeSource)===op.sourceHash&&serverAdditions(op.payload,remotePayload(source)).safe)return this.store.dispatch(id,{type:'saveAdditions',operationId:op.id,baseHash:op.sourceHash,payloadHash:hash(op.payload),source,etag:remote.etag,environment,worldId:p.remote.worldId});
     if(review&&!comparison.matches)return this.store.dispatch(id,{type:'saveReview',id:randomUUID(),operationId:op.id,baseHash:hash(p.activeSource),payloadHash:hash(op.payload),source,etag:remote.etag,environment,worldId:p.remote.worldId});
     this.store.dispatch(id,{type:'saveState',id:op.id,state:comparison.matches?'CONFIRMED':'UNKNOWN',etag:remote.etag,comparison,detail:comparison.matches?'Read-back confirmed the submitted world; JSON object ordering and equivalent number formatting are ignored.':'Read-back differs in '+comparison.total+' value(s). The save remains unconfirmed; review the differences before retrying.'});if(comparison.matches)this.store.checkpoint(id,'Confirmed Voyage save');return this.store.get(id);}
 }

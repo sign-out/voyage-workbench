@@ -6,12 +6,25 @@ import {voyageSaveFeedback} from './voyage';
 
 const source='{"shortId":"WORLD","title":"Local","initialGameState":{"heroesVersion":37,"compatibilityRevision":16,"unassignedAreas":{},"worldVoices":{},"exact":9007199254740993,"parties":{"":{"quests":{},"questTriggers":{}}}}}';
 const remote='{"shortId":"WORLD","title":"Local","initialGameState":{"heroesVersion":37,"compatibilityRevision":16,"characterCreationMusic":"fantasy","exact":9007199254740993,"parties":{"":{"quests":{},"questTriggers":{"__generated_quest_progress__/Example":{"effects":[{"type":"quest-progress","questId":"Example"}]}}}}}}';
-function pending(){
- let project=create('project','World',source,1);
- project=reduce(project,{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'"old"',envelopeSource:source});
- project=reduce(project,{type:'savePrepare',id:'save',baseHash:hash(source),payload:remotePayload(source)});
+function pending(initial=source){
+ let project=create('project','World',initial,1);
+ project=reduce(project,{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'"old"',envelopeSource:initial});
+ project=reduce(project,{type:'savePrepare',id:'save',baseHash:hash(initial),payload:remotePayload(initial)});
  return reduce(project,{type:'saveState',id:'save',state:'SEND_ATTEMPTED'});
 }
+test('verified additive read-backs are adopted automatically but mixed, stale and identity/version changes are never approved silently',()=>{
+ const added=source.replace('"questTriggers":{}','"questTriggers":{"__generated_quest_progress__/New":{"value":9007199254740993}}');
+ const command={type:'saveAdditions',operationId:'save',baseHash:hash(source),payloadHash:hash(remotePayload(source)),source:added,etag:'"added"',environment:'alpha',worldId:'WORLD'};
+ const project=reduce(pending(),command);assert.equal(read(project.activeSource,['initialGameState','parties','','questTriggers','__generated_quest_progress__/New','value']),'9007199254740993');assert.equal(project.remote.operations[0].state,'ACCEPTED');assert.equal(project.remote.operations[0].automaticAdditions.total,1);assert.equal(project.remote.operations[0].payload,remotePayload(source));assert.equal(project.remote.baselineHash,hash(project.activeSource));assert.equal(project.remote.etag,'"added"');assert.equal(project.candidates.length,0);assert.match(voyageSaveFeedback(project.remote.operations[0])!.title,/server additions adopted/);
+ const restored=JSON.parse(JSON.stringify(project));assert.equal(restored.remote.operations[0].automaticAdditions.total,1);
+ const withCopy=reduce(pending(),{...command,source:added.replace('"title":"Local",','"title":"Local","description":"Server-added public copy",')});assert.equal(read(withCopy.activeSource,['description']),'"Server-added public copy"');assert.equal(withCopy.remote.operations[0].automaticAdditions.total,2);
+ const unversioned=source.replace('"compatibilityRevision":16,',''),versioned=reduce(pending(unversioned),{...command,baseHash:hash(unversioned),payloadHash:hash(remotePayload(unversioned))});assert.equal(read(versioned.activeSource,['initialGameState','compatibilityRevision']),'16');assert.equal(versioned.remote.operations[0].automaticAdditions.total,2);
+ const arraySource=source.replace('"exact":9007199254740993','"entries":[{"name":"First"},{"name":"Second"}],"exact":9007199254740993'),arrayAdded=arraySource.replace('[{"name":"First"},{"name":"Second"}]','[{"name":"First","detail":"Filled by server"},{"name":"Second"},{"name":"Third"}]'),arrayCommand={...command,baseHash:hash(arraySource),payloadHash:hash(remotePayload(arraySource)),source:arrayAdded};
+ const arrays=reduce(pending(arraySource),arrayCommand);assert.equal(arrays.remote.operations[0].automaticAdditions.total,2);assert.equal(read(arrays.activeSource,['initialGameState','entries',2,'name']),'"Third"');
+ for(const changed of ['[{"name":"Second"},{"name":"First"}]','[{"name":"First"}]'])assert.throws(()=>reduce(pending(arraySource),{...arrayCommand,source:arraySource.replace('[{"name":"First"},{"name":"Second"}]',changed)}));
+ for(const changed of [added.replace('"title":"Local"','"title":"Changed"'),added.replace('"compatibilityRevision":16','"compatibilityRevision":17'),added.replace('"WORLD"','"OTHER"'),added.replace('"worldVoices":{},','')])assert.throws(()=>reduce(pending(),{...command,source:changed}));
+ const edited=reduce(pending(),{type:'edit',path:['title'],source:'"Newer local edit"',baseHash:hash(source)});assert.throws(()=>reduce(edited,{...command,baseHash:hash(edited.activeSource)}),/unchanged submitted world/);assert.equal(read(edited.activeSource,['title']),'"Newer local edit"');assert.equal(pending().activeSource,source);
+});
 function review(project=pending(),overrides:any={}){
  return reduce(project,{type:'saveReview',id:'review',operationId:'save',baseHash:hash(project.activeSource),payloadHash:hash(project.remote.operations[0].payload),source:remote,etag:'"new"',environment:'alpha',worldId:'WORLD',...overrides});
 }

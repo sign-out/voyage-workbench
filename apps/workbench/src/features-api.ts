@@ -1,3 +1,4 @@
+import {publicationDefaults} from '../../../packages/core/features';
 import {request} from './host';import * as doc from '../../../packages/core/document';import {hash,remotePayload,type Project} from '../../../packages/core/project';
 import {feature,saveFeature} from './feature-store';
 export {feature,saveFeature} from './feature-store';
@@ -18,7 +19,7 @@ export const valid=(report:any)=>{const result=report?.data??report;return resul
 export function privateDraft(p:Project,creationDetails='{}'){
  const path=doc.statePath(doc.parse(p.activeSource)),fields:Record<string,string>={title:JSON.stringify(p.name),visibility:'"private"',initialGameState:doc.read(p.activeSource,path)};
  if(path.length){const parent=doc.at(doc.parse(p.activeSource),path.slice(0,-1));for(const key of ['title','description','advancedDescription','discordThreadUrl','image','isLocked','isMod','isUnremixable','tags'])if(parent.children.some(child=>child.key===key))fields[key]=doc.read(p.activeSource,path.slice(0,-1).concat(key));}
- else{const details=doc.parse(creationDetails);if(details.kind!=='object')throw new Error('Creation details must be an object.');for(const child of details.children){const key=String(child.key);if(!['title','description','advancedDescription','discordThreadUrl','image','isLocked','isMod','isUnremixable','tags'].includes(key))throw new Error('Unsupported creation detail: '+key);fields[key]=creationDetails.slice(child.node.start,child.node.end);}}
+ else{const details=doc.parse(publicationDefaults(p,creationDetails));if(details.kind!=='object')throw new Error('Creation details must be an object.');for(const child of details.children){const key=String(child.key);if(!['title','description','advancedDescription','discordThreadUrl','image','isLocked','isMod','isUnremixable','tags'].includes(key))throw new Error('Unsupported creation detail: '+key);fields[key]=creationDetails.slice(child.node.start,child.node.end);}}
  return '{"world":{'+Object.keys(fields).map(key=>JSON.stringify(key)+':'+fields[key]).join(',')+'}}';
 }
 export interface PublicationOperation {id:string;kind:string;worldId:string;body:string;sourceHash:string;created:number;state:string;result?:any;detail?:string;environment?:string;apiBase?:string;expectedEtag?:string;owner?:string;sentAt?:number;retryAt?:number;retryBlocked?:boolean}

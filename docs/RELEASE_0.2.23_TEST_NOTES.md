@@ -10,6 +10,21 @@ Do not uninstall Android merely to update: uninstalling can remove local data.
 
 ## Changes and what to test
 
+- **Adopt verified API additions automatically:** server-only world-data additions
+  no longer require manual approval after a save. Submitted values, identity,
+  version fields, array positions and the local source/revision must still match.
+  Overwrites, removals and mixed differences remain explicit review cases. The
+  original submission and a local checkpoint are retained; no extra write is sent.
+- **See ongoing work:** header activity reports image/model/Voyage operations,
+  targets, elapsed time and recent outcomes across views. Cover Studio shows
+  generation/review progress inline. No fake percentages or automatic paid retries.
+- **Use world data throughout authoring forms:** public metadata, cover and map
+  briefs, creation premises and public previews use shared source-backed defaults.
+  Untouched fields follow updates; edits are preserved. Missing facts and provider
+  permissions are not invented, and private lore is not copied to public blurbs.
+- **Accept expected open-ended score bounds:** the first tier's null minimum and
+  the final tier's null maximum are valid. Interior and unrelated invalid null
+  numbers still fail local checks; no sentinel values are inserted.
 - **Review world changes instead of file churn:** import aligns bare Voyage
   GameState and Creator API envelopes and compares actual values, ignoring
   whitespace, object-key order, equivalent escapes and equivalent number spelling.
@@ -46,9 +61,12 @@ Do not uninstall Android merely to update: uninstalling can remove local data.
 See [world import review](WORLD_IMPORT_REVIEW.md),
 [community references](COMMUNITY_REFERENCE_INTEGRATION.md), and
 [save normalization and recovery](VOYAGE_SAVE_NORMALIZATION.md).
-Remote save read-back recovery remains separate and all-or-nothing. Generating,
+Other remote save read-back recovery remains separate and all-or-nothing. Generating,
 uploading, attaching, remote saving, moderation and publishing remain separate
 actions. Codex generation uses Codex CLI, not a direct OpenAI API fallback.
+
+See [world-backed forms, activity and automatic additions](WORLD_DEFAULTS_AND_ACTIVITY.md)
+for data precedence, privacy, restart behavior and safe-adoption limits.
 
 ## Downloads and signing
 

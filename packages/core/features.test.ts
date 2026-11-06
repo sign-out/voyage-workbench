@@ -1,5 +1,15 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import * as f from './features';import * as d from './document';import {readFileSync} from 'node:fs';
 const source='{"initialGameState":{"realms":{"Earth":{"name":"Earth"}},"regions":{},"locations":{},"unknown":9007199254740993,"npcs":{"__proto__":{"name":"__proto__","basicInfo":"old","score":1E+999}}}}';
+test('shared world defaults hydrate briefs and public details from actual data without inventing copy or replacing explicit edits',()=>{
+ const state='{"storySettings":{"worldBackground":"Source premise"},"imagePromptConfiguration":{"regions":"Watercolor geography","npcs":"Distinctive character silhouettes"},"regions":{"Coast":{},"Mountains":{}},"exact":9007199254740993}';
+ const envelope='{"shortId":"WORLD","title":"Source title","description":"Public blurb","advancedDescription":"Public long copy","image":"https://example.invalid/cover.png","initialGameState":'+state+'}';
+ const project={activeSource:state,name:'Untitled world',remote:{worldId:'WORLD',envelopeSource:envelope}};
+ const defaults=f.worldAuthoringDefaults(project);assert.equal(defaults.title,'Source title');assert.equal(defaults.premise,'Public blurb\n\nPublic long copy');assert.ok(defaults.direction.includes('Watercolor geography'));assert.ok(defaults.mapPrompt.includes('Coast, Mountains'));
+ assert.equal(f.worldAuthoringDefaults({...project,remote:{worldId:'OTHER',envelopeSource:envelope}}).title,'Untitled world');assert.equal(f.worldAuthoringDefaults({...project,remote:undefined}).premise,'Source premise');
+ const cached='{"title":"My edited title","description":"","unknown":9007199254740993}',filled=f.publicationDefaults(project,cached);assert.equal(d.read(filled,['title']),'"My edited title"');assert.equal(d.read(filled,['description']),'""');assert.equal(d.read(filled,['advancedDescription']),'"Public long copy"');assert.equal(d.read(filled,['unknown']),'9007199254740993');assert.throws(()=>d.read(filled,['shortId']));
+ assert.equal(d.read(f.publicationDefaults({...project,activeSource:envelope},cached),['title']),'"Source title"');
+ assert.equal(f.worldAuthoringDefaults({...project,activeSource:envelope.replace('"Public blurb"','""').replace('"Public long copy"','""')}).description,'');assert.equal(project.activeSource,state);
+});
 test('header world title supports local and API shapes without altering source',()=>{
  for(const world of [{title:'  Aetheric  ',exact:9007199254740993},{title:'世界 🌍'}]){
   for(const envelope of [world,{world},{data:{world}}])assert.equal(f.worldTitle(JSON.stringify(envelope),'Save filename'),world.title.trim());

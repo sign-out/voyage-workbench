@@ -13,6 +13,9 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
    import React from 'react';
    import {createRoot} from 'react-dom/client';
    import {ArtworkWorkspace} from './ArtworkWorkspace';
+   import {CoverStudio} from './CoverStudio';
+   import {OperationActivity} from './OperationActivity';
+   import {operationSnapshot} from './operation-progress';
    import {MediaPreview} from './AssetLibrary';
    import {create} from '../../../packages/core/project';
    import {defaultSettings} from '../../../packages/core/providers';
@@ -20,6 +23,8 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
    import {initCharacterExplorer} from '../../../web/character-explorer.js';
    const root=createRoot(document.getElementById('root'));
    const project=create('portraits','Fixture world',JSON.stringify({title:'Fixture world',initialGameState:{npcs:{guide:{name:'Guide',visualDescription:'Blue cloak and silver hair'}},premadeCharacters:[{name:'Hero',visualDescription:'Red cloak'}]}}),1);
+   createRoot(document.getElementById('activity')).render(<OperationActivity project={project}/>);window.operationSnapshot=operationSnapshot;
+   window.mountCover=(id='cover',title='Source title',premise='Source premise',direction='Source watercolor style')=>root.render(<CoverStudio project={create(id,'Untitled world',JSON.stringify({title,initialGameState:{storySettings:{worldBackground:premise},imagePromptConfiguration:{regions:direction}}}),1)}/>);
    const guideId=JSON.stringify(['initialGameState','npcs','guide','portraitUrl']),heroId=JSON.stringify(['initialGameState','premadeCharacters',0,'portraitUrl']);
    const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;canvas.getContext('2d').fillRect(0,0,128,128);const image=canvas.toDataURL('image/png');
    window.confirmations=[];window.confirm=message=>{window.confirmations.push(message);return window.consent!==false;};
@@ -37,6 +42,7 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
    window.voyage={invoke:async(method,payload)=>{
     window.calls.push(method);
     if(method==='providerSettings')return {settings};
+    if(method==='connection')return {environment:'alpha',contract:null};
     if(method==='featureGet')return store.get(payload.key)||null;
     if(method==='featureSet'){
      if('expected' in payload&&payload.expected!==(store.get(payload.key)||null))throw Error('This feature changed');
@@ -62,8 +68,8 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
     await explorer.render();
    };
   `,resolveDir:path.resolve('apps/workbench/src'),loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser'});
-  const styles=['apps/workbench/src/style.css','apps/workbench/src/adaptive.css','web/character-explorer.css'].map(file=>readFileSync(file,'utf8')).join('\n');
-  writeFileSync(path.join(directory,'fixture.html'),`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>${styles}</style><div class="adaptive-app"><div id="root"></div></div><script>${bundle.outputFiles[0].text}</script>`);
+  const styles=['apps/workbench/src/style.css','apps/workbench/src/adaptive.css','apps/workbench/src/operation-progress.css','web/character-explorer.css'].map(file=>readFileSync(file,'utf8')).join('\n');
+  writeFileSync(path.join(directory,'fixture.html'),`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>${styles}</style><div class="adaptive-app"><div id="activity"></div><div id="root"></div></div><script>${bundle.outputFiles[0].text}</script>`);
   writeFileSync(path.join(directory,'run.cjs'),`
    const {app,BrowserWindow,session}=require('electron');
    app.setPath('userData',${JSON.stringify(path.join(directory,'user-data'))});
@@ -91,6 +97,8 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
      window.deferSave=true;
      button('Generate artwork locally').click();await wait(()=>window.imageCalls===1);
      check(document.querySelector('[aria-label="Artwork generation progress"]').innerText.includes('Generating artwork for Hero'),'Missing target-specific generating feedback');
+     await wait(()=>document.querySelector('.operation-activity summary')?.textContent.includes('Generating artwork for Hero'));
+     check(window.operationSnapshot().some(operation=>operation.method==='imageGenerate'&&operation.state==='running'),'Image request was not tracked as running');
      check(document.body.innerText.includes('Codex CLI fixture · vision-fixture'),'Missing provider/model feedback');
      check(window.confirmations.at(-1).includes('Hero')&&window.confirmations.at(-1).includes('may incur charges'),'Confirmation omitted the target or charge scope');
      check(window.lastImageRequest.prompt==='Hero brief'&&!JSON.stringify(window.lastImageRequest).includes('initialGameState'),'Generation sent the full world instead of the brief');
@@ -120,6 +128,12 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
      document.querySelector('[aria-label="Inspect Offline portrait full size"]').click();await wait(()=>document.querySelector('dialog[open] img')?.naturalWidth===128);button('Close').click();
      window.mountLibraryPreview('missing-original');await wait(()=>document.body.innerText.includes('Preview unavailable'));
      check(window.store.has('asset:hero-image')&&window.applies===0,'A preview failure removed original artwork or changed its association');
+     check(window.operationSnapshot().some(operation=>operation.method==='imageGenerate'&&operation.state==='failed'),'Failed provider work lost its feedback after navigation');
+     window.mountCover();const field=name=>[...document.querySelectorAll('label')].find(label=>label.textContent.startsWith(name))?.querySelector('input,textarea');
+     await wait(()=>field('World title')?.value==='Source title');check(field('Player fantasy / premise').value==='Source premise','Premise was not filled from GameState');check(field('Cover art direction').value==='Source watercolor style','Visual direction was not filled from world data');
+     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field('World title'),'My edited title');field('World title').dispatchEvent(new Event('input',{bubbles:true}));await settle();
+     window.mountCover('cover','Changed source title','Updated source premise','Updated source style');await wait(()=>field('Player fantasy / premise')?.value==='Updated source premise');check(field('World title').value==='My edited title','World refresh overwrote the edited title');check(field('Cover art direction').value==='Updated source style','Pristine art direction did not follow world data');
+     window.mountCover('another-cover','Another world','Another premise','Another style');await wait(()=>field('World title')?.value==='Another world');check(field('Player fantasy / premise').value==='Another premise','Project switch retained another world brief');check(window.imageCalls===2&&window.applies===0,'Autofill triggered paid generation or changed the world');
     })()`)});}finally{window.destroy();}
    }).then(()=>app.exit(0)).catch(error=>{console.error(error);app.exit(1)});
   `);

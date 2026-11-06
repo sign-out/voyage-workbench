@@ -1,4 +1,23 @@
-import {parse,type Node,type Path} from './document';
+import {parse,sameValues,type Node,type Path} from './document';
+
+export function serverAdditions(submitted:string,remote:string){
+ const paths:Path[]=[];let total=0,safe=true;
+ function added(path:Path){if(path[0]!=='world'||path.length<2||path.length===2&&path[1]==='shortId')safe=false;total++;if(paths.length<20)paths.push(path);}
+ function compare(expected:Node,actual:Node,path:Path){
+  if(sameValues(submitted,remote,expected,actual))return;
+  if(expected.kind==='array'&&actual.kind==='array'){
+   if(actual.children.length<expected.children.length){safe=false;return;}
+   expected.children.forEach((child,index)=>compare(child.node,actual.children[index].node,path.concat(index)));actual.children.slice(expected.children.length).forEach(child=>added(path.concat(child.key)));return;
+  }
+  if(expected.kind!=='object'||actual.kind!=='object'){safe=false;return;}
+  const previous:Record<string,Node>=Object.create(null),next:Record<string,Node>=Object.create(null);
+  expected.children.forEach(child=>previous[String(child.key)]=child.node);actual.children.forEach(child=>next[String(child.key)]=child.node);
+  expected.children.forEach(child=>{const found=next[String(child.key)];if(found)compare(child.node,found,path.concat(child.key));else safe=false;});
+  actual.children.forEach(child=>{if(!previous[String(child.key)])added(path.concat(child.key));});
+ }
+ compare(parse(submitted),parse(remote),[]);
+ return {safe:safe&&total>0,total,paths,truncated:total>paths.length};
+}
 
 export function voyageRevision(etag:string):string {
   let revision=etag.trim();
@@ -44,6 +63,7 @@ export function compareRemoteWorlds(submitted:string,remote:string){
 }
 export function voyageSaveFeedback(operation:any){
   if(!operation)return null;
+  if(operation.state==='ACCEPTED'&&operation.automaticAdditions)return {tone:'success',title:'Saved to Voyage · server additions adopted',detail:operation.automaticAdditions.total+' server-added field(s) or records were merged automatically. Existing submitted values were unchanged. The original submission and a local checkpoint are retained; no extra write was sent.'};
   if(operation.state==='ACCEPTED')return {tone:'success',title:'Voyage draft accepted after review',detail:'You adopted the downloaded Voyage changes. The original submission remains in save history; this was not an exact read-back confirmation and no write was resent.'};
   if(operation.state==='CONFIRMED')return {tone:'success',title:'Saved to Voyage',detail:'The remote draft was confirmed by read-back. Your local project remains saved on this device.'};
   if(operation.state==='REJECTED')return {tone:'error',title:'Voyage save rejected',detail:(operation.detail||'Voyage rejected this save.')+' Your local project is unchanged. Resolve the error before starting another save.'};

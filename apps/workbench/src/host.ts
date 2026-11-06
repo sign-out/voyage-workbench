@@ -1,11 +1,12 @@
 import {Capacitor,registerPlugin} from '@capacitor/core';
+import {beginOperation,finishOperation} from './operation-progress';
 declare global {interface Window {voyage?:{invoke:(method:string,payload:any)=>Promise<any>}}}
 const native=registerPlugin<{request:(args:any)=>Promise<{result:any}>}>('Workbench');
 export const platform=Capacitor.isNativePlatform()?'android':typeof window!=='undefined'&&window.voyage?'desktop':'browser';
-export async function request(method:string,payload:any={}):Promise<any>{
- const result=await invokeHost(method,payload);
- if(['setVoyageEnvironment','connectVoyage','refreshVoyageContract'].includes(method)&&typeof window.dispatchEvent==='function')window.dispatchEvent(new Event('voyage-connection-changed'));
- return result;
+export async function request(method:string,payload:any={},activity?:{label:string;projectId?:string}):Promise<any>{
+ const operation=beginOperation(method,payload,activity);
+ try{const result=await invokeHost(method,payload);finishOperation(operation);if(['setVoyageEnvironment','connectVoyage','refreshVoyageContract'].includes(method)&&typeof window.dispatchEvent==='function')window.dispatchEvent(new Event('voyage-connection-changed'));return result;}
+ catch(error){finishOperation(operation,error);throw error;}
 }
 async function invokeHost(method:string,payload:any={}):Promise<any>{
  if(window.voyage)return window.voyage.invoke(method,payload);

@@ -49,6 +49,29 @@ export function worldIdentity(source:string,fallback:string){
  return {title:fallback,shortId:''};
 }
 export function worldTitle(source:string,fallback:string){return worldIdentity(source,fallback).title;}
+export function publicationDefaults(project:{activeSource:string;name:string;remote?:{worldId?:string;envelopeSource?:string};creation?:{publication:{title:string;blurb:string;description:string;tags?:string[]}}},cached='{}'){
+ const fields=['title','description','advancedDescription','image','tags','discordThreadUrl','isLocked','isMod','isUnremixable'],root=d.parse(project.activeSource),base=d.statePath(root),world=d.at(root,base.length?base.slice(0,-1):[]);
+ let source=base.length?'{}':cached;const supplied=d.parse(source);if(supplied.kind!=='object')throw new Error('Publication details must be an object.');
+ let baseline:ReturnType<typeof d.parse>|undefined,baselineSource='';
+ if(!base.length&&project.remote?.worldId&&project.remote.envelopeSource&&worldIdentity(project.remote.envelopeSource,'').shortId===project.remote.worldId){baselineSource=project.remote.envelopeSource;const parsed=d.parse(baselineSource),path=d.statePath(parsed);baseline=d.at(parsed,path.length?path.slice(0,-1):[]);}
+ for(const key of fields){if(supplied.children.some(child=>child.key===key))continue;const current=world.children.find(child=>child.key===key)?.node,saved=baseline?.children.find(child=>child.key===key)?.node,planned=key==='title'?project.creation?.publication.title:key==='description'?project.creation?.publication.blurb:key==='advancedDescription'?project.creation?.publication.description:key==='tags'?project.creation?.publication.tags:undefined;
+  const value=current?project.activeSource.slice(current.start,current.end):saved?baselineSource.slice(saved.start,saved.end):planned!==undefined&&(typeof planned!=='string'||planned.trim())?JSON.stringify(planned):undefined;
+  if(value!==undefined)source=d.insert(source,[],key,value);
+ }
+ return source;
+}
+export function worldAuthoringDefaults(project:{activeSource:string;name:string;remote?:{worldId?:string;envelopeSource?:string};creation?:{publication:{title:string;blurb:string;description:string};design:{artDirection:string};brief:string}},cached='{}'){
+ const root=d.parse(project.activeSource),base=d.statePath(root),publication=d.parse(publicationDefaults(project,cached));
+ const field=(key:'title'|'description'|'advancedDescription')=>{const node=publication.children.find(child=>child.key===key)?.node;return node?node.kind==='string'?String(node.value):'':key==='title'?project.name:'';};
+ const text=(path:d.Path)=>{try{const node=d.at(root,base.concat(path));return node.kind==='string'?String(node.value):'';}catch{return '';}};
+ const title=field('title'),description=field('description'),advancedDescription=field('advancedDescription');
+ const background=text(['storySettings','worldBackground'])||text(['worldBackground']);
+ const styles=['regions','locations','npcs','areas','items'].map(key=>text(['imagePromptConfiguration',key])).filter(Boolean);
+ const direction=project.creation?.design.artDirection||Array.from(new Set(styles)).join('\n\n');
+ const premise=[description,advancedDescription].filter(Boolean).join('\n\n')||background;
+ let geography='';try{const regions=d.at(root,base.concat('regions'));geography=regions.children.map(child=>String(child.key)).join(', ');}catch{}
+ return {title,description,advancedDescription,premise,direction,mapName:title?title+' map':'World map',mapPrompt:[title&&'Map of '+title,geography&&'Regions: '+geography,direction].filter(Boolean).join('\n\n')};
+}
 export function modsInspect(source:string){const path=worldPath(source),root=d.at(d.parse(source),path);if(!root.children.some(c=>c.key==='mods'))return [];const mods=JSON.parse(d.read(source,path.concat('mods')));if(!Array.isArray(mods))throw new Error('Mods must be an array.');const seen:string[]=[];mods.forEach((m:any)=>{if(!m||typeof m.shortId!=='string'||!m.shortId.trim()||m.shortId!==m.shortId.trim()||seen.includes(m.shortId))throw new Error('Each mod needs a unique short ID.');if(m.version!==null&&m.version!==undefined&&(!Number.isSafeInteger(m.version)||m.version<1))throw new Error('Mod versions must be positive integers or null.');seen.push(m.shortId);});return mods;}
 export function modsExport(source:string,mods:any[]){modsInspect('{"mods":'+JSON.stringify(mods)+'}');return put(source,worldPath(source),'mods',JSON.stringify(mods));}
 export function deriveBase(source:string,refs:any[]){if(source.length>8*1024*1024)throw new Error('Base source exceeds 8 MiB.');const root=d.parse(source),base=d.at(root,d.statePath(root));const codecs:Record<string,any>=Object.create(null);d.selectReferences(source,refs).forEach(r=>codecs[r.section]=r.schema);const runtime=['engineState','uiState','characters','partyState','memoryBank','summaryState','embeddings','triggerWritable','systemResults','turnData','studioSession','chatLog','embeddingModel','embeddingDimension','stateEdited','compatibilityRevision'];
