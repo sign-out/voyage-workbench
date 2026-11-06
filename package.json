@@ -1,6 +1,6 @@
 {
   "name": "voyage-workbench",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "license": "GPL-2.0-only",
   "private": true,
   "type": "module",
