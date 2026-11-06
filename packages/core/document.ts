@@ -1,12 +1,19 @@
 import {structuralReferences} from './relationships';
 import {referenceVersion,referencesForVersion} from './references';
+import {readReferenceHelp,type ReferenceHelpKind} from './community-reference';
 export {normalizeReferences,referenceVersion,mergeReferenceSets} from './references';
+export {planWorldImport,worldImportDiff,readImportReview,importOmissions} from './world-import';
+export {buildCommunityReferences,communityGuideRequests,communityReferenceFiles,communityReferenceRequests,communityReferenceOrigin,referenceHelpTopics} from './community-reference';
+
+export function referenceHelp(source:string,references:any[],kind:ReferenceHelpKind='index',topic='',offset=0,context:{environment?:string;engineVersion?:string;schemaId?:string}={}) {
+ return readReferenceHelp(selectReferences(source,references,context),kind,topic,offset);
+}
 
 export function selectReferences(source:string,references:any[],context:{environment?:string;engineVersion?:string;schemaId?:string}={}):any[] {
  try{const root=parse(source),world=at(root,statePath(root)),version=world.children.find(child=>child.key==='heroesVersion')?.node,revision=world.children.find(child=>child.key==='compatibilityRevision')?.node;return referencesForVersion(references,version?.kind==='number'?Number(source.slice(version.start,version.end)):null,{...context,compatibilityRevision:revision?.kind==='number'?Number(source.slice(revision.start,revision.end)):undefined});}catch{return [];}
 }
 export function schemaGuidance(source:string,references:any[],section:string,context:{environment?:string;engineVersion?:string;schemaId?:string}={}):any[] {
- const selected=selectReferences(source,references,context),matches=selected.filter(entry=>entry.section===section).slice(0,3);
+ const selected=selectReferences(source,references,context),matches=selected.filter(entry=>entry.section===section).slice(0,3).map(({communityHelp,...entry})=>entry);
  return matches.length?matches:[{section,schema:null,available:false,warning:selected.length?'This section has no matching cached schema. Preserve existing fields; do not infer a schema from another version.':'No matching cached schema coverage for this document. Obtain version-matched references; do not change heroesVersion to match the cache.'}];
 }
 export type Path = (string | number)[];
@@ -136,13 +143,31 @@ export function assertPackageMetadataUnchanged(before:string,after:string){
 }
 export interface Change {path:Path;kind:'added'|'removed'|'changed'|'order';before:string;after:string}
 export interface ChangeChoice {path:Path;kind:Change['kind']}
+function numericValue(raw:string){
+ const match=/^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(raw)!;
+ const authoredExponent=Number(match[4]||0);if(!Number.isSafeInteger(authoredExponent))return raw;
+ let digits=(match[2]+(match[3]||'')).replace(/^0+/,''),exponent=authoredExponent-(match[3]||'').length;
+ if(!Number.isSafeInteger(exponent))return raw;
+ if(!digits)return match[1]+'0';
+ const tail=/0+$/.exec(digits)?.[0].length||0;digits=digits.slice(0,digits.length-tail);exponent+=tail;
+ return Number.isSafeInteger(exponent)?match[1]+digits+'e'+exponent:raw;
+}
+export function sameValues(before:string,after:string,oldNode:Node,newNode:Node):boolean {
+ if(oldNode.kind!==newNode.kind)return false;
+ if(before.slice(oldNode.start,oldNode.end)===after.slice(newNode.start,newNode.end))return true;
+ if(oldNode.kind==='number')return numericValue(before.slice(oldNode.start,oldNode.end))===numericValue(after.slice(newNode.start,newNode.end));
+ if(oldNode.kind!=='object'&&oldNode.kind!=='array')return oldNode.value===newNode.value;
+ if(oldNode.children.length!==newNode.children.length)return false;
+ const next:Record<string,Node>=Object.create(null);newNode.children.forEach(child=>next[String(child.key)]=child.node);
+ return oldNode.children.every(child=>!!next[String(child.key)]&&sameValues(before,after,child.node,next[String(child.key)]));
+}
 export function alignImport(current:string,incoming:string,protectVoyageMetadata=false){
  const currentPath=statePath(parse(current)),incomingPath=statePath(parse(incoming));
  let aligned={source:incoming,note:''};
  if(currentPath.length&&!incomingPath.length)aligned={source:edit(current,currentPath,incoming),note:'Imported GameState is reviewed inside the existing world envelope. API metadata and world identity are preserved.'};
  else if(!currentPath.length&&incomingPath.length)aligned={source:read(incoming,incomingPath),note:'Imported world envelope is reviewed as GameState to match this local document. Its metadata is not substituted for the linked API world.'};
  else if(currentPath.length&&incomingPath.length)aligned={source:edit(current,currentPath.slice(0,-1),read(incoming,incomingPath.slice(0,-1))),note:JSON.stringify(currentPath)!==JSON.stringify(incomingPath)?'Imported envelope is aligned to the current document wrapper.':''};
- if(protectVoyageMetadata){const preserved=preserveVoyageFields(current,aligned.source);aligned.source=preserved.source;aligned.note+=(aligned.note?' ':'')+(preserved.protectedPaths.length?'Protected Voyage fields retained from the linked world: '+preserved.protectedPaths.map(label).join(', ')+'. ':'')+'Voyage identity and schema-version fields are protected. Import as a separate project to use another world identity or schema version.';}
+ if(protectVoyageMetadata){const preserved=preserveVoyageFields(current,aligned.source);aligned.source=preserved.source;aligned.note+=(aligned.note?' ':'')+(preserved.protectedPaths.length?'Protected Voyage fields retained from the linked world: '+preserved.protectedPaths.map(label).join(', ')+'. ':'')+'Voyage identity and GameState version fields are protected. Import as a separate project to use another world identity or GameState version.';}
  return aligned;
 }
 export function selectChanges(before:string,after:string,rejected:ChangeChoice[]=[]):string {
@@ -167,7 +192,29 @@ export function selectChanges(before:string,after:string,rejected:ChangeChoice[]
  }
  return merge(oldRoot,newRoot,[])!;
 }
-export function diff(before:string,after:string,limit=2000,offset=0,match?:ChangeChoice){
+export function selectProposalChanges(before:string,after:string,rejected:ChangeChoice[]=[]):string {
+ const selected=selectChanges(before,after,rejected),oldRoot=parse(before),newRoot=parse(selected);
+ function retain(oldNode:Node|undefined,newNode:Node):string {
+  if(!oldNode)return selected.slice(newNode.start,newNode.end);
+  if(sameValues(before,selected,oldNode,newNode))return before.slice(oldNode.start,oldNode.end);
+  if(oldNode.kind!=='object'||newNode.kind!=='object')return selected.slice(newNode.start,newNode.end);
+  const previous:Record<string,Node>=Object.create(null),next:Record<string,Node>=Object.create(null),values:Record<string,string>=Object.create(null);
+  oldNode.children.forEach(child=>previous[String(child.key)]=child.node);newNode.children.forEach(child=>next[String(child.key)]=child.node);
+  const oldKeys=oldNode.children.filter(child=>next[String(child.key)]).map(child=>String(child.key)),newKeys=newNode.children.filter(child=>previous[String(child.key)]).map(child=>String(child.key));
+  newNode.children.forEach(child=>values[String(child.key)]=retain(previous[String(child.key)],child.node));
+  if(JSON.stringify(oldKeys)===JSON.stringify(newKeys)){
+   let result=selected.slice(newNode.start,newNode.end);
+   newNode.children.slice().reverse().forEach(child=>{const value=values[String(child.key)];if(value!==selected.slice(child.node.start,child.node.end))result=result.slice(0,child.node.start-newNode.start)+value+result.slice(child.node.end-newNode.start);});
+   return result;
+  }
+  const keys=oldKeys.concat(newNode.children.filter(child=>!previous[String(child.key)]).map(child=>String(child.key)));
+  return '{'+keys.map(key=>JSON.stringify(key)+':'+values[key]).join(',')+'}';
+ }
+ if(sameValues(before,selected,oldRoot,newRoot))return before;
+ return selected.slice(0,newRoot.start)+retain(oldRoot,newRoot)+selected.slice(newRoot.end);
+}
+export function proposalDiff(before:string,after:string,limit=2000,offset=0,match?:ChangeChoice){return diff(before,after,limit,offset,match,true);}
+export function diff(before:string,after:string,limit=2000,offset=0,match?:ChangeChoice,valuesOnly=false){
   const a=parse(before),b=parse(after),changes:Change[]=[];let total=0;
   function equal(x:Node,y:Node):boolean{
     if(x.kind!==y.kind)return false;if(before.slice(x.start,x.end)===after.slice(y.start,y.end))return true;
@@ -177,12 +224,12 @@ export function diff(before:string,after:string,limit=2000,offset=0,match?:Chang
   }
   function add(path:Path,kind:Change['kind'],x?:Node,y?:Node){total++;if(total>offset&&changes.length<limit&&(!match||(match.kind===kind&&JSON.stringify(match.path)===JSON.stringify(path))))changes.push({path,kind,before:x?before.slice(x.start,x.end):'',after:y?after.slice(y.start,y.end):''});}
   function walk(x:Node,y:Node,path:Path){
-    if(equal(x,y))return;
+    if(valuesOnly?sameValues(before,after,x,y):equal(x,y))return;
     if(x.kind==='object'&&y.kind==='object'){
       const oldKeys=x.children.map(c=>c.key),newKeys=y.children.map(c=>c.key);
       const oldMap:Record<string,Node>=Object.create(null),newMap:Record<string,Node>=Object.create(null);x.children.forEach(c=>oldMap[String(c.key)]=c.node);y.children.forEach(c=>newMap[String(c.key)]=c.node);
       const commonOld=oldKeys.filter(k=>!!newMap[String(k)]),commonNew=newKeys.filter(k=>!!oldMap[String(k)]);
-      if(JSON.stringify(commonOld)!==JSON.stringify(commonNew))add(path,'order',x,y);
+      if(!valuesOnly&&JSON.stringify(commonOld)!==JSON.stringify(commonNew))add(path,'order',x,y);
       x.children.forEach(c=>{const next=newMap[String(c.key)];if(next)walk(c.node,next,path.concat(c.key));else add(path.concat(c.key),'removed',c.node);});
       y.children.forEach(c=>{if(!oldMap[String(c.key)])add(path.concat(c.key),'added',undefined,c.node);});
     }else add(path,'changed',x,y);

@@ -13,7 +13,7 @@ test('identity is guarded across edits, insert/remove, root drafts and proposals
  for(const command of [{type:'edit',path:['shortId'],source:'"BAD"',baseHash},{type:'edit',path:[],source:'{}',baseHash},{type:'remove',path:['shortId'],baseHash},{type:'insert',path:[],key:'canSafelySave',source:'true',baseHash}])assert.throws(()=>reduce(project,command),/metadata .*read only/);
  const draft=reduce(project,{type:'draft',path:[],text:envelope.replace('WORLD','BAD'),baseHash});assert.throws(()=>reduce(draft,{type:'applyDraft'}),/read only/);assert.equal(draft.draft?.text,envelope.replace('WORLD','BAD'));
  const proposal=reduce(project,{type:'stage',id:'bad',kind:'work',source:envelope.replace('WORLD','BAD')});assert.throws(()=>reduce(proposal,{type:'accept',id:'bad'}),/read only/);
- const imported=reduce(project,{type:'stage',id:'import',kind:'import',source:envelope.replace('WORLD','IMPORTED')});assert.ok(reduce(imported,{type:'accept',id:'import'}).activeSource.includes('IMPORTED'));
+ const imported=reduce(project,{type:'stage',id:'import',kind:'import',source:envelope.replace('WORLD','IMPORTED').replace('Public copy','Imported copy')}),accepted=reduce(imported,{type:'accept',id:'import'});assert.equal(document.read(accepted.activeSource,['shortId']),'"WORLD"');assert.equal(document.read(accepted.activeSource,['title']),'"Imported copy"');
  assert.equal(project.activeSource,envelope);
 });
 test('publication copy and legitimately named content fields remain editable',()=>{

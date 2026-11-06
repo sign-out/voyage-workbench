@@ -54,24 +54,46 @@ test('upload recovery preserves downloaded schema versions without losing edited
 });
 
 test('raw GameState imports align inside the downloaded envelope instead of deleting API metadata',()=>{
- const project=create('p','Imported',envelope,1),staged=reduce(project,{type:'stage',id:'c',source:state,kind:'import'});
+ const project=create('p','Imported',envelope,1),staged=reduce(project,{type:'stage',id:'c',source:state,kind:'import',importOptions:{mode:'replace'}});
  assert.equal(staged.activeSource,envelope);assert.match(staged.candidates[0].importNote||'',/metadata.*preserved/);
  assert.equal(doc.read(staged.candidates[0].source,['shortId']),'"WORLD"');assert.equal(doc.read(staged.candidates[0].source,['title']),'"API title"');
  assert.ok(doc.diff(envelope,staged.candidates[0].source).changes.every(change=>change.path[0]==='initialGameState'));
  const accepted=reduce(staged,{type:'accept',id:'c'});assert.equal(doc.read(accepted.activeSource,['initialGameState']),state);
 });
 test('selective rejection persists, can be reversed, and applies only selected changes',()=>{
- let project=reduce(create('p','Imported',envelope,1),{type:'stage',id:'c',source:state,kind:'import'});
+ let project=reduce(create('p','Imported',envelope,1),{type:'stage',id:'c',source:state,kind:'import',importOptions:{mode:'replace'}});
  const choose=(path:doc.Path,kind:doc.Change['kind'],reject=true)=>{project=reduce(project,{type:'candidateChange',id:'c',path,kind,reject,candidateHash:hash(project.candidates[0].source)});};
  choose(['initialGameState','npcs','Ada','hp'],'changed');choose(['initialGameState','remove'],'removed');choose(['initialGameState','added'],'added');choose(['initialGameState','keep'],'changed');choose(['initialGameState','keep'],'changed',false);
  assert.equal(project.activeSource,envelope);project=JSON.parse(JSON.stringify(project));assert.equal(project.candidates[0].rejectedChanges?.length,3);
  project=reduce(project,{type:'accept',id:'c'});assert.equal(doc.read(project.activeSource,['initialGameState','npcs','Ada','hp']),'9007199254740993');assert.equal(doc.read(project.activeSource,['initialGameState','npcs','Ada','name']),'"Edited"');assert.equal(doc.read(project.activeSource,['initialGameState','remove']),'"old"');assert.throws(()=>doc.read(project.activeSource,['initialGameState','added']));assert.equal(doc.read(project.activeSource,['initialGameState','keep']),'0');assert.equal(doc.read(project.activeSource,['initialGameState','fraction']),'1.000');assert.equal(project.candidates.length,0);
 });
-test('ordering can be rejected independently of field edits and arrays remain atomic',()=>{
+test('local proposals automatically retain formatting while selective values and exact snapshots stay distinct',()=>{
  const before='{"a":1,"b":2,"list":[9007199254740993,-0],"gone":1}',after='{"b":3,"a":1,"list":[9007199254740995,0],"new":1E+99}';
  const result=doc.selectChanges(before,after,[{path:[],kind:'order'},{path:['list'],kind:'changed'},{path:['gone'],kind:'removed'}]);
  assert.deepEqual(doc.describe(result).children.map(child=>child.key),['a','b','list','gone','new']);assert.equal(doc.read(result,['b']),'3');assert.equal(doc.read(result,['list']),'[9007199254740993,-0]');assert.equal(doc.read(result,['new']),'1E+99');
  const all=doc.selectChanges(before,after,doc.diff(before,after).changes);assert.equal(doc.diff(before,all).total,0);
+ const current='{\n "itemSettings":{"currencyName":"coin","tiers":{"mundane":{"displayName":"Mundane","valueRange":{"min":0,"max":100}}},"itemCategories":["Armor","Tool"]},\n "parties":{"":{"arcs":{},"quests":{}}},"instructions":"Old wording","exact":9007199254740993,"notation":1.2300e+42,"name":"Caf\\u00e9","unknown":{"__proto__":{"value":1}},"list":[1,2],"zero":-0\n}';
+ const minified='{"zero":-0,"list":[1,2],"unknown":{"__proto__":{"value":1}},"name":"Café","notation":123e40,"exact":9007199254740993,"instructions":"Old wording","parties":{"":{"quests":{},"arcs":{}}},"itemSettings":{"itemCategories":["Armor","Tool"],"tiers":{"mundane":{"valueRange":{"max":100,"min":0},"displayName":"Mundane"}},"currencyName":"coin"}}';
+ assert.equal(doc.proposalDiff(current,minified).total,0);assert.equal(doc.selectProposalChanges(current,minified),current);
+ const slots='[{ "slot":"tool", "quantity":2 },{"slot":"armor","quantity":1}]',compactSlots='[{"quantity":2,"slot":"tool"},{"quantity":1,"slot":"armor"}]';
+ assert.equal(doc.proposalDiff(slots,compactSlots).total,0);assert.equal(doc.selectProposalChanges(slots,compactSlots),slots);assert.equal(doc.proposalDiff(slots,'[{"slot":"armor","quantity":1},{"slot":"tool","quantity":2}]').total,1);
+ const incoming=minified.replace('"Old wording"','"New wording"').replace('"displayName":"Mundane"','"displayName":"Mundane","bonusPolicy":{"initialMaximumPicks":1}').replace('"zero":-0','"compatibilityRevision":16,"zero":0').replace('"list":[1,2]','"list":[2,1]');
+ const expected=[['itemSettings','tiers','mundane','bonusPolicy'],['instructions'],['list'],['zero'],['compatibilityRevision']];
+ assert.deepEqual(doc.proposalDiff(current,incoming).changes.map(change=>change.path),expected);
+ assert.equal(doc.proposalDiff(current,incoming,2,2).changes.length,2);
+ for(const kind of ['import','work','restore']){
+  let project=create('formatting','Legacy proposal',current,1);
+  project.candidates=[{id:'legacy',title:'Persisted proposal',kind,source:incoming,baseHash:hash(current),created:1}];project=JSON.parse(JSON.stringify(project));
+  project=reduce(project,{type:'candidateChange',id:'legacy',candidateHash:hash(incoming),path:expected[0],kind:'added',reject:true});
+  if(kind!=='import'){assert.throws(()=>reduce(project,{type:'accept',id:'legacy'}),/metadata compatibilityRevision is read only/);project=reduce(project,{type:'candidateChange',id:'legacy',candidateHash:hash(incoming),path:['compatibilityRevision'],kind:'added',reject:true});}
+  const selected=doc.selectProposalChanges(current,incoming,project.candidates[0].rejectedChanges);
+  project=reduce(project,{type:'accept',id:'legacy'});assert.equal(project.activeSource,selected);assert.equal(project.candidates.length,0);
+  assert.equal(doc.read(selected,['instructions']),'"New wording"');if(kind==='import')assert.equal(doc.read(selected,['compatibilityRevision']),'16');else assert.throws(()=>doc.read(selected,['compatibilityRevision']));assert.equal(doc.read(selected,['list']),'[2,1]');assert.equal(doc.read(selected,['zero']),'0');
+  assert.equal(doc.read(selected,['notation']),'1.2300e+42');assert.equal(doc.read(selected,['exact']),'9007199254740993');assert.equal(doc.read(selected,['name']),'"Caf\\u00e9"');assert.equal(doc.read(selected,['unknown','__proto__','value']),'1');
+  assert.deepEqual(doc.describe(selected).children.map(child=>child.key),doc.describe(current).children.map(child=>child.key).concat(kind==='import'?['compatibilityRevision']:[]));
+  assert.deepEqual(doc.describe(selected,['parties','']).children.map(child=>child.key),['arcs','quests']);assert.throws(()=>doc.read(selected,expected[0]));
+ }
+ assert.equal(doc.selectChanges(current,incoming),incoming);assert.ok(doc.diff(current,incoming).changes.some(change=>change.kind==='order'));
 });
 test('review choices reject unknown paths, stale proposals and changed proposal snapshots',()=>{
  let project=reduce(create('p','Imported',envelope,1),{type:'stage',id:'c',source:state});const command={type:'candidateChange',id:'c',path:['missing'],kind:'changed',reject:true,candidateHash:hash(project.candidates[0].source)};
@@ -91,4 +113,11 @@ test('diff pages expose later changes and selective rejection is not limited to 
  assert.equal(doc.diff(before,after).changes.length,2000);assert.equal(doc.diff(before,after,2000,2000).changes.length,10);
  let project=reduce(create('p','Large diff',before,1),{type:'stage',id:'c',source:after});project=reduce(project,{type:'candidateChange',id:'c',path:['field2009'],kind:'changed',reject:true,candidateHash:hash(project.candidates[0].source)});project=reduce(project,{type:'accept',id:'c'});
  assert.equal(doc.read(project.activeSource,['field2009']),'0');assert.equal(doc.read(project.activeSource,['field0']),'1');
+});
+test('GameState import is exact for a new project and supports explicit replacement for an existing world',()=>{
+ const incoming='{"heroesVersion":37,"worldVoices":{},"parties":{"":{"questTriggers":{}}},"exact":9007199254740993}',current='{"shortId":"WORLD","title":"Keep metadata","initialGameState":{"heroesVersion":37,"compatibilityRevision":16,"characterCreationMusic":"fantasy","parties":{"":{"questTriggers":{"__generated_quest_progress__/Example":{"effects":[]}}}},"exact":9007199254740993}}';
+ const separate=create('separate','Separate',incoming,1);assert.equal(separate.activeSource,incoming);assert.equal(separate.originalSource,incoming);assert.equal(separate.candidates.length,0);
+ const linked=reduce(create('existing','Existing',current,1),{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'revision'}),staged=reduce(linked,{type:'stage',id:'import',kind:'import',source:incoming,importOptions:{mode:'replace'}}),proposal=staged.candidates[0],changes=doc.diff(current,proposal.source).changes;
+ assert.equal(staged.activeSource,current);assert.equal(doc.read(proposal.source,['title']),'"Keep metadata"');assert.equal(doc.read(proposal.source,['initialGameState','compatibilityRevision']),'16');assert.equal(doc.read(proposal.source,['initialGameState','exact']),'9007199254740993');
+ assert.ok(changes.some(change=>change.kind==='removed'&&change.path.at(-1)==='__generated_quest_progress__/Example'));assert.ok(changes.some(change=>change.kind==='removed'&&change.path.at(-1)==='characterCreationMusic'));assert.ok(changes.some(change=>change.kind==='added'&&change.path.at(-1)==='worldVoices'));assert.match(proposal.importNote!,/GameState version fields/);
 });

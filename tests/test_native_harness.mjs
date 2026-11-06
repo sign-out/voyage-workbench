@@ -13,6 +13,43 @@ const reduce=(project,command)=>request({operation:'reduce',project,command:{...
 const references=[{section:'heroesVersion',schema:{_type:'literal',value:37}},{section:'value',schema:'number'}];
 const source='{"heroesVersion":37,"value":1,"list":[],"exact":9007199254740993}';
 
+test('native import merge, replace and read-only summary preserve omitted GameState and numeric spelling',()=>{
+ const pretty='{\n "itemSettings":{"currencyName":"coin","tiers":{}},"parties":{"":{"arcs":{},"quests":{}}},"number":1.2300e+42\n}',compact='{"number":123e40,"parties":{"":{"quests":{},"arcs":{}}},"itemSettings":{"tiers":{},"currencyName":"coin"}}';
+ assert.equal(request({operation:'proposalDiff',args:[pretty,compact]}).total,0);assert.equal(request({operation:'selectProposalChanges',args:[pretty,compact]}),pretty);
+ const changed=compact.replace('"coin"','"silver"');let legacy=request({operation:'create',id:'legacy',name:'Legacy',source:pretty,now:1});legacy.candidates=[{id:'old',kind:'import',source:changed,baseHash:request({operation:'hash',source:pretty}),created:1}];
+ legacy=reduce(legacy,{type:'accept',id:'old'});assert.equal(request({operation:'read',args:[legacy.activeSource,['number']]}),'1.2300e+42');assert.equal(request({operation:'read',args:[legacy.activeSource,['itemSettings','currencyName']]}),'"silver"');assert.equal(request({operation:'diff',args:[pretty,legacy.activeSource]}).total,1);
+ const before='{"shortId":"WORLD","initialGameState":{"heroesVersion":37,"value":1,"party":{"exact":9007199254740993}}}',incoming='{"value":2}';
+ let project=request({operation:'create',id:'p',name:'Import',source:before,now:1});project=reduce(project,{type:'stage',id:'import',kind:'import',source:incoming});
+ assert.equal(project.candidates[0].importOptions.mode,'merge');assert.equal(request({operation:'read',args:[project.candidates[0].source,['initialGameState','party','exact']]}),'9007199254740993');
+ assert.equal(request({operation:'worldImportDiff',args:[before,project.candidates[0].source]}).counts.world,1);
+ project=reduce(project,{type:'prepareTask',id:'summary',attempt:'attempt',kind:'plan',importReview:{candidateId:'import'}});project=reduce(project,{type:'taskRunning',taskId:'summary',attempt:'attempt'});
+ assert.deepEqual(request({operation:'toolDefinitions',args:[false,request({operation:'taskToolCapabilities',args:[project.tasks[0]]})]}).map(tool=>tool.name),['world_import_review']);
+ project=reduce(project,{type:'taskTool',taskId:'summary',attempt:'attempt',callId:'read',name:'world_import_review',args:{offset:0}});assert.equal(project.tasks[0].toolJournal[0].result.counts.world,1);
+ project=reduce(project,{type:'taskDone',taskId:'summary',attempt:'attempt',text:'One world value changes; omitted party data stays.'});assert.equal(project.activeSource,before);
+ project=reduce(project,{type:'configureImport',id:'import',candidateHash:request({operation:'hash',source:project.candidates[0].source}),importOptions:{mode:'replace'}});assert.throws(()=>request({operation:'read',args:[project.candidates[0].source,['initialGameState','party']]}));
+ project=reduce(project,{type:'edit',path:['initialGameState','value'],source:'3',baseHash:request({operation:'hash',source:project.activeSource})});
+ project=reduce(project,{type:'refreshImport',id:'import',candidateHash:request({operation:'hash',source:project.candidates[0].source}),baseHash:request({operation:'hash',source:project.activeSource})});assert.equal(project.candidates[0].baseHash,request({operation:'hash',source:project.activeSource}));
+ project=reduce(project,{type:'importCategorySelection',id:'import',candidateHash:request({operation:'hash',source:project.candidates[0].source}),category:'all',reject:true});assert.equal(request({operation:'selectChanges',args:[project.activeSource,project.candidates[0].source,project.candidates[0].rejectedChanges]}),project.activeSource);
+});
+
+test('native bridge builds and reads cached community help without changing GameState',()=>{
+ const files={
+  'schema.json':JSON.stringify({_type:'required',fields:{heroesVersion:{_type:'literal',value:37}}}),
+  'wiki.json':JSON.stringify([{section:'npcs',title:'Characters',summary:'Voices.',filePath:['npcs'],body:'Advisory character help.'}]),
+  'limits.json':JSON.stringify({schemaVersion:'V37',count:0,limits:[]}),
+  'voice-catalog.json':JSON.stringify({schemaVersion:'V37',field:'voiceTag',count:1,voiceTags:['male gruff']}),
+  'guides.json':'[]','base-world.json':'{ "heroesVersion":37, "exact":9007199254740993 }'
+ };
+ assert.deepEqual(request({operation:'communityReferenceRequests'}),['schema.json','wiki.json','limits.json','voice-catalog.json','guides.json','base-world.json']);
+ assert.deepEqual(request({operation:'communityGuideRequests',args:[files['guides.json']]}),[]);
+ const bundle=request({operation:'buildCommunityReferences',args:[files,1234]});
+ const help=request({operation:'referenceHelp',args:[source,bundle.sections,'section','npcs']});
+ assert.equal(help.text,'Advisory character help.');assert.equal(help.official,false);
+ assert.equal(request({operation:'referenceHelp',args:[source,bundle.sections,'seed']}).text,files['base-world.json']);
+ assert.equal(request({operation:'schemaGuidance',args:[source,bundle.sections,'heroesVersion']})[0].communityHelp,undefined);
+ assert.equal(request({operation:'referenceHelp',args:['{"heroesVersion":36}',bundle.sections]}).available,false);
+});
+
 test('native compatibility profiles and revision-scoped references survive the ES5 bridge',()=>{
  assert.equal(request({operation:'coverRecommendation',args:['alpha']}).width,1280);
  assert.equal(request({operation:'coverRecommendation',args:['production']}).width,1000);

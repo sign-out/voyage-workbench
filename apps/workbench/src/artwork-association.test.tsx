@@ -67,7 +67,7 @@ test('rendered character artwork picker persists exact portrait associations, re
      const state=()=>JSON.parse(JSON.parse(localStorage.getItem('portrait-project')).activeSource).world.initialGameState;
      const edit=name=>document.querySelector('[aria-label="Edit '+name+'"]');
      const portrait=name=>document.querySelector('[aria-label="Choose artwork for '+name+'"]');
-     const choose=async name=>{portrait(name).click();await wait(()=>document.querySelector('.library-row')||document.querySelector('.library-picker-list strong'));button('Library portraitHosted URL retained').click();await wait(()=>[...document.querySelectorAll('button')].some(element=>element.textContent==='Use existing hosted URL'));button('Use existing hosted URL').click();};
+     const choose=async name=>{portrait(name).click();await wait(()=>document.querySelector('.library-row')||document.querySelector('.library-picker-list strong'));document.querySelector('[aria-label="Select Library portrait"]').click();await wait(()=>[...document.querySelectorAll('button')].some(element=>element.textContent==='Use existing hosted URL'));button('Use existing hosted URL').click();};
      await window.start();await wait(()=>edit('guide'));edit('guide').click();await wait(()=>portrait('guide'));
      check(document.querySelector('textarea[aria-label="portrait Url"]'),'Missing portrait field was not offered without a schema');
      window.setEditorDraft(true);await wait(()=>window.project.draft);portrait('guide').click();await wait(()=>document.body.innerText.includes('editor draft before attaching'));check(!document.querySelector('[aria-label="Choose an asset"]'),'Portrait picker could discard an editor draft');window.setEditorDraft(false);await wait(()=>!window.project.draft);
@@ -91,7 +91,7 @@ test('rendered character artwork picker persists exact portrait associations, re
      check(!state().npcs.other.portraitUrl,'Failed assignment changed the saved project');
      check(!document.body.innerText.includes('Portrait saved locally to other'),'Failed assignment reported success');
      window.rejectSave=false;button('Use existing hosted URL').click();await wait(()=>!document.querySelector('[aria-label="Choose an asset"]'));check(state().npcs.other.portraitUrl==='https://images.example/portrait.png','Retrying a failed local save did not attach');
-     portrait('other').click();await wait(()=>document.querySelector('.library-picker-list strong'));button('Library portraitHosted URL retained').click();await wait(()=>[...document.querySelectorAll('button')].some(element=>element.textContent==='Use existing hosted URL'));
+     portrait('other').click();await wait(()=>document.querySelector('.library-picker-list strong'));document.querySelector('[aria-label="Select Library portrait"]').click();await wait(()=>[...document.querySelectorAll('button')].some(element=>element.textContent==='Use existing hosted URL'));
      const beforeChange=window.project.activeSource;window.mutateWorld();await wait(()=>window.project.activeSource!==beforeChange);button('Use existing hosted URL').click();await wait(()=>document.body.innerText.includes('character or world changed'));button('Close').click();
      window.showArtwork();await wait(()=>document.querySelector('[aria-label="Artwork destinations"]'));
      const destination=name=>[...document.querySelectorAll('.artwork-destination-list button')].find(element=>element.querySelector('strong')?.textContent===name);

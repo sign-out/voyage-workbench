@@ -1,5 +1,46 @@
 # Reviewing Voyage save differences
 
+## GameState data is not a JSON Schema
+
+Workbench edits the exact imported JSON source. A Studio-style file contains a
+bare GameState. A Creator API download contains a world envelope with metadata
+and `initialGameState`; its GameState is what the content editor displays and
+edits. The official API contract calls it canonical authored state, with shared
+fields at the root and party fields under `parties[partyId]`. It is not a live
+game session, and the JSON Schema/reference describing its fields is not the
+document being edited. Cached community references are guidance, not authority
+to silently rewrite imported data or migrate an engine version.
+
+Import with no project open creates a separate project and preserves the exact
+file. Import while a project is open now stages a **Merge proposal by default**.
+Missing fields and records are kept, not proposed as deletions. Choose **Replace**
+to remove omitted GameState data deliberately. Linked identity and GameState
+version fields remain protected, and wrapper alignment does not itself migrate
+GameState. The active project stays unchanged until explicit acceptance. Close
+the project first when the intent is to import a separate world. See
+[world-focused import review](WORLD_IMPORT_REVIEW.md) for exact merge rules,
+runtime categorization and the optional read-only assistant summary.
+
+Before world-focused import review, importing the supplied November 6 updated
+GameState into the Workbench export reproduced 54 entries: 50 generated-trigger removals, removal
+of the music default, two added empty collections, and one key-order entry. The
+key-order entry previously displayed both full GameState objects, making it look
+like another complete content replacement. The new import review compares
+GameState values, not key order or wrappers. Default Merge retains the 52 omitted
+branches and reports only two added empty collections for these supplied files:
+no authored-world edits and no runtime removals. Explicit Replace instead shows
+the music removal, 50 generated-trigger removals and two added empty collections,
+in separate categories. Categorization never silently discards a selected change.
+The three differences against the supplied Studio export are a changed
+instruction-map key (`/` versus `%2F`, shown as remove/add) and an omitted empty
+party `entities` object. This comparison does not establish which form the creator
+intends; neither ID encoding nor omission is silently repaired.
+
+The 0.2.22 save-recovery change provides explicit read-back review. The new local
+import behavior does not alter that all-or-nothing remote recovery or prove that
+the server preserved every intended edit. Review, import, save confirmation and
+schema guidance are distinct.
+
 ## November 6, 2026 investigation
 
 The supplied Studio export and Workbench export use different containers:
