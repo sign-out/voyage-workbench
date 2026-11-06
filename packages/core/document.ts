@@ -1,12 +1,19 @@
 import {structuralReferences} from './relationships';
 import {referenceVersion,referencesForVersion} from './references';
+import {readReferenceHelp,type ReferenceHelpKind} from './community-reference';
 export {normalizeReferences,referenceVersion,mergeReferenceSets} from './references';
+export {planWorldImport,worldImportDiff,readImportReview,importOmissions} from './world-import';
+export {buildCommunityReferences,communityGuideRequests,communityReferenceFiles,communityReferenceRequests,communityReferenceOrigin,referenceHelpTopics} from './community-reference';
+
+export function referenceHelp(source:string,references:any[],kind:ReferenceHelpKind='index',topic='',offset=0,context:{environment?:string;engineVersion?:string;schemaId?:string}={}) {
+ return readReferenceHelp(selectReferences(source,references,context),kind,topic,offset);
+}
 
 export function selectReferences(source:string,references:any[],context:{environment?:string;engineVersion?:string;schemaId?:string}={}):any[] {
  try{const root=parse(source),world=at(root,statePath(root)),version=world.children.find(child=>child.key==='heroesVersion')?.node,revision=world.children.find(child=>child.key==='compatibilityRevision')?.node;return referencesForVersion(references,version?.kind==='number'?Number(source.slice(version.start,version.end)):null,{...context,compatibilityRevision:revision?.kind==='number'?Number(source.slice(revision.start,revision.end)):undefined});}catch{return [];}
 }
 export function schemaGuidance(source:string,references:any[],section:string,context:{environment?:string;engineVersion?:string;schemaId?:string}={}):any[] {
- const selected=selectReferences(source,references,context),matches=selected.filter(entry=>entry.section===section).slice(0,3);
+ const selected=selectReferences(source,references,context),matches=selected.filter(entry=>entry.section===section).slice(0,3).map(({communityHelp,...entry})=>entry);
  return matches.length?matches:[{section,schema:null,available:false,warning:selected.length?'This section has no matching cached schema. Preserve existing fields; do not infer a schema from another version.':'No matching cached schema coverage for this document. Obtain version-matched references; do not change heroesVersion to match the cache.'}];
 }
 export type Path = (string | number)[];
@@ -142,7 +149,7 @@ export function alignImport(current:string,incoming:string,protectVoyageMetadata
  if(currentPath.length&&!incomingPath.length)aligned={source:edit(current,currentPath,incoming),note:'Imported GameState is reviewed inside the existing world envelope. API metadata and world identity are preserved.'};
  else if(!currentPath.length&&incomingPath.length)aligned={source:read(incoming,incomingPath),note:'Imported world envelope is reviewed as GameState to match this local document. Its metadata is not substituted for the linked API world.'};
  else if(currentPath.length&&incomingPath.length)aligned={source:edit(current,currentPath.slice(0,-1),read(incoming,incomingPath.slice(0,-1))),note:JSON.stringify(currentPath)!==JSON.stringify(incomingPath)?'Imported envelope is aligned to the current document wrapper.':''};
- if(protectVoyageMetadata){const preserved=preserveVoyageFields(current,aligned.source);aligned.source=preserved.source;aligned.note+=(aligned.note?' ':'')+(preserved.protectedPaths.length?'Protected Voyage fields retained from the linked world: '+preserved.protectedPaths.map(label).join(', ')+'. ':'')+'Voyage identity and schema-version fields are protected. Import as a separate project to use another world identity or schema version.';}
+ if(protectVoyageMetadata){const preserved=preserveVoyageFields(current,aligned.source);aligned.source=preserved.source;aligned.note+=(aligned.note?' ':'')+(preserved.protectedPaths.length?'Protected Voyage fields retained from the linked world: '+preserved.protectedPaths.map(label).join(', ')+'. ':'')+'Voyage identity and GameState version fields are protected. Import as a separate project to use another world identity or GameState version.';}
  return aligned;
 }
 export function selectChanges(before:string,after:string,rejected:ChangeChoice[]=[]):string {

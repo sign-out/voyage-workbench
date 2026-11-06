@@ -4,18 +4,20 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {Service} from './service';
+import {communityFixture} from '../../tests/community-reference-fixture';
 
 test('refresh installs V37 intersection references, persists provenance and retains them on failure',async()=>{
  const directory=mkdtempSync(path.join(os.tmpdir(),'voyage-references-')),originalFetch=globalThis.fetch;
  const secrets={durable:false,get:()=>'',set:()=>{}};
  const service=new Service(directory,path.resolve('apps/workbench/public/references'),secrets);
  try{
-  const schema={_type:'intersection',parts:[{_type:'required',fields:{heroesVersion:{_type:'literal',value:37},npcs:{_type:'record',codomain:'unknown'}}},{_type:'partial',fields:{triggerDefinitions:{_type:'record',codomain:'unknown'}}}]};
+  const files=communityFixture(),requests:string[]=[];
   globalThis.fetch=async(url,options)=>{
-   assert.equal(url,'https://api.unofficial.voyage/schema.json');
+   const file=String(url).replace('https://api.unofficial.voyage/','');assert.ok(Object.hasOwn(files,file));requests.push(file);
    assert.equal(options?.redirect,'error');
    assert.equal(options?.headers,undefined);
-   return new Response(JSON.stringify(schema));
+   assert.equal(options?.body,undefined);assert.equal(options?.method,undefined);assert.equal(options?.credentials,'omit');
+   return new Response(files[file]);
   };
   assert.deepEqual(await service.request('refreshReferences'),{ok:true});
   const installed=await service.request('references');
@@ -24,13 +26,23 @@ test('refresh installs V37 intersection references, persists provenance and reta
   assert.equal(installed.official,false);
   assert.equal(installed.sections.find((entry:any)=>entry.schemaVersion===37).snapshotHash,installed.meta.hash);
   assert.deepEqual(installed.sections.filter((entry:any)=>entry.schemaVersion===37).map((entry:any)=>entry.section),['heroesVersion','npcs','triggerDefinitions']);
-  globalThis.fetch=async()=>new Response('{"_type":"intersection","parts":[]}');
+  assert.deepEqual(requests,Object.keys(files).filter(file=>!file.startsWith('guides/')).concat('guides/world-building.json'));
+  const help=installed.sections.find((entry:any)=>entry.communityHelp).communityHelp;assert.equal(help.guides.length,1);assert.equal(help.pages.length,2);
+  const fetchGood=globalThis.fetch;
+  globalThis.fetch=async(url,options)=>String(url).endsWith('/wiki.json')?new Response('[]'):fetchGood(url,options);
   const failure=await service.request('refreshReferences');
   assert.equal(failure.ok,false);
   assert.equal(failure.retainedPrevious,true);
   assert.deepEqual(await service.request('references'),installed);
+  globalThis.fetch=async(url,options)=>String(url).endsWith('/voice-catalog.json')?new Response('Unavailable',{status:503}):fetchGood(url,options);
+  assert.equal((await service.request('refreshReferences')).retainedPrevious,true);
+  assert.deepEqual(await service.request('references'),installed);
+  let cancelled=false;
+  globalThis.fetch=async()=>new Response(new ReadableStream({start(controller){controller.enqueue(new Uint8Array(8*1024*1024+1));},cancel(){cancelled=true;}}));
+  assert.equal((await service.request('refreshReferences')).retainedPrevious,true);assert.equal(cancelled,true);
+  assert.deepEqual(await service.request('references'),installed);
   const setting=service.store.setting.bind(service.store);
-  globalThis.fetch=async()=>new Response(JSON.stringify({_type:'required',fields:{heroesVersion:{_type:'literal',value:38}}}));
+  globalThis.fetch=fetchGood;
   service.store.setting=(key,value)=>{if(key==='referenceMeta'&&value!==undefined)throw new Error('Simulated disk failure');return setting(key,value);};
   assert.equal((await service.request('refreshReferences')).retainedPrevious,true);
   service.store.setting=setting;

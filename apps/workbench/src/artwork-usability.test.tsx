@@ -13,6 +13,7 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
    import React from 'react';
    import {createRoot} from 'react-dom/client';
    import {ArtworkWorkspace} from './ArtworkWorkspace';
+   import {MediaPreview} from './AssetLibrary';
    import {create} from '../../../packages/core/project';
    import {defaultSettings} from '../../../packages/core/providers';
    import {charactersInspect} from '../../../packages/core/features';
@@ -52,6 +53,7 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
     throw Error('Unexpected provider, upload or world mutation: '+method);
    }};
    window.mountArtwork=(id=guideId)=>root.render(<ArtworkWorkspace key={crypto.randomUUID()} project={project} initialDestinationId={id} apply={async()=>{window.applies++;throw Error('Artwork must not auto-attach');}} onCover={()=>{throw Error('Portrait must not open cover');}}/>);
+   window.mountLibraryPreview=storageId=>root.render(<MediaPreview asset={{id:storageId,name:'Offline portrait',kind:'image',mime:'image/png',created:1,storageId,aliases:[],tags:[],remote:[{url:'https://offline-artwork.invalid/portrait.png',state:'durable',created:1}]}}/>);
    window.mountCharacters=async()=>{
     root.render(<div/>);await new Promise(resolve=>setTimeout(resolve,30));
     const host=document.createElement('div');document.body.append(host);window.characterHost=host;
@@ -63,9 +65,10 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
   const styles=['apps/workbench/src/style.css','apps/workbench/src/adaptive.css','web/character-explorer.css'].map(file=>readFileSync(file,'utf8')).join('\n');
   writeFileSync(path.join(directory,'fixture.html'),`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>${styles}</style><div class="adaptive-app"><div id="root"></div></div><script>${bundle.outputFiles[0].text}</script>`);
   writeFileSync(path.join(directory,'run.cjs'),`
-   const {app,BrowserWindow}=require('electron');
+   const {app,BrowserWindow,session}=require('electron');
    app.setPath('userData',${JSON.stringify(path.join(directory,'user-data'))});
    app.whenReady().then(async()=>{
+    session.defaultSession.webRequest.onBeforeRequest({urls:['https://offline-artwork.invalid/*']},(details,callback)=>callback({cancel:true}));
     const window=new BrowserWindow({show:false,width:400,height:850,webPreferences:{contextIsolation:true,backgroundThrottling:false}});
     try{await window.loadFile(${JSON.stringify(path.join(directory,'fixture.html'))});await window.webContents.executeJavaScript(${JSON.stringify(`(async()=>{
      const check=(condition,message)=>{if(!condition)throw Error(message);};
@@ -112,6 +115,11 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
      check(JSON.stringify(window.characterSelection.path)==='["initialGameState","npcs","guide"]','Character shortcut used the wrong exact path');
      check(document.querySelector('[aria-label="Artwork brief"]').value.includes('Blue cloak and silver hair'),'Character appearance was not included in the prepared brief');
      check(window.imageCalls===2&&window.applies===0,'Portrait shortcut silently generated or mutated the world');
+     window.mountLibraryPreview('hero-image');await wait(()=>document.querySelector('.library-preview')?.naturalWidth===128);
+     check(document.querySelector('.library-preview').src.startsWith('data:image/png;'),'Available original was hidden behind an unavailable hosted preview');
+     document.querySelector('[aria-label="Inspect Offline portrait full size"]').click();await wait(()=>document.querySelector('dialog[open] img')?.naturalWidth===128);button('Close').click();
+     window.mountLibraryPreview('missing-original');await wait(()=>document.body.innerText.includes('Preview unavailable'));
+     check(window.store.has('asset:hero-image')&&window.applies===0,'A preview failure removed original artwork or changed its association');
     })()`)});}finally{window.destroy();}
    }).then(()=>app.exit(0)).catch(error=>{console.error(error);app.exit(1)});
   `);

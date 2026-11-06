@@ -4,7 +4,7 @@ import {creationBriefHash} from './world-creation';
 
 export const orchestrationLimits={resumes:2,children:2,summaryCharacters:4000};
 export const toolJournalLimits={calls:256,resultCharacters:128*1024,totalCharacters:512*1024,retainedTasks:10};
-export interface ToolCapabilities {delegation?:boolean;readOnly?:boolean;grading?:boolean;fieldFill?:boolean}
+export interface ToolCapabilities {delegation?:boolean;readOnly?:boolean;grading?:boolean;fieldFill?:boolean;importReview?:boolean}
 export interface TaskPolicy {autoResume:boolean;allowDelegation:boolean;routeHash:string;hostPlatform:string}
 export interface ResumeReceipt {previousAttempt:string;attempt:string;sourceHash:string;created:number;reply:string}
 export interface Delegation {parentAttempt:string;callId:string;paths:doc.Path[];sourceHash:string}
@@ -20,7 +20,7 @@ export function taskPolicy(platform:string,route:any,input:any,hasher:(source:st
  if((input.autoResume||input.allowDelegation)&&input.kind!=='work')throw new Error('Checkpoint continuation and delegation require an approved work task.');
  return {autoResume:input.autoResume===true,allowDelegation:input.allowDelegation===true,routeHash:hasher(JSON.stringify(route||null)),hostPlatform:platform};
 }
-export function taskToolCapabilities(task:Task):ToolCapabilities {return {delegation:task.policy?.allowDelegation===true&&!task.parentTaskId&&!task.grading&&!task.fieldFill,readOnly:task.kind==='review',grading:!!task.grading,fieldFill:!!task.fieldFill};}
+export function taskToolCapabilities(task:Task):ToolCapabilities {return {delegation:task.policy?.allowDelegation===true&&!task.parentTaskId&&!task.grading&&!task.fieldFill&&!task.importReview,readOnly:task.kind==='review',grading:!!task.grading,fieldFill:!!task.fieldFill,importReview:!!task.importReview};}
 export function taskGroup(project:Project,task:Task){const root=task.parentTaskId||task.id;return project.tasks.filter(entry=>entry.id===root||entry.parentTaskId===root);}
 export function groupJournal(project:Project,task:Task){return taskGroup(project,task).reduce<ToolReceipt[]>((journal,entry)=>journal.concat(entry.toolJournal||[]),[]);}
 export function resumeIssue(project:Project,task:Task,platform:string,hasher:(source:string)=>string):string {

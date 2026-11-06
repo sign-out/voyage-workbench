@@ -54,14 +54,14 @@ test('upload recovery preserves downloaded schema versions without losing edited
 });
 
 test('raw GameState imports align inside the downloaded envelope instead of deleting API metadata',()=>{
- const project=create('p','Imported',envelope,1),staged=reduce(project,{type:'stage',id:'c',source:state,kind:'import'});
+ const project=create('p','Imported',envelope,1),staged=reduce(project,{type:'stage',id:'c',source:state,kind:'import',importOptions:{mode:'replace'}});
  assert.equal(staged.activeSource,envelope);assert.match(staged.candidates[0].importNote||'',/metadata.*preserved/);
  assert.equal(doc.read(staged.candidates[0].source,['shortId']),'"WORLD"');assert.equal(doc.read(staged.candidates[0].source,['title']),'"API title"');
  assert.ok(doc.diff(envelope,staged.candidates[0].source).changes.every(change=>change.path[0]==='initialGameState'));
  const accepted=reduce(staged,{type:'accept',id:'c'});assert.equal(doc.read(accepted.activeSource,['initialGameState']),state);
 });
 test('selective rejection persists, can be reversed, and applies only selected changes',()=>{
- let project=reduce(create('p','Imported',envelope,1),{type:'stage',id:'c',source:state,kind:'import'});
+ let project=reduce(create('p','Imported',envelope,1),{type:'stage',id:'c',source:state,kind:'import',importOptions:{mode:'replace'}});
  const choose=(path:doc.Path,kind:doc.Change['kind'],reject=true)=>{project=reduce(project,{type:'candidateChange',id:'c',path,kind,reject,candidateHash:hash(project.candidates[0].source)});};
  choose(['initialGameState','npcs','Ada','hp'],'changed');choose(['initialGameState','remove'],'removed');choose(['initialGameState','added'],'added');choose(['initialGameState','keep'],'changed');choose(['initialGameState','keep'],'changed',false);
  assert.equal(project.activeSource,envelope);project=JSON.parse(JSON.stringify(project));assert.equal(project.candidates[0].rejectedChanges?.length,3);
@@ -91,4 +91,11 @@ test('diff pages expose later changes and selective rejection is not limited to 
  assert.equal(doc.diff(before,after).changes.length,2000);assert.equal(doc.diff(before,after,2000,2000).changes.length,10);
  let project=reduce(create('p','Large diff',before,1),{type:'stage',id:'c',source:after});project=reduce(project,{type:'candidateChange',id:'c',path:['field2009'],kind:'changed',reject:true,candidateHash:hash(project.candidates[0].source)});project=reduce(project,{type:'accept',id:'c'});
  assert.equal(doc.read(project.activeSource,['field2009']),'0');assert.equal(doc.read(project.activeSource,['field0']),'1');
+});
+test('GameState import is exact for a new project and supports explicit replacement for an existing world',()=>{
+ const incoming='{"heroesVersion":37,"worldVoices":{},"parties":{"":{"questTriggers":{}}},"exact":9007199254740993}',current='{"shortId":"WORLD","title":"Keep metadata","initialGameState":{"heroesVersion":37,"compatibilityRevision":16,"characterCreationMusic":"fantasy","parties":{"":{"questTriggers":{"__generated_quest_progress__/Example":{"effects":[]}}}},"exact":9007199254740993}}';
+ const separate=create('separate','Separate',incoming,1);assert.equal(separate.activeSource,incoming);assert.equal(separate.originalSource,incoming);assert.equal(separate.candidates.length,0);
+ const linked=reduce(create('existing','Existing',current,1),{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'revision'}),staged=reduce(linked,{type:'stage',id:'import',kind:'import',source:incoming,importOptions:{mode:'replace'}}),proposal=staged.candidates[0],changes=doc.diff(current,proposal.source).changes;
+ assert.equal(staged.activeSource,current);assert.equal(doc.read(proposal.source,['title']),'"Keep metadata"');assert.equal(doc.read(proposal.source,['initialGameState','compatibilityRevision']),'16');assert.equal(doc.read(proposal.source,['initialGameState','exact']),'9007199254740993');
+ assert.ok(changes.some(change=>change.kind==='removed'&&change.path.at(-1)==='__generated_quest_progress__/Example'));assert.ok(changes.some(change=>change.kind==='removed'&&change.path.at(-1)==='characterCreationMusic'));assert.ok(changes.some(change=>change.kind==='added'&&change.path.at(-1)==='worldVoices'));assert.match(proposal.importNote!,/GameState version fields/);
 });
