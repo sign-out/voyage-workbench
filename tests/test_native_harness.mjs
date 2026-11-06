@@ -13,6 +13,19 @@ const reduce=(project,command)=>request({operation:'reduce',project,command:{...
 const references=[{section:'heroesVersion',schema:{_type:'literal',value:37}},{section:'value',schema:'number'}];
 const source='{"heroesVersion":37,"value":1,"list":[],"exact":9007199254740993}';
 
+test('native compatibility profiles and revision-scoped references survive the ES5 bridge',()=>{
+ assert.equal(request({operation:'coverRecommendation',args:['alpha']}).width,1280);
+ assert.equal(request({operation:'coverRecommendation',args:['production']}).width,1000);
+ const catalog=[{section:'value',schema:'number',schemaVersion:37,compatibilityRevision:2,environment:'alpha'},{section:'value',schema:'string',schemaVersion:37,compatibilityRevision:1,environment:'production'}];
+ const text='{"heroesVersion":37,"compatibilityRevision":2,"value":1}';
+ assert.equal(request({operation:'selectReferences',args:[text,catalog,{environment:'alpha'}]}).length,1);
+ assert.deepEqual(request({operation:'selectReferences',args:[text,catalog,{environment:'production'}]}),[]);
+ const state=JSON.stringify({heroesVersion:37,itemTypes:{book:{mediaContent:'x'.repeat(4001)}}});
+ const issues=request({operation:'releaseAdvisories',args:[state,'alpha','publish']});
+ assert.equal(issues.length,1);assert.equal(issues[0].level,'warning');
+ assert.deepEqual(request({operation:'releaseAdvisories',args:[state,'production','publish']}),[]);
+});
+
 function running(kind='work',localEditMode='proposal-only',options={}){
  let project=request({operation:'create',id:'native',name:'Native harness',source,now:1});
  project=reduce(project,{type:'workOrder',baseHash:request({operation:'hash',source:project.activeSource}),order:{reviewedScope:true,objective:'Update values',requirements:[],allowedPaths:[['value'],['list']]}});
@@ -51,7 +64,8 @@ test('built native bridge stages and replays one mutation without rounding autho
 });
 test('built native bridge persists source-to-world evidence and cannot let an agent claim generated assets',()=>{
  let project=request({operation:'create',id:'creation-native',name:'Creation',source,now:1});
- project=reduce(project,{type:'configureCreation',baseHash:request({operation:'hash',source}),workspace:{id:'creation',brief:'Build a complete coastal world with maps and cover.',documents:[{id:'research',name:'research.md',text:'An island port.'}]}});
+ project=reduce(project,{type:'configureCreation',baseHash:request({operation:'hash',source}),workspace:{id:'creation',brief:'Build a complete coastal world with maps and cover.',targetEnvironment:'alpha',documents:[{id:'research',name:'research.md',text:'An island port.'}]}});
+ assert.equal(project.creation.targetEnvironment,'alpha');
  project=reduce(project,{type:'approveCreation',baseHash:request({operation:'hash',source}),expectedRevision:project.creation.revision});
  project=reduce(project,{type:'prepareTask',id:'task',attempt:'attempt',kind:'work',hostPlatform:'android',route:{protocol:'openai',model:'fixture'}});
  project=reduce(project,{type:'taskRunning',taskId:'task',attempt:'attempt'});

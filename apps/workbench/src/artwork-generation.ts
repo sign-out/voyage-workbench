@@ -4,7 +4,7 @@ import {resolveRoute,type TaskRoute} from '../../../packages/core/providers';
 import {saveAsset,type Asset} from './features-api';
 import {request} from './host';
 
-export interface Generation {id:string;created:number;destination:string;destinationId?:string;proposalId?:string;prompt:string;state:string;assetId?:string;error?:string}
+export interface Generation {id:string;created:number;destination:string;destinationId?:string;proposalId?:string;prompt:string;state:string;assetId?:string;error?:string;provider?:string;model?:string}
 type Dependencies={request:typeof request;saveAsset:typeof saveAsset;id:()=>string;now:()=>number};
 const defaults:Dependencies={request,saveAsset,id:()=>crypto.randomUUID(),now:()=>Date.now()};
 export async function saveGeneration(key:string,job:Generation,invoke:typeof request=request,reserve=false){
@@ -27,7 +27,7 @@ export async function generateApprovedArtwork(projectId:string,proposal:ArtworkP
   if(JSON.stringify(effective)!==JSON.stringify(route))throw new Error('The Artwork provider or model changed. Refresh approvals before generating.');
  };
  await check();
- const job:Generation={id:dependencies.id(),created:dependencies.now(),destination:proposal.label,destinationId:proposal.destinationId,proposalId:proposal.id,prompt:proposal.prompt,state:'generating'};
+ const job:Generation={id:dependencies.id(),created:dependencies.now(),destination:proposal.label,destinationId:proposal.destinationId,proposalId:proposal.id,prompt:proposal.prompt,state:'generating',provider:route.name,model:route.model};
  onHistory(await saveGeneration(key,job,invoke,true));
  let sent=false;
  try{

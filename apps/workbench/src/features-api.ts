@@ -10,6 +10,10 @@ export interface UploadBinding {projectId:string;environment:string;worldId:stri
 export async function creator(method:string,endpoint:string,body?:string,idempotencyKey?:string,binding?:UploadBinding){const r=await request('creatorRequest',{method,endpoint,body,idempotencyKey,...binding});return {...r,data:JSON.parse(r.text)};}
 export const worldSource=(source:string)=>doc.read(source,doc.statePath(doc.parse(source)).slice(0,-1));
 export async function validateSource(source:string,stage='draft'){if(!['draft','publish'].includes(stage))throw new Error('Validation stage must be draft or publish.');return (await creator('POST','/validate','{"stage":'+JSON.stringify(stage)+',"world":{"initialGameState":'+doc.read(source,doc.statePath(doc.parse(source)))+'}}')).data;}
+export async function validateProjectSource(project:Project,stage='draft'){
+ if(project.remote.worldId)return request('validateRemote',{id:project.id,stage});
+ return validateSource(project.activeSource,stage);
+}
 export const valid=(report:any)=>{const result=report?.data??report;return result?.valid===true&&Array.isArray(result.errors)&&result.errors.length===0;};
 export function privateDraft(p:Project,creationDetails='{}'){
  const path=doc.statePath(doc.parse(p.activeSource)),fields:Record<string,string>={title:JSON.stringify(p.name),visibility:'"private"',initialGameState:doc.read(p.activeSource,path)};

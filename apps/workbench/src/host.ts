@@ -3,6 +3,11 @@ declare global {interface Window {voyage?:{invoke:(method:string,payload:any)=>P
 const native=registerPlugin<{request:(args:any)=>Promise<{result:any}>}>('Workbench');
 export const platform=Capacitor.isNativePlatform()?'android':typeof window!=='undefined'&&window.voyage?'desktop':'browser';
 export async function request(method:string,payload:any={}):Promise<any>{
+ const result=await invokeHost(method,payload);
+ if(['setVoyageEnvironment','connectVoyage','refreshVoyageContract'].includes(method)&&typeof window.dispatchEvent==='function')window.dispatchEvent(new Event('voyage-connection-changed'));
+ return result;
+}
+async function invokeHost(method:string,payload:any={}):Promise<any>{
  if(window.voyage)return window.voyage.invoke(method,payload);
  if(Capacitor.isNativePlatform())return (await native.request({method,payload})).result;
  if(method==='copyText'){if(typeof payload.text!=='string')throw new Error('Clipboard text must be a string.');await navigator.clipboard.writeText(payload.text);return {copied:true};}

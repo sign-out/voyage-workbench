@@ -20,6 +20,7 @@ import {reviewCreationVisuals,creationVisualPreview} from './creation-visual';
 type Props={project:Project;references:any[];command:(command:any)=>Promise<any>;receive:(result:any)=>void;onReview:()=>void;onPublish:()=>void;onNew:()=>Promise<void>;onRestore?:(project:Project)=>Promise<void>;disabled?:boolean};
 export function WorldCreationWorkspace({project,references,command,receive,onReview,onPublish,onNew,onRestore,disabled=false}:Props){
  const workspace=project.creation;
+ const [targetEnvironment,setTargetEnvironment]=useState(workspace?.targetEnvironment||project.remote.environment||'alpha');
  const [brief,setBrief]=useState(workspace?.brief||''),[documents,setDocuments]=useState<{id:string;name:string;text:string}[]>(workspace?.documents.map(({id,name,text})=>({id,name,text}))||[]),[profile,setProfile]=useState(workspace?.profile||'universal');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[allowImages,setAllowImages]=useState(false),[maximumImages,setMaximumImages]=useState(8),[route,setRoute]=useState<TaskRoute>(),[visualReport,setVisualReport]=useState('');
  const [runOptions,setRunOptions]=useState<RunOptions>({autoResume:false,allowDelegation:false}),[capabilities,setCapabilities]=useState({checkpointResume:false,delegation:false});
@@ -49,7 +50,7 @@ export function WorldCreationWorkspace({project,references,command,receive,onRev
  }
  async function saveBrief(){
   if(workspace&&!window.confirm('Replace this creation brief and reset its design, jobs and assessment? Existing world JSON and library assets are preserved.'))return;
-  await command({type:'configureCreation',baseHash:hash(project.activeSource),expectedRevision:workspace?.revision,workspace:{id:crypto.randomUUID(),brief,documents,profile}});
+  await command({type:'configureCreation',baseHash:hash(project.activeSource),expectedRevision:workspace?.revision,workspace:{id:crypto.randomUUID(),brief,documents,profile,targetEnvironment}});
   setNotice('Sources saved locally. No provider request was sent.');
  }
  async function runAssets(approval:{route?:TaskRoute;maximumImages:number;acknowledgeRetry?:boolean}){
@@ -113,6 +114,7 @@ export function WorldCreationWorkspace({project,references,command,receive,onRev
    <label>What world should the assistant create?<textarea rows={5} value={brief} disabled={!!locked} onChange={event=>setBrief(event.target.value)} placeholder="Create a Voyage world based on … Faithfully adapt the attached research, including characters, geography, culture, tone and appearance. Plan and create its maps, cover and publishing blurb."/></label>
    <label>Markdown or text research<input type="file" multiple accept=".md,.markdown,.txt,text/plain,text/markdown" disabled={!!locked} onChange={event=>{const files=event.target.files;void act(()=>importSources(files));event.target.value='';}}/></label>
    <ul>{documents.map(document=><li key={document.id}>{document.name} · {document.text.length.toLocaleString()} characters <button disabled={!!locked} onClick={()=>setDocuments(documents.filter(item=>item.id!==document.id))}>Remove</button></li>)}</ul>
+   <label>Artwork target environment<select aria-label="Creation artwork environment" value={targetEnvironment} disabled={!!locked} onChange={event=>setTargetEnvironment(event.target.value as 'alpha'|'production')}><option value="alpha">Alpha · widescreen cover recommendation</option><option value="production">Production · production cover recommendation</option></select></label><p className="muted">Pins composition guidance for new artifact jobs, not an API connection or engine upgrade. Existing approved briefs are never rewritten by a connection change.</p>{workspace&&!workspace.targetEnvironment&&<p className="feature-status">This legacy plan retains its original cover composition. Replace the brief explicitly to adopt the selected artwork target.</p>}
    <label>Precommitted rubric path<select value={profile} disabled={!!locked} onChange={event=>setProfile(event.target.value)}><option value="universal">Universal</option>{Object.entries(worldCreationRubric.adaptive_paths.profiles).map(([id,value]:[string,any])=><option value={id} key={id}>{value.name}</option>)}</select></label>
    <button disabled={!!locked||!brief.trim()||!documents.length} onClick={()=>void act(saveBrief)}>{workspace?'Replace brief and reset creation plan':'Save source-to-world brief'}</button>
   </section>

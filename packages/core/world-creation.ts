@@ -7,6 +7,7 @@ import {mapInspect,publicationInspect} from './features';
 import {worldCreationRubric as rubric} from './world-creation-rubric';
 import {validateCreationMaps,mapBlueprintIssues,mapRegion,creationMapRendererVersion,type CreationMap} from './creation-map';
 import type {CreationVisualResult,CreationVisualFinding} from './creation-visual';
+import {coverRecommendation,voyageEnvironment,type VoyageEnvironment} from './voyage-compatibility';
 
 export {rubric as worldCreationRubric};
 export interface SourceDocument {id:string;name:string;text:string;hash:string}
@@ -21,6 +22,7 @@ export interface CreationGrade {id:string;grade:number|'NE';reason:string;paths:
 export interface CreationGate {id:string;status:'PASS'|'FAIL'|'NE'|'PASS_WITH_DOCUMENTED_EXCEPTION';reason:string;paths:doc.Path[]}
 export interface CreationReview {inputHash:string;criteria:CreationGrade[];gates:CreationGate[];coverDiagnostic:number|null;titleDiagnostic:number|null;blurbDiagnostic:number|null;created:number}
 export interface CreationWorkspace {
+ targetEnvironment?:VoyageEnvironment;
  version:1;id:string;revision:number;brief:string;documents:SourceDocument[];rubricHash:string;profile:string;
  design:CreationDesign;publication:CreationPublication;maps:CreationMap[];artwork:CreationArtwork[];jobs:CreationJob[];
  sourceReads?:{documentId:string;hash:string;ranges:number[][]}[];
@@ -34,7 +36,7 @@ function fields(value:any,allowed:string[]){if(!value||typeof value!=='object'||
 function list(value:any,maximum=1000):asserts value is any[] {if(!Array.isArray(value)||value.length>maximum)throw new Error(`Expected an array of at most ${maximum} entries.`);}
 function identifier(value:unknown){text(value,'ID',80);if(!/^[a-zA-Z0-9_-]+$/.test(value))throw new Error('IDs use letters, numbers, hyphens and underscores.');}
 export function createWorkspace(input:any,hasher:Hasher):CreationWorkspace {
- fields(input,['id','brief','documents','profile']);identifier(input.id);text(input.brief,'Creative request',20000);list(input.documents,20);
+ fields(input,['id','brief','documents','profile','targetEnvironment']);identifier(input.id);text(input.brief,'Creative request',20000);list(input.documents,20);
  let total=0;const ids:string[]=[];
  const documents=input.documents.map((document:any)=>{
   fields(document,['id','name','text']);identifier(document.id);text(document.name,'Document name',200);text(document.text,'Source document',1024*1024);total+=document.text.length;
@@ -44,10 +46,10 @@ export function createWorkspace(input:any,hasher:Hasher):CreationWorkspace {
  });
  if(!documents.length||total>4*1024*1024)throw new Error('Attach source documents, up to four million characters total.');
  const profile=input.profile===undefined?'universal':input.profile;if(typeof profile!=='string'||profile!=='universal'&&!Object.prototype.hasOwnProperty.call(rubric.adaptive_paths.profiles,profile))throw new Error('Choose a known rubric path before grading.');
- return {version:1,id:input.id,revision:1,brief:input.brief.trim(),documents,rubricHash:hasher(JSON.stringify(rubric)),profile,design:{tone:'',artDirection:'',timeframe:'',assumptions:[],decisions:[],deliverables:[]},publication:{title:'',blurb:'',description:'',tags:[]},maps:[],artwork:[],jobs:[]};
+ return {version:1,id:input.id,revision:1,brief:input.brief.trim(),documents,rubricHash:hasher(JSON.stringify(rubric)),profile,...(input.targetEnvironment!==undefined?{targetEnvironment:voyageEnvironment(input.targetEnvironment)}:{}),design:{tone:'',artDirection:'',timeframe:'',assumptions:[],decisions:[],deliverables:[]},publication:{title:'',blurb:'',description:'',tags:[]},maps:[],artwork:[],jobs:[]};
 }
 function creativeDesign(design:CreationDesign){const {deliverables,...creative}=design;return creative;}
-export function creationBriefHash(workspace:CreationWorkspace,hasher:Hasher){return hasher(JSON.stringify({id:workspace.id,brief:workspace.brief,documents:workspace.documents.map(({id,name,hash})=>({id,name,hash})),rubricHash:workspace.rubricHash,profile:workspace.profile}));}
+export function creationBriefHash(workspace:CreationWorkspace,hasher:Hasher){return hasher(JSON.stringify({id:workspace.id,brief:workspace.brief,documents:workspace.documents.map(({id,name,hash})=>({id,name,hash})),rubricHash:workspace.rubricHash,profile:workspace.profile,targetEnvironment:workspace.targetEnvironment}));}
 export function recordCreationRead(workspace:CreationWorkspace,documentId:string,offset:number,length:number):CreationWorkspace {
  const document=workspace.documents.find(document=>document.id===documentId);if(!document||length<=0)return workspace;
  const existing=workspace.sourceReads?.find(read=>read.documentId===documentId&&read.hash===document.hash),ranges=(existing?.ranges||[]).concat([[offset,Math.min(offset+length,document.text.length)]]).sort((left,right)=>left[0]-right[0]),merged:number[][]=[];
@@ -87,7 +89,7 @@ export function creationArtifactSpecs(workspace:CreationWorkspace,source:string,
  for(const artwork of workspace.artwork){
   const destination=destinations.find(item=>item.id===artwork.destinationId&&item.target&&item.target!=='REGION_MAP_IMAGE');
   if(!destination)continue;
-  const target=imageTargets[destination.target!];
+  const target=destination.target==='WORLD_COVER'&&workspace.targetEnvironment?{...imageTargets.WORLD_COVER,...coverRecommendation(workspace.targetEnvironment)}:imageTargets[destination.target!];
   specs.push({id:artwork.id,kind:'image',label:destination.label,destinationId:destination.id,prompt:`${artwork.prompt}\nComposition: ${target.width} × ${target.height}; no UI or watermark.\nWorld art direction: ${workspace.design.artDirection}\nTone: ${workspace.design.tone}\n${destination.context}`,specHash:hasher(JSON.stringify({common,artwork,target,publication:destination.target==='WORLD_COVER'?workspace.publication:undefined}))});
  }
  return specs;
@@ -97,7 +99,7 @@ export function readCreation(workspace:CreationWorkspace,section:string,offset:n
  let value:string;
  if(section==='rubric')value=JSON.stringify(rubric,null,2);
  else if(section==='help')value=creationInstructions;
- else if(section==='summary')value=JSON.stringify({id:workspace.id,revision:workspace.revision,brief:workspace.brief,profile:workspace.profile,rubricHash:workspace.rubricHash,briefHash:creationBriefHash(workspace,hasher),documents:workspace.documents.map(({id,name,text,hash})=>({id,name,characters:text.length,lines:text.split('\n').length,hash})),sections:['design','publication','maps','artwork','review','visualReview','visualProgress','visualResolution'],jobs:workspace.jobs},null,2);
+ else if(section==='summary')value=JSON.stringify({id:workspace.id,revision:workspace.revision,brief:workspace.brief,profile:workspace.profile,targetEnvironment:workspace.targetEnvironment||'legacy-unspecified',rubricHash:workspace.rubricHash,briefHash:creationBriefHash(workspace,hasher),documents:workspace.documents.map(({id,name,text,hash})=>({id,name,characters:text.length,lines:text.split('\n').length,hash})),sections:['design','publication','maps','artwork','review','visualReview','visualProgress','visualResolution'],jobs:workspace.jobs},null,2);
  else if(['design','publication','maps','artwork','review','visualReview','visualProgress','visualResolution'].includes(section))value=JSON.stringify((workspace as any)[section]??null,null,2);
  else {const document=workspace.documents.find(document=>document.id===section);if(!document)throw new Error('Unknown creation section or document ID.');value=document.text;}
  return {section,offset,text:value.slice(offset,offset+12000),nextOffset:offset+12000<value.length?offset+12000:null,totalCharacters:value.length,untrusted:true};

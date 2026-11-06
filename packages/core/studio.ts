@@ -54,6 +54,10 @@ export function publicationEdit(source:string,field:string,raw:string){
  return put(source,worldPath(source),field,raw);
 }
 export type AssetSlot={path:doc.Path;kind:'image'|'audio';target?:string;url:string;present?:boolean};
+export function assetLocation(base:doc.Path,path:doc.Path){
+ const parts=path.slice(base.length),party=parts[0]==='parties'&&parts.length>2;
+ return {scope:party?base.concat(parts.slice(0,2)):base,relative:party?parts.slice(2):parts,partyId:party?String(parts[1]):undefined};
+}
 export function assetSlots(source:string){
  const root=doc.parse(source),base=doc.statePath(root),result:AssetSlot[]=[];let visited=0;
  const walk=(node:doc.Node,path:doc.Path,depth:number)=>{
@@ -61,7 +65,7 @@ export function assetSlots(source:string){
   const key=String(path[path.length-1]||'');
   if(node.kind==='string'){
    const music=path.includes('gameplayMusicSettings')&&path.includes('variants')&&['url','narrationUrl','gameplayUrl'].includes(key);
-   const relative=path.slice(base.length),section=relative[0];
+   const {relative}=assetLocation(base,path),section=relative[0];
    const namedPortrait=section==='npcs'&&relative.length===4&&relative[2]==='portraits';
    const image=namedPortrait||/^(image|imageUrl|portraitUrl|portrait|mapImageUrl|establishingShotUrl)$/i.test(key);
    if(music||image)result.push({path,kind:music?'audio':'image',url:String(node.value),target:music?undefined:section==='npcs'||section==='premadeCharacters'?'NPC_PORTRAIT':section==='itemTypes'?'ITEM_IMAGE':section==='regions'?'REGION_MAP_IMAGE':section==='locations'?(relative[2]==='areas'?'AREA_IMAGE':'LOCATION_IMAGE'):undefined});
@@ -77,9 +81,9 @@ export function assetSlots(source:string){
   for(let index=1;index<field.length;index++){try{if(doc.at(root,path.concat(field.slice(0,index))).kind!=='object')return;}catch{}}
   result.push({path:destination,kind:'image',target,url:'',present:false});
  };
- for(const section of ['npcs','premadeCharacters','regions','locations','itemTypes']){
-  let collection:doc.Node;try{collection=doc.at(root,base.concat(section));}catch{continue;}
-  for(const child of collection.children){const path=base.concat(section,child.key);addMissing(child.node,path,section==='npcs'||section==='premadeCharacters'?['portraitUrl']:section==='itemTypes'?['imageUrl']:section==='regions'?['images','map','imageUrl']:['images','establishingShot','imageUrl'],section==='regions'?'REGION_MAP_IMAGE':section==='locations'?'LOCATION_IMAGE':section==='itemTypes'?'ITEM_IMAGE':'NPC_PORTRAIT');
+ for(const scope of doc.authoredScopes(source))for(const section of ['npcs','premadeCharacters','regions','locations','itemTypes']){
+  let collection:doc.Node;try{collection=doc.at(root,scope.path.concat(section));}catch{continue;}
+  for(const child of collection.children){const path=scope.path.concat(section,child.key);addMissing(child.node,path,section==='npcs'||section==='premadeCharacters'?['portraitUrl']:section==='itemTypes'?['imageUrl']:section==='regions'?['images','map','imageUrl']:['images','establishingShot','imageUrl'],section==='regions'?'REGION_MAP_IMAGE':section==='locations'?'LOCATION_IMAGE':section==='itemTypes'?'ITEM_IMAGE':'NPC_PORTRAIT');
    if(section==='locations'){const areas=child.node.children.find(field=>field.key==='areas')?.node;if(areas?.kind==='object')for(const area of areas.children)addMissing(area.node,path.concat('areas',area.key),['images','establishingShot','imageUrl'],'AREA_IMAGE');}
   }
  }

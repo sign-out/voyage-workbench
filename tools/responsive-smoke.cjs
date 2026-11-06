@@ -139,6 +139,13 @@ async function verifyScreen(config,projectId){
   assert.ok(menu.lastHittable,'Last tool is clipped or covered: '+JSON.stringify(menu));
   if(compact)assert.ok(menu.bottom<=menu.modeTop,'Tool menu overlaps the bottom mode bar: '+JSON.stringify(menu));
  });
+ await check('compatibility status',screen,async()=>{
+  await evaluate("document.querySelector('.compatibility-status').open=true");await settled();
+  const panel=await evaluate("(()=>{const panel=document.querySelector('.compatibility-panel'),r=panel.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,height:r.height,text:panel.textContent};})()");
+  assert.ok(panel.height>0&&panel.left>=0&&panel.right<=config.width+1&&panel.top>=0&&panel.bottom<=config.height+1,'Compatibility details leave viewport: '+JSON.stringify(panel));
+  assert.ok(panel.text.includes('Unknown')&&panel.text.includes('Saved locally'),'Status must distinguish local saving and unknown engine compatibility');
+  await evaluate("document.querySelector('.compatibility-status').open=false");
+ });
  console.log(`${config.name}: ${screen.passed.length} checks passed`);
 }
 
@@ -325,7 +332,7 @@ async function verifyLiveResize(projectId){
  const original=await service.request('project',{id:projectId});
  const draft='Draft survives rotation and resizing';
  await evaluate(`(()=>{const field=document.querySelector('.structured-editor textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,${JSON.stringify(draft)});field.dispatchEvent(new Event('input',{bubbles:true}));})()`);
- await waitFor("document.querySelector('[role=status][aria-label=\"Draft saved locally\"]')");
+ await waitFor("document.querySelector('summary[aria-label^=\"Save and compatibility: Draft saved locally\"]')");
  report.reflow=[];
  for(const config of [{width:844,height:390,touch:true},{width:761,height:700,touch:true},{width:1280,height:900,touch:false},{width:360,height:640,touch:true}]){
   await applyViewport(config);const compact=config.width<761||(config.touch&&config.height<501);
@@ -451,7 +458,7 @@ async function verifyAndroidWorkspaceResume(){
   await evaluate("window.dispatchEvent(new Event('voyage-pause'))");
   await waitFor("document.body.textContent.includes('Pause draft fixture unavailable')");
   await evaluate("window.dispatchEvent(new Event('voyage-resume'))");
-  await waitFor("document.querySelector('[role=status][aria-label=\"Draft saved locally\"]')");
+  await waitFor("document.querySelector('summary[aria-label^=\"Save and compatibility: Draft saved locally\"]')");
   assert.equal(service.store.project(created.project.id).draft.text,'"Draft before sleep"');
   await evaluate('location.reload()');
   await waitFor("document.querySelector('.editor-layout.mobile-editing .structured-editor textarea')?.value==='Draft before sleep'");
@@ -466,7 +473,7 @@ async function verifyAndroidWorkspaceResume(){
   await waitFor("document.body.textContent.includes('Deferred pause fixture unavailable')");
   assert.equal(await evaluate("localStorage.getItem('voyage-project')"),created.project.id,'Failed pause save closed the world');
   await evaluate("window.dispatchEvent(new Event('voyage-resume'))");
-  await waitFor("document.querySelector('[role=status][aria-label=\"Draft saved locally\"]')");
+  await waitFor("document.querySelector('summary[aria-label^=\"Save and compatibility: Draft saved locally\"]')");
   assert.equal(service.store.project(created.project.id).draft.text,'"Deferred pause draft"');
   await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent==='Close project').click()");
   await waitFor("!localStorage.getItem('voyage-project')");

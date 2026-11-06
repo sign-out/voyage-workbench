@@ -1,0 +1,9 @@
+{
+  "source": "https://api-alpha.aidungeon.com/creator/v1/openapi.json",
+  "retrieved": "2026-11-05",
+  "version": "1.3.0-preview",
+  "environment": "alpha",
+  "sha256": "22dd8eaa7a33665bd9e81f7c18928106aacf90357fdf29a62e7d93f11a8fced7",
+  "bundledSha256": "4f1019f90e5e4d7345e69873786d2c2a82cd92c572747793315a536479474f32",
+  "scope": "Public documentation snapshot, not authenticated acceptance"
+}

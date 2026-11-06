@@ -8,7 +8,7 @@ export function prepareCreationTransfer(input:CreationWorkspace,source:string,ha
   if(!document||document.hash!==hasher(document.text))throw new Error('A research document hash does not match its archived text.');
   return {id:document.id,name:document.name,text:document.text};
  });
- let restored=createWorkspace({id:input.id,brief:input.brief,documents,profile:input.profile},hasher);
+ let restored=createWorkspace({id:input.id,brief:input.brief,documents,profile:input.profile,targetEnvironment:input.targetEnvironment},hasher);
  for(const section of ['design','publication','maps','artwork'] as const){
   if(JSON.stringify(input[section])===JSON.stringify(restored[section]))continue;
   restored=updateCreation(restored,section,JSON.stringify(input[section]),source,hasher,0);

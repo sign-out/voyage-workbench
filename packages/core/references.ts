@@ -33,6 +33,10 @@ export function normalizeReferences(payload:unknown):SchemaReference[] {
   return {...value};
  }
  let source:any=payload;
+ const metadata:Record<string,any>={};
+ if(source&&typeof source==='object'&&!Array.isArray(source)&&source.metadata){
+  for(const key of ['environment','schemaVersion','compatibilityRevision','engineVersion','schemaId','provenance','snapshotHash','retrieved'])if(source.metadata[key]!==undefined)metadata[key]=source.metadata[key];
+ }
  if(source&&typeof source==='object'&&!source._type&&!Array.isArray(source))source=source.schema?._type?source.schema:source.sections??source.schemas??source;
  let sections:SchemaReference[];
  if(source?._type){
@@ -55,7 +59,13 @@ export function normalizeReferences(payload:unknown):SchemaReference[] {
  return sections.map(entry=>{
   if(!entry||typeof entry.section!=='string'||!entry.section||seen[entry.section])throw new Error('Schema sections must have unique nonempty names.');
   seen[entry.section]=true;
-  return {...entry,schema:codec(entry.schema)};
+  const result:SchemaReference={...metadata,...entry,schema:codec(entry.schema)};
+  for(const key of ['schemaVersion','compatibilityRevision'])if(result[key]!==undefined&&(!Number.isSafeInteger(result[key])||result[key]<(key==='schemaVersion'?1:0)))throw new Error('Invalid reference '+key+'.');
+  for(const key of ['engineVersion','schemaId'])if(result[key]!==undefined&&(typeof result[key]!=='string'||!result[key].trim()||result[key].length>200))throw new Error('Invalid reference '+key+'.');
+  if(result.environment!==undefined&&!['production','alpha','beta','unverified'].includes(result.environment))throw new Error('Invalid reference environment.');
+  const authoredVersion=entry.section==='heroesVersion'?referenceVersion([result]):null;
+  if(authoredVersion!==null&&result.schemaVersion!==undefined&&result.schemaVersion!==authoredVersion)throw new Error('Reference metadata disagrees with the authored schema version.');
+  return result;
  });
 }
 
@@ -71,20 +81,26 @@ export function referenceVersion(references:SchemaReference[]):number|null {
  return version(entry?.schema)??null;
 }
 
-export function mergeReferenceSets(bundled:SchemaReference[],cached:SchemaReference[]):SchemaReference[] {
- if(cached.some(entry=>Object.prototype.hasOwnProperty.call(entry,'schemaVersion'))){
-  const versions=cached.map(entry=>entry.schemaVersion).filter((version,index,values)=>typeof version==='number'&&values.indexOf(version)===index);
-  return versions.reduce<SchemaReference[]>((catalog,version)=>catalog.filter(entry=>entry.schemaVersion!==version).concat(cached.filter(entry=>entry.schemaVersion===version)),bundled);
- }
- const version=referenceVersion(cached);
- if(!cached.length)return bundled;
- if(version===null)return bundled.length?bundled:cached;
- return bundled.filter(entry=>entry.schemaVersion!==version).concat(cached.map(entry=>({...entry,schemaVersion:version})));
+export function referenceIdentity(entry:SchemaReference){
+ return JSON.stringify([entry.schemaVersion,entry.environment&&entry.environment!=='unverified'?entry.environment:null,entry.compatibilityRevision??null,entry.engineVersion??null,entry.schemaId??null]);
 }
-
-export function referencesForVersion(references:SchemaReference[],version:number|null):SchemaReference[] {
+export function mergeReferenceSets(bundled:SchemaReference[],cached:SchemaReference[]):SchemaReference[] {
+ if(!cached.length)return bundled;
+ const version=referenceVersion(cached),normalized=cached.map(entry=>({...entry,schemaVersion:entry.schemaVersion??version}));
+ if(normalized.some(entry=>entry.schemaVersion===null))return bundled.length?bundled:cached;
+ const identities=normalized.map(referenceIdentity);
+ return bundled.filter(entry=>identities.indexOf(referenceIdentity(entry))<0).concat(normalized);
+}
+export function referencesForVersion(references:SchemaReference[],version:number|null,context:{environment?:string;compatibilityRevision?:number;engineVersion?:string;schemaId?:string}={}):SchemaReference[] {
  const catalog=references.some(entry=>Object.prototype.hasOwnProperty.call(entry,'schemaVersion'));
- if(catalog)return references.filter(entry=>entry.schemaVersion===version&&version!==null);
+ if(catalog){
+  const candidates=references.filter(entry=>entry.schemaVersion===version&&version!==null);
+  const scoped=candidates.some(entry=>entry.compatibilityRevision!==undefined||entry.engineVersion!==undefined||entry.schemaId!==undefined);
+  const matches=candidates.filter(entry=>(!entry.environment||entry.environment==='unverified'||entry.environment===context.environment)&&(!scoped||entry.compatibilityRevision!==undefined||entry.engineVersion!==undefined||entry.schemaId!==undefined)&&['compatibilityRevision','engineVersion','schemaId'].every(key=>entry[key]===undefined||entry[key]===(context as any)[key]));
+  const specific=context.environment&&matches.some(entry=>entry.environment===context.environment)?matches.filter(entry=>entry.environment===context.environment):matches;
+  const keys=specific.map(referenceIdentity).filter((key,index,values)=>values.indexOf(key)===index);
+  return keys.length===1?specific:[];
+ }
  const expected=referenceVersion(references);
  return expected===null||expected===version?references:[];
 }

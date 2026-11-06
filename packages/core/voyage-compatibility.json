@@ -1,0 +1,40 @@
+{
+  "format": 1,
+  "worldSchema": {
+    "source": "https://api.unofficial.voyage/schema.json",
+    "baseline": "docs/references/voyage-v37-community.json"
+  },
+  "environments": {
+    "production": {
+      "apiBase": "https://api.aidungeon.com/creator/v1",
+      "studioUrl": "https://voyage.io/studio",
+      "contractSource": "https://api.aidungeon.com/creator/v1/openapi.json",
+      "contractBaseline": "docs/openapi.json",
+      "guideBaseline": "docs/voyage-agent-guide.md",
+      "checked": "2026-11-05",
+      "contractHash": "2e002a431201777891dcd8eff01129613b14940e4c1d77af4a7b13efe8258340",
+      "cover": {"width": 1000, "height": 1000},
+      "release": null
+    },
+    "alpha": {
+      "apiBase": "https://api-alpha.aidungeon.com/creator/v1",
+      "studioUrl": "https://alpha.voyage.io/studio",
+      "contractSource": "https://api-alpha.aidungeon.com/creator/v1/openapi.json",
+      "contractBaseline": "docs/references/creator-alpha-2026-11-05.openapi.json",
+      "guideBaseline": "docs/voyage-agent-guide.md",
+      "checked": "2026-11-05",
+      "contractHash": "22dd8eaa7a33665bd9e81f7c18928106aacf90357fdf29a62e7d93f11a8fced7",
+      "cover": {"width": 1280, "height": 720},
+      "release": {
+        "label": "Voyage 2.55.0",
+        "source": "https://alpha.voyage.io/whats-new/patch/announcement%3Accd856e0-53fd-4a6c-8a63-76a34d24f79c",
+        "evidence": "Creator-supplied announcement text; production rollout and counting conventions unverified",
+        "itemCatalogCharacters": 350000,
+        "itemMediaCharacters": 4000,
+        "schemaNotices": [
+          "Resource descriptions and multiple resource boosts per attribute are announced, but their new serialized shapes are not verified by the bundled codec. Preserve unfamiliar fields; do not convert or remove them using an older schema."
+        ]
+      }
+    }
+  }
+}
