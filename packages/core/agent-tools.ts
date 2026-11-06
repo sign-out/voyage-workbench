@@ -6,6 +6,7 @@ import type {Project,Task} from './project';
 import {taskToolCapabilities,toolJournalLimits} from './agent-orchestration';
 import type {ToolCapabilities} from './agent-orchestration';
 import {readCreation,creationReadiness,creationBriefHash,creationDestinations} from './world-creation';
+import {compatibilityIdentity,releaseAdvisories} from './voyage-compatibility';
 
 export {toolJournalLimits};
 
@@ -74,12 +75,12 @@ export function canonicalToolRequest(name:string,args:any):string {
  const request=stable({name,args});if(request.length>9*1024*1024)throw new Error('Tool arguments exceed 9 MiB characters.');return request;
 }
 
-export function schemaCoverage(source:string,references:any[]){
+export function schemaCoverage(source:string,references:any[],context:{environment?:string}={}){
  try{
  const root=doc.parse(source),base=doc.statePath(root),world=doc.at(root,base),versionNode=world.children.find(child=>child.key==='heroesVersion')?.node;
  const version=versionNode?.kind==='number'?Number(source.slice(versionNode.start,versionNode.end)):null;
- const selected=doc.selectReferences(source,references),expected=referenceVersion(selected);
- return {version,schemaVersion:expected,coverage:expected!==null&&expected===version?'matched':selected.length?'advisory':'unavailable',sections:selected.map(entry=>entry.section),environment:'unverified',official:false};
+ const selected=doc.selectReferences(source,references,context),expected=referenceVersion(selected);
+ return {version,schemaVersion:expected,compatibilityRevision:compatibilityIdentity(source).compatibilityRevision,engineVersion:'unknown',coverage:expected!==null&&expected===version?'matched':selected.length?'advisory':'unavailable',sections:selected.map(entry=>entry.section),environment:selected[0]?.environment||'unverified',targetEnvironment:context.environment||'unknown',official:false};
  }catch{return {version:null,schemaVersion:null,coverage:'unavailable',sections:[],environment:'unverified',official:false};}
 }
 
@@ -89,6 +90,7 @@ export function executeWorldTool(project:Project,task:Task,name:string,args:any,
  if(task.kind==='review'&&args.path&&!task.delegation?.paths.some(path=>path.every((key,index)=>args.path[index]===key)))throw new Error('Read path is outside the delegated scope.');
  if(name==='delegate_review'&&!taskToolCapabilities(task).delegation)throw new Error('Delegation was not approved for this task.');
  const source=task.kind==='work'?task.stagedSource:task.baseSource;
+ const referenceContext=task.referenceContext||{};
  switch(name){
   case 'creation_read':{
    if(!project.creation)throw new Error('No source-to-world creation workspace is configured.');
@@ -106,12 +108,12 @@ export function executeWorldTool(project:Project,task:Task,name:string,args:any,
   case 'world_read':{const raw=doc.read(source,args.path);if(raw.length>100000)throw new Error('Read a smaller path using world_children.');return {result:{source:raw}};}
   case 'world_children':{const node=doc.describe(source,args.path);return {result:{kind:node.kind,children:node.children.slice(0,500),truncated:node.children.length>500}};}
   case 'world_search':return {result:doc.search(source,args.query)};
-  case 'world_validate':return {result:doc.validate(source,references)};
-  case 'world_schema':return {result:doc.schemaGuidance(source,references,args.section)};
+  case 'world_validate':return {result:doc.validate(source,references,referenceContext).concat(['alpha','production'].includes(referenceContext.environment||'')?releaseAdvisories(source,referenceContext.environment,'draft'):[])};
+  case 'world_schema':return {result:doc.schemaGuidance(source,references,args.section,referenceContext)};
   case 'world_notes':return {result:readBuilderNotes(task.builderNotes||[],args.path,args.offset||0)};
   case 'world_reference_impact':return {result:referenceImpact(source,args.path,args.direction||'all',args.offset||0,args.limit||40)};
   case 'world_diff':return {result:doc.diff(task.baseSource,source,100,args.offset||0)};
-  case 'world_schema_coverage':return {result:schemaCoverage(source,references)};
+  case 'world_schema_coverage':return {result:schemaCoverage(source,references,referenceContext)};
   case 'world_readiness':return {result:readiness({...project,activeSource:source},references,hasher(source))};
   case 'world_edit':return {result:{staged:true,activeWorldUnchanged:true},command:{...args,type:'taskEdit'}};
   case 'world_checkpoint':return {result:{staged:true,activeWorldUnchanged:true,localOnly:true},command:{...args,type:'taskSectionCheckpoint'}};
@@ -125,7 +127,7 @@ export function executeWorldTool(project:Project,task:Task,name:string,args:any,
 
 export interface CompletionEvidence {sourceHash:string;baseHash:string;schemaHash:string;coverage:string;schemaVersion:number|null;environment:string;state:'pass'|'blocked'|'review';errors:doc.Issue[];warnings:number;scopeChecked:boolean;created:number;official:false}
 export function completionEvidence(task:Task,references:any[],hasher:(text:string)=>string,now:number):CompletionEvidence {
- const source=task.stagedSource,coverage=schemaCoverage(source,references),issues=doc.validate(source,references),errors=issues.filter(issue=>issue.level==='error');
+ const source=task.stagedSource,context=task.referenceContext||{},coverage=schemaCoverage(source,references,context),issues=doc.validate(source,references,context),errors=issues.filter(issue=>issue.level==='error');
  let scopeChecked=true;
  try{
   if(hasher(task.baseSource)!==task.baseHash)throw new Error('Task-start source hash does not match its snapshot.');
@@ -133,5 +135,5 @@ export function completionEvidence(task:Task,references:any[],hasher:(text:strin
   const diff=doc.diff(task.baseSource,source,2000,0);scopeChecked=diff.total<=2000;
   if(scopeChecked&&task.workOrder.allowedPaths.length)for(const change of diff.changes)if(!task.workOrder.allowedPaths.some(path=>path.every((key,index)=>change.path[index]===key)))errors.push({level:'error',path:change.path,message:'Change is outside the approved Work Order scope.'});
  }catch(error){errors.push({level:'error',path:[],message:(error as Error).message});}
- return {sourceHash:hasher(source),baseHash:task.baseHash,schemaHash:hasher(JSON.stringify(doc.selectReferences(source,references))),coverage:coverage.coverage,schemaVersion:coverage.schemaVersion,environment:coverage.environment,state:errors.length?'blocked':coverage.coverage==='matched'&&scopeChecked?'pass':'review',errors:errors.slice(0,100),warnings:issues.filter(issue=>issue.level==='warning').length,scopeChecked,created:now,official:false};
+ return {sourceHash:hasher(source),baseHash:task.baseHash,schemaHash:hasher(JSON.stringify(doc.selectReferences(source,references,context))),coverage:coverage.coverage,schemaVersion:coverage.schemaVersion,environment:coverage.environment,state:errors.length?'blocked':coverage.coverage==='matched'&&scopeChecked?'pass':'review',errors:errors.slice(0,100),warnings:issues.filter(issue=>issue.level==='warning').length,scopeChecked,created:now,official:false};
 }

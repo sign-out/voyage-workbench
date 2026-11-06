@@ -2,11 +2,11 @@ import {structuralReferences} from './relationships';
 import {referenceVersion,referencesForVersion} from './references';
 export {normalizeReferences,referenceVersion,mergeReferenceSets} from './references';
 
-export function selectReferences(source:string,references:any[]):any[] {
- try{const root=parse(source),world=at(root,statePath(root)),version=world.children.find(child=>child.key==='heroesVersion')?.node;return referencesForVersion(references,version?.kind==='number'?Number(source.slice(version.start,version.end)):null);}catch{return [];}
+export function selectReferences(source:string,references:any[],context:{environment?:string;engineVersion?:string;schemaId?:string}={}):any[] {
+ try{const root=parse(source),world=at(root,statePath(root)),version=world.children.find(child=>child.key==='heroesVersion')?.node,revision=world.children.find(child=>child.key==='compatibilityRevision')?.node;return referencesForVersion(references,version?.kind==='number'?Number(source.slice(version.start,version.end)):null,{...context,compatibilityRevision:revision?.kind==='number'?Number(source.slice(revision.start,revision.end)):undefined});}catch{return [];}
 }
-export function schemaGuidance(source:string,references:any[],section:string):any[] {
- const selected=selectReferences(source,references),matches=selected.filter(entry=>entry.section===section).slice(0,3);
+export function schemaGuidance(source:string,references:any[],section:string,context:{environment?:string;engineVersion?:string;schemaId?:string}={}):any[] {
+ const selected=selectReferences(source,references,context),matches=selected.filter(entry=>entry.section===section).slice(0,3);
  return matches.length?matches:[{section,schema:null,available:false,warning:selected.length?'This section has no matching cached schema. Preserve existing fields; do not infer a schema from another version.':'No matching cached schema coverage for this document. Obtain version-matched references; do not change heroesVersion to match the cache.'}];
 }
 export type Path = (string | number)[];
@@ -74,6 +74,12 @@ export function statePath(root:Node):Path {
   const exists=(p:Path)=>{try{return at(root,p);}catch{return null;}};
   for(const p of [['data','world','initialGameState'],['world','initialGameState'],['initialGameState']] as Path[])if(exists(p))return p;
   return [];
+}
+export function authoredScopes(source:string):{path:Path;partyId?:string}[]{
+ const root=parse(source),base=statePath(root),world=at(root,base),result:{path:Path;partyId?:string}[]=[{path:base}];
+ const parties=world.children.find(child=>child.key==='parties')?.node;
+ if(parties?.kind==='object')parties.children.forEach(child=>{if(child.node.kind==='object')result.push({path:base.concat('parties',child.key),partyId:String(child.key)});});
+ return result;
 }
 export const packageReadOnlyFields=['shortId','loadStatus','degradedReason','canSafelySave'];
 export const gameStateReadOnlyFields=['heroesVersion','compatibilityRevision'];
@@ -175,12 +181,12 @@ export function diff(before:string,after:string,limit=2000,offset=0,match?:Chang
   }walk(a,b,[]);return {changes,total,truncated:total>offset+limit,offset};
 }
 export interface Issue {level:'error'|'warning';path:Path;message:string}
-export function validate(source:string,references:any[]=[]):Issue[]{
+export function validate(source:string,references:any[]=[],context:{environment?:string;engineVersion?:string;schemaId?:string}={}):Issue[]{
   const issues:Issue[]=[];let root:Node;
   try{root=parse(source);}catch(e){return [{level:'error',path:[],message:String((e as Error).message)}];}
   const prefix=statePath(root),world=at(root,prefix);
   if(world.kind!=='object')return [{level:'error',path:prefix,message:'A world must be a JSON object.'}];
-  const selected=selectReferences(source,references);
+  const selected=selectReferences(source,references,context);
   if(references.some(entry=>Object.prototype.hasOwnProperty.call(entry,'schemaVersion'))){
    if(!selected.length)issues.push({level:'warning',path:prefix.concat('heroesVersion'),message:'No matching cached schema coverage. Schema checks were skipped; preserve the version and obtain matching references.'});
    else if(selected[0].schemaVersion===36)issues.push({level:'warning',path:prefix.concat('heroesVersion'),message:'Legacy V36-era wiki provides advisory section coverage only, not a verified complete V36 world codec.'});
