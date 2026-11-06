@@ -445,12 +445,19 @@ export function reduce(project:Project,c:any):Project {
       requireCurrent(p,c.baseHash);if(p.draft)throw new Error('Apply or discard the editor draft first.');if((c.etag&&p.remote.etag!==c.etag)||(c.worldId&&p.remote.worldId!==c.worldId))throw new Error('Remote revision changed. Validate again.');if(!p.remote.worldId||!p.remote.etag)throw new Error('Download a Voyage world before saving it.');
       p.remote.operations.unshift({id:c.id,state:'PREPARED',environment:p.remote.environment||'production',source:p.activeSource,payload:c.payload,sourceHash:hash(p.activeSource),expectedEtag:p.remote.etag,created:p.updated});p.remote.operations=p.remote.operations.slice(0,20);break;
     }
+    case 'saveAdditions':
     case 'saveReview':{
       requireCurrent(p,c.baseHash);if(p.draft)throw new Error('Apply or discard the editor draft before reviewing Voyage changes.');
       const operation=p.remote.operations.find(entry=>entry.id===c.operationId);
       if(!operation||!['SEND_ATTEMPTED','UNKNOWN'].includes(operation.state)||c.payloadHash!==hash(operation.payload)||c.environment!==(p.remote.environment||'production')||c.environment!==operation.environment||c.worldId!==p.remote.worldId)throw new Error('The pending Voyage save or its binding changed. Reconcile it again.');
       voyage.voyageRevision(c.etag);if(doc.at(doc.parse(c.source),doc.statePath(doc.parse(c.source))).kind!=='object')throw new Error('The downloaded Voyage GameState must be an object.');const payload=remotePayload(c.source,undefined,c.worldId),comparison=voyage.compareRemoteWorlds(operation.payload,payload);
       if(comparison.matches)throw new Error('The remote draft already matches; reconcile this save instead.');
+      if(c.type==='saveAdditions'){
+        const additions=voyage.serverAdditions(operation.payload,payload);
+        if(operation.sourceHash!==hash(p.activeSource)||operation.expectedEtag!==p.remote.etag||!additions.safe)throw new Error('Only verified server additions to an unchanged submitted world and revision can be adopted automatically.');
+        active(alignSaveReadback(p.activeSource,c.source),false);operation.state='ACCEPTED';operation.updated=p.updated;operation.automaticAdditions=additions;operation.acceptedSourceHash=hash(p.activeSource);operation.detail='Verified server additions adopted automatically; existing submitted values were unchanged. No write was resent.';
+        operation.readback={source:c.source,etag:c.etag,environment:c.environment,worldId:c.worldId,checkedAt:p.updated};p.remote.etag=c.etag;p.remote.baselineHash=hash(p.activeSource);p.remote.envelopeSource=c.source;p.remote.validation=undefined;p.candidates=p.candidates.filter(candidate=>candidate.remoteSave?.operationId!==operation.id);break;
+      }
       if(typeof c.id!=='string'||!c.id||p.candidates.some(candidate=>candidate.id===c.id))throw new Error('Provide a unique review ID.');
       operation.state='UNKNOWN';operation.updated=p.updated;operation.comparison=comparison;operation.detail='Voyage returned '+comparison.total+' differences. Review the downloaded draft before accepting it; no write was resent.';
       operation.readback={source:c.source,etag:c.etag,environment:c.environment,worldId:c.worldId,checkedAt:p.updated};

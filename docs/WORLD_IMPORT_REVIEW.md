@@ -110,6 +110,10 @@ shown with the task.
 
 ## Remote saves remain distinct
 
+Verified server-only additions can be adopted automatically after a save, with
+an explicit receipt and checkpoint. Existing values and source/revision bindings
+must remain unchanged. See [automatic additions and activity](WORLD_DEFAULTS_AND_ACTIVITY.md).
+
 This feature does not weaken exact save read-back verification. **Review Voyage
 changes…** remains a complete remote snapshot recovery, with its own revision
 and all-or-nothing acceptance rules. See

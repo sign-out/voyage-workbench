@@ -2,7 +2,10 @@ import {compactLayoutQuery} from './responsive-layout';
 import React,{useMemo,useRef,useState} from 'react';
 import {Image as ImageIcon,Play} from 'lucide-react';
 import {publicationInspect} from '../../../packages/core/features';
-import type {Path} from '../../../packages/core/document';
+import {parse,statePath,type Path} from '../../../packages/core/document';
+import type {Project} from '../../../packages/core/project';
+import {usePublicationDetails} from './use-publication-details';
+import {WorldDetailsStatus} from './WorldDetailsStatus';
 import {PreviewScreen} from './PreviewScreen';
 import {ImageInspection} from './ImageInspection';
 
@@ -11,13 +14,15 @@ function Cover({url,title}:{url:string;title:string}){
  return url&&!failed?<img src={url} alt={'Cover art for '+title} referrerPolicy="no-referrer" onError={()=>setFailed(true)}/>:<div className="publication-cover-placeholder"><ImageIcon size={32}/><span>{failed?'Cover could not load':'No cover available in this JSON'}</span></div>;
 }
 
-export function PublicationPreview({source,saveName,onNavigate}:{source:string;saveName:string;onNavigate?:(path:Path)=>void}){
- const world=useMemo(()=>publicationInspect(source,saveName),[source,saveName]);
+export function PublicationPreview({source,saveName,onNavigate,project}:{source:string;saveName:string;onNavigate?:(path:Path)=>void;project?:Project}){
+ const publication=usePublicationDetails(project);
+ const world=useMemo(()=>{const actual=publicationInspect(source,saveName);return project&&!statePath(parse(source)).length?{...publicationInspect(publication.source,saveName),path:actual.path,fields:actual.fields}:actual;},[source,saveName,project?.id,publication.source]);
  const [view,setView]=useState(()=>matchMedia(compactLayoutQuery).matches?'mobile':'desktop');
  const [previewOpen,setPreviewOpen]=useState(false);
  const previewLauncher=useRef<HTMLButtonElement|null>(null);
  function edit(field:string){onNavigate?.(world.fields.includes(field)?world.path.concat(field):world.path);}
  return <section className="publication-preview" aria-label="Public world preview">
+  <WorldDetailsStatus details={publication}/>
   <div className="publication-preview-heading"><h3>Public-facing copy &amp; cover</h3><button ref={previewLauncher} onClick={()=>setPreviewOpen(true)}>Open full-screen preview</button></div>
   <p className="muted">Preview of your active local world, not a read-back of the published page. Save the active world to Voyage before publishing. These approximate Alpha layouts show centered cover crops; actual site layouts can vary.</p>
   <div className="publication-copy-grid">

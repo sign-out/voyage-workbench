@@ -1,4 +1,12 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import * as d from './document';
+test('open-ended success tiers validate without allowing unrelated null numbers or invalid interior bounds',()=>{
+ const references=[{section:'successLevelSettings',schema:{_type:'required',fields:{tiers:{_type:'array',of:{_type:'required',fields:{minScore:'number',maxScore:'number'}}}}}},{section:'hp',schema:'number'}];
+ const source='{"successLevelSettings":{"tiers":[{"minScore":null,"maxScore":0},{"minScore":1,"maxScore":10},{"minScore":11,"maxScore":null}]},"hp":10,"unknown":9007199254740993}';
+ for(const wrapped of [source,'{"world":{"initialGameState":'+source+'}}'])assert.equal(d.validate(wrapped,references).filter(issue=>issue.level==='error').length,0);
+ const invalid=source.replace('"hp":10','"hp":null').replace('"minScore":1,','"minScore":null,').replace('"maxScore":10','"maxScore":null');
+ assert.deepEqual(d.validate(invalid,references).filter(issue=>issue.level==='error').map(issue=>issue.path),[['successLevelSettings','tiers',1,'minScore'],['successLevelSettings','tiers',1,'maxScore'],['hp']]);
+ assert.equal(d.validate(source.replace('"maxScore":0','"maxScore":"0"'),references).filter(issue=>issue.level==='error').length,1);assert.equal(d.read(source,['unknown']),'9007199254740993');
+});
 test('preserves exact numeric lexemes, unknown keys and hostile names',()=>{const source='{ "__proto__": {"id":9007199254740993}, "negative":-0,"huge":1E+999,"title":"old" }';const edited=d.edit(source,['title'],'"new"');assert.equal(edited,source.replace('"old"','"new"'));assert.equal(d.read(edited,['__proto__','id']),'9007199254740993');assert.equal(d.diff(source,edited).total,1);});
 test('rejects malformed JSON, duplicate keys and raw unpaired surrogates',()=>{for(const s of ['{"a":1,"a":2}','[1,]','{"a":1','01','"\ud800"','true false'])assert.throws(()=>d.parse(s));assert.doesNotThrow(()=>d.parse('"\\ud800"'));assert.doesNotThrow(()=>d.parse('"😀"'));});
 test('insertion and removal preserve untouched text',()=>{const source='{\n "first": 1,\n "second": 2,\n "last":3\n}';for(const k of ['first','second','last']){const result=d.remove(source,[k]);assert.equal(JSON.parse(result)[k],undefined);assert.equal(Object.keys(JSON.parse(result)).length,2);}assert.equal(JSON.parse(d.insert(source,[],'new','9007199254740993')).last,3);assert.throws(()=>d.insert(source,[],'first','0'));});

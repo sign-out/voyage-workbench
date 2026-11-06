@@ -19,6 +19,17 @@ function fixture(){
  const envelope=(value:any)=>'{"shortId":"WORLD","title":"Synthetic world","initialGameState":'+JSON.stringify(value)+',"creationNotes":"Local only"}';
  return {source:envelope(state),remote:envelope(normalized)};
 }
+test('save read-back adopts server-only additions with durable checkpoints and no second write',async()=>{
+ const folder=mkdtempSync(path.join(os.tmpdir(),'voyage-save-additions-')),original=globalThis.fetch,resources=path.resolve('apps/workbench/public/references'),secrets={durable:false,get:()=> 'test-key',set:()=>{}};
+ let service=new Service(folder,resources,secrets),writes=0;
+ const source='{"shortId":"WORLD","title":"Synthetic world","initialGameState":{"heroesVersion":37,"compatibilityRevision":16,"parties":{"":{"questTriggers":{}}}}}',remote=source.replace('"questTriggers":{}','"questTriggers":{"__generated_quest_progress__/Example":{"exact":9007199254740993}}');
+ try{
+  const {project}=await service.request('create',{source});service.store.dispatch(project.id,{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'"old"',envelopeSource:source});
+  globalThis.fetch=async(_url,options)=>{if(String(_url).endsWith('/validate'))return new Response('{"data":{"valid":true,"errors":[]}}');if(options?.method==='PUT'){writes++;return new Response('{}');}return new Response('{"data":{"world":'+remote+'}}',{headers:{etag:'"added"'}});};
+  const saved=await service.request('saveRemote',{id:project.id});assert.equal(saved.project.remote.operations[0].state,'ACCEPTED');assert.equal(saved.project.remote.operations[0].automaticAdditions.total,1);assert.equal(saved.project.activeSource,remote);assert.equal(saved.project.candidates.length,0);assert.equal(saved.project.remote.baselineHash,hash(remote));assert.equal(writes,1);assert.ok(service.store.history(project.id).some((row:any)=>row.label==='Before saveAdditions'));
+  service.store.close();service=new Service(folder,resources,secrets);const restored=service.store.project(project.id);assert.equal(restored.activeSource,remote);assert.equal(restored.remote.operations[0].automaticAdditions.total,1);assert.equal(restored.remote.operations[0].payload.includes('__generated_quest_progress__'),false);assert.equal(writes,1);
+ }finally{globalThis.fetch=original;service.store.close();rmSync(folder,{recursive:true,force:true});}
+});
 test('53 normalization differences can be reviewed, adopted and reopened without a second PUT',async()=>{
  const folder=mkdtempSync(path.join(os.tmpdir(),'voyage-save-review-')),original=globalThis.fetch,resources=path.resolve('apps/workbench/public/references'),secrets={durable:false,get:()=> 'test-key',set:()=>{}};
  let service=new Service(folder,resources,secrets),writes=0,reads=0;

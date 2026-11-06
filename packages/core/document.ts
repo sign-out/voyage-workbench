@@ -249,6 +249,12 @@ export function validate(source:string,references:any[]=[],context:{environment?
   }
   function check(n:Node,s:any,path:Path,depth=0){
     if(issues.length>=200||depth>128||!s)return;
+    if(n.kind==='null'&&s==='number'){
+     const relative=path.slice(prefix.length),index=relative[2];
+     if(relative.length===4&&relative[0]==='successLevelSettings'&&relative[1]==='tiers'&&typeof index==='number'){
+      try{const tiers=at(root,prefix.concat('successLevelSettings','tiers'));if(tiers.kind==='array'&&(relative[3]==='minScore'&&index===0||relative[3]==='maxScore'&&index===tiers.children.length-1))return;}catch{}
+     }
+    }
     if(typeof s==='string'){if(['unknown','any'].indexOf(s)<0&&s!==n.kind)issues.push({level:'error',path,message:'Expected '+s+', found '+n.kind+'.'});return;}
     if(s._type==='literal'){const actual=n.kind==='number'?source.slice(n.start,n.end):n.value;if(String(actual)!==String(s.value))issues.push({level:'error',path,message:'Expected '+JSON.stringify(s.value)+'.'});}
     else if(s._type==='required'||s._type==='partial'){

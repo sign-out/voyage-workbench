@@ -5,7 +5,9 @@ import {creationMapSvg} from '../../../packages/core/creation-map';
 import {defaultCoverGrader} from '../../../packages/core/covers';
 import {resolveRoute,type TaskRoute} from '../../../packages/core/providers';
 import {publicationEdit} from '../../../packages/core/studio';
-import {put} from '../../../packages/core/features';
+import {put,worldAuthoringDefaults} from '../../../packages/core/features';
+import {useWorldField} from './use-world-field';
+import {usePublicationDetails} from './use-publication-details';
 import {statePath,parse} from '../../../packages/core/document';
 import {request} from './host';
 import {feature,type Asset} from './features-api';
@@ -19,9 +21,9 @@ import {reviewCreationVisuals,creationVisualPreview} from './creation-visual';
 
 type Props={project:Project;references:any[];command:(command:any)=>Promise<any>;receive:(result:any)=>void;onReview:()=>void;onPublish:()=>void;onNew:()=>Promise<void>;onRestore?:(project:Project)=>Promise<void>;disabled?:boolean};
 export function WorldCreationWorkspace({project,references,command,receive,onReview,onPublish,onNew,onRestore,disabled=false}:Props){
- const workspace=project.creation;
+ const workspace=project.creation,publication=usePublicationDetails(project),worldDefaults=useMemo(()=>worldAuthoringDefaults(project,publication.source),[project.activeSource,project.name,project.creation?.design.artDirection,publication.source]);
  const [targetEnvironment,setTargetEnvironment]=useState(workspace?.targetEnvironment||project.remote.environment||'alpha');
- const [brief,setBrief]=useState(workspace?.brief||''),[documents,setDocuments]=useState<{id:string;name:string;text:string}[]>(workspace?.documents.map(({id,name,text})=>({id,name,text}))||[]),[profile,setProfile]=useState(workspace?.profile||'universal');
+ const [brief,setBrief]=useWorldField(workspace?workspace.brief:worldDefaults.premise,project.id),[documents,setDocuments]=useState<{id:string;name:string;text:string}[]>(workspace?.documents.map(({id,name,text})=>({id,name,text}))||[]),[profile,setProfile]=useState(workspace?.profile||'universal');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[allowImages,setAllowImages]=useState(false),[maximumImages,setMaximumImages]=useState(8),[route,setRoute]=useState<TaskRoute>(),[visualReport,setVisualReport]=useState('');
  const [runOptions,setRunOptions]=useState<RunOptions>({autoResume:false,allowDelegation:false}),[capabilities,setCapabilities]=useState({checkpointResume:false,delegation:false});
  const [assets,setAssets]=useState<Record<string,Asset>>({});

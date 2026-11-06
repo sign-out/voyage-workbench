@@ -71,6 +71,9 @@ function running(kind='work',localEditMode='proposal-only',options={}){
 }
 
 test('native save review adopts a bound downloaded snapshot without claiming exact confirmation',()=>{
+ const originalSource='{"shortId":"WORLD","initialGameState":{"heroesVersion":37,"questTriggers":{}}}',addedSource=originalSource.replace('"questTriggers":{}','"questTriggers":{"generated":{"exact":9007199254740993}}');
+ let added=request({operation:'create',id:'additive',name:'Additive',source:originalSource,now:1});added=reduce(added,{type:'remoteLink',worldId:'WORLD',environment:'alpha',etag:'"old"'});const addedPayload=request({operation:'payload',source:originalSource});added=reduce(added,{type:'savePrepare',id:'added-save',baseHash:request({operation:'hash',source:originalSource}),payload:addedPayload});added=reduce(added,{type:'saveState',id:'added-save',state:'SEND_ATTEMPTED'});added=reduce(added,{type:'saveAdditions',operationId:'added-save',baseHash:request({operation:'hash',source:originalSource}),payloadHash:request({operation:'hash',source:addedPayload}),source:addedSource,etag:'"added"',environment:'alpha',worldId:'WORLD'});
+ assert.equal(added.remote.operations[0].automaticAdditions.total,1);assert.equal(added.activeSource,addedSource);assert.equal(added.remote.operations[0].state,'ACCEPTED');
  const original='{"shortId":"WORLD","initialGameState":{"heroesVersion":37,"exact":9007199254740993,"worldVoices":{}}}';
  const remote='{"shortId":"WORLD","initialGameState":{"heroesVersion":37,"exact":9007199254740993,"characterCreationMusic":"fantasy"}}';
  let project=request({operation:'create',id:'review',name:'Review',source:original,now:1});
