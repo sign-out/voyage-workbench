@@ -33,6 +33,22 @@ function running(kind='work',localEditMode='proposal-only',options={}){
  return reduce(project,{type:'taskRunning',taskId:'task',attempt:'attempt'});
 }
 
+test('native save review adopts a bound downloaded snapshot without claiming exact confirmation',()=>{
+ const original='{"shortId":"WORLD","initialGameState":{"heroesVersion":37,"exact":9007199254740993,"worldVoices":{}}}';
+ const remote='{"shortId":"WORLD","initialGameState":{"heroesVersion":37,"exact":9007199254740993,"characterCreationMusic":"fantasy"}}';
+ let project=request({operation:'create',id:'review',name:'Review',source:original,now:1});
+ project=reduce(project,{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'"old"',envelopeSource:original});
+ const payload=request({operation:'payload',source:original}),digest=request({operation:'hash',source:original});
+ project=reduce(project,{type:'savePrepare',id:'save',baseHash:digest,payload});
+ project=reduce(project,{type:'saveState',id:'save',state:'SEND_ATTEMPTED'});
+ project=reduce(project,{type:'saveReview',id:'candidate',operationId:'save',baseHash:digest,payloadHash:request({operation:'hash',source:payload}),source:remote,environment:'alpha',worldId:'WORLD',etag:'"new"'});
+ assert.equal(project.activeSource,original);assert.equal(project.remote.operations[0].state,'UNKNOWN');
+ project=reduce(project,{type:'accept',id:'candidate'});
+ assert.equal(project.activeSource,remote);assert.equal(project.remote.operations[0].state,'ACCEPTED');assert.equal(project.remote.etag,'"new"');
+ assert.equal(request({operation:'exportWorldSource',args:[remote,'voyage']}),'{"heroesVersion":37,"exact":9007199254740993,"characterCreationMusic":"fantasy"}');
+ assert.match(request({operation:'voyageSaveFeedback',args:[project.remote.operations[0]]}).detail,/not an exact read-back/);
+});
+
 function call(project,callId,name,args){
  return reduce(project,{type:'taskTool',taskId:'task',attempt:'attempt',callId,name,args,references});
 }

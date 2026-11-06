@@ -96,6 +96,7 @@ export class Service {
       case 'validateRemote':{const project=this.store.project(p.id),root=doc.parse(project.activeSource),environment=this.projectEnvironment(project),stage=p.stage??'draft';if(!['draft','publish'].includes(stage))throw new Error('Validation stage must be draft or publish.');if(!project.remote.worldId)throw new Error('Link a Voyage world before validating its remote target.');const result=JSON.parse((await this.voyage('POST','/validate','{"stage":'+JSON.stringify(stage)+',"world":{"initialGameState":'+doc.read(project.activeSource,doc.statePath(root))+'}}',undefined,undefined,environment)).text);const record={sourceHash:hash(project.activeSource),environment,worldId:project.remote.worldId,etag:project.remote.etag,stage,checkedAt:Date.now(),report:result};this.store.dispatch(p.id,{type:'remoteValidation',result:record});return record;}
       case 'saveRemote':return this.save(p.id);
       case 'reconcileSave':return this.reconcile(p.id);
+      case 'reviewRemoteSave':return this.reconcile(p.id,true);
       default:throw new Error('Unknown host request: '+method);
     }
   }
@@ -121,9 +122,11 @@ export class Service {
     this.store.dispatch(id,{type:'saveState',id:operation,state:'SEND_ATTEMPTED'});
     try{await this.voyage('PUT','/worlds/'+encodeURIComponent(project.remote.worldId),payload,project.remote.etag,undefined,environment);}catch(e){this.store.dispatch(id,{type:'saveState',id:operation,state:voyageCleanRejection((e as any).status,(e as any).code)?'REJECTED':'UNKNOWN',detail:(e as Error).message});throw e;}
     try{return await this.reconcile(id);}catch(e){this.store.dispatch(id,{type:'saveState',id:operation,state:'UNKNOWN',detail:'Voyage acknowledged the write, but read-back failed. Reconcile save before another write. '+(e as Error).message});throw e;}}
-  async reconcile(id:string){const p=this.store.project(id),environment=this.projectEnvironment(p),op=p.remote.operations.find(o=>['PREPARED','SEND_ATTEMPTED','UNKNOWN'].includes(o.state));if(!op)throw new Error('No uncertain save needs reconciliation.');
+  async reconcile(id:string,review=false){const p=this.store.project(id),environment=this.projectEnvironment(p),op=p.remote.operations.find(o=>['PREPARED','SEND_ATTEMPTED','UNKNOWN'].includes(o.state));if(!op)throw new Error('No uncertain save needs reconciliation.');
+    if(review&&p.draft)throw new Error('Apply or discard the editor draft before reviewing Voyage changes.');
     if(op.state==='UNKNOWN'&&invalidRevisionFailure(op.detail||'')){this.recoverInvalidRevision(id);return this.store.get(id);}
     if(op.state==='PREPARED'){this.store.dispatch(id,{type:'saveState',id:op.id,state:'REJECTED',detail:'No network dispatch was recorded. You may start a new save.'});return this.store.get(id);}
     const remote=await this.voyage('GET','/worlds/'+encodeURIComponent(p.remote.worldId),undefined,undefined,undefined,environment);const source=this.unwrapWorld(remote.text);const comparison=compareRemoteWorlds(op.payload,remotePayload(source));
+    if(review&&!comparison.matches)return this.store.dispatch(id,{type:'saveReview',id:randomUUID(),operationId:op.id,baseHash:hash(p.activeSource),payloadHash:hash(op.payload),source,etag:remote.etag,environment,worldId:p.remote.worldId});
     this.store.dispatch(id,{type:'saveState',id:op.id,state:comparison.matches?'CONFIRMED':'UNKNOWN',etag:remote.etag,comparison,detail:comparison.matches?'Read-back confirmed the submitted world; JSON object ordering and equivalent number formatting are ignored.':'Read-back differs in '+comparison.total+' value(s). The save remains unconfirmed; review the differences before retrying.'});if(comparison.matches)this.store.checkpoint(id,'Confirmed Voyage save');return this.store.get(id);}
 }

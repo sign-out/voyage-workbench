@@ -44,6 +44,7 @@ export function compareRemoteWorlds(submitted:string,remote:string){
 }
 export function voyageSaveFeedback(operation:any){
   if(!operation)return null;
+  if(operation.state==='ACCEPTED')return {tone:'success',title:'Voyage draft accepted after review',detail:'You adopted the downloaded Voyage changes. The original submission remains in save history; this was not an exact read-back confirmation and no write was resent.'};
   if(operation.state==='CONFIRMED')return {tone:'success',title:'Saved to Voyage',detail:'The remote draft was confirmed by read-back. Your local project remains saved on this device.'};
   if(operation.state==='REJECTED')return {tone:'error',title:'Voyage save rejected',detail:(operation.detail||'Voyage rejected this save.')+' Your local project is unchanged. Resolve the error before starting another save.'};
   if(operation.state==='UNKNOWN'){

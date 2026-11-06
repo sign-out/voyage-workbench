@@ -75,6 +75,14 @@ export function statePath(root:Node):Path {
   for(const p of [['data','world','initialGameState'],['world','initialGameState'],['initialGameState']] as Path[])if(exists(p))return p;
   return [];
 }
+export function exportWorldSource(source:string,format:'project'|'voyage'='project'):string {
+ const root=parse(source);
+ if(format==='project')return source;
+ if(format!=='voyage')throw new Error('Choose project JSON or Voyage GameState.');
+ const path=statePath(root);
+ if(at(root,path).kind!=='object')throw new Error('Voyage GameState exports require an object.');
+ return read(source,path);
+}
 export function authoredScopes(source:string):{path:Path;partyId?:string}[]{
  const root=parse(source),base=statePath(root),world=at(root,base),result:{path:Path;partyId?:string}[]=[{path:base}];
  const parties=world.children.find(child=>child.key==='parties')?.node;
