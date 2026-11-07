@@ -22,17 +22,19 @@ test('verified additive read-backs are adopted automatically but mixed, stale an
  const arraySource=source.replace('"exact":9007199254740993','"entries":[{"name":"First"},{"name":"Second"}],"exact":9007199254740993'),arrayAdded=arraySource.replace('[{"name":"First"},{"name":"Second"}]','[{"name":"First","detail":"Filled by server"},{"name":"Second"},{"name":"Third"}]'),arrayCommand={...command,baseHash:hash(arraySource),payloadHash:hash(remotePayload(arraySource)),source:arrayAdded};
  const arrays=reduce(pending(arraySource),arrayCommand);assert.equal(arrays.remote.operations[0].automaticAdditions.total,2);assert.equal(read(arrays.activeSource,['initialGameState','entries',2,'name']),'"Third"');
  for(const changed of ['[{"name":"Second"},{"name":"First"}]','[{"name":"First"}]'])assert.throws(()=>reduce(pending(arraySource),{...arrayCommand,source:arraySource.replace('[{"name":"First"},{"name":"Second"}]',changed)}));
- for(const changed of [added.replace('"title":"Local"','"title":"Changed"'),added.replace('"compatibilityRevision":16','"compatibilityRevision":17'),added.replace('"WORLD"','"OTHER"'),added.replace('"worldVoices":{},','')])assert.throws(()=>reduce(pending(),{...command,source:changed}));
+ const omittedEmpty=reduce(pending(),{...command,source:added.replace('"worldVoices":{},','').replace('"unassignedAreas":{},','')});assert.equal(omittedEmpty.remote.operations[0].state,'ACCEPTED');assert.equal(omittedEmpty.remote.operations[0].automaticAdditions.total,1);
+ const nonempty=source.replace('"worldVoices":{}','"worldVoices":{"guide":{"name":"Guide"}}');assert.throws(()=>reduce(pending(nonempty),{...command,baseHash:hash(nonempty),payloadHash:hash(remotePayload(nonempty)),source:added.replace('"worldVoices":{},','')}),/Only verified server additions/);
+ for(const changed of [added.replace('"title":"Local"','"title":"Changed"'),added.replace('"compatibilityRevision":16','"compatibilityRevision":17'),added.replace('"WORLD"','"OTHER"'),added.replace('"questTriggers":','"otherTriggers":')])assert.throws(()=>reduce(pending(),{...command,source:changed}));
  const edited=reduce(pending(),{type:'edit',path:['title'],source:'"Newer local edit"',baseHash:hash(source)});assert.throws(()=>reduce(edited,{...command,baseHash:hash(edited.activeSource)}),/unchanged submitted world/);assert.equal(read(edited.activeSource,['title']),'"Newer local edit"');assert.equal(pending().activeSource,source);
 });
 function review(project=pending(),overrides:any={}){
  return reduce(project,{type:'saveReview',id:'review',operationId:'save',baseHash:hash(project.activeSource),payloadHash:hash(project.remote.operations[0].payload),source:remote,etag:'"new"',environment:'alpha',worldId:'WORLD',...overrides});
 }
-test('remote normalization stays unresolved until complete explicit snapshot acceptance',()=>{
+test('remote changes can still be reviewed as a complete explicit snapshot',()=>{
  const original=pending(),proposal=review(original);
  assert.equal(original.remote.operations[0].state,'SEND_ATTEMPTED');
  assert.equal(proposal.activeSource,source);assert.equal(proposal.remote.etag,'"old"');
- assert.equal(proposal.remote.operations[0].state,'UNKNOWN');assert.equal(proposal.remote.operations[0].comparison.total,4);
+ assert.equal(proposal.remote.operations[0].state,'UNKNOWN');assert.equal(proposal.remote.operations[0].comparison.total,2);assert.equal(proposal.remote.operations[0].comparison.optionalEmptyCollections.length,2);
  assert.equal(proposal.candidates[0].remoteSave?.operationId,'save');
  const accepted=reduce(proposal,{type:'accept',id:'review'});
  assert.equal(accepted.activeSource,remote);assert.equal(accepted.remote.etag,'"new"');

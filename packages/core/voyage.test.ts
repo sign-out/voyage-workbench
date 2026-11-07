@@ -30,6 +30,24 @@ test('remote comparison retains exact large-number distinctions, field presence 
   const differences=compareRemoteWorlds(JSON.stringify(Array.from({length:30},()=>1)),JSON.stringify(Array.from({length:30},()=>2)));
   assert.equal(differences.total,30);assert.equal(differences.paths.length,20);assert.equal(differences.truncated,true);
 });
+test('only the two known empty GameState maps are equivalent to absence across the native bridge',()=>{
+ const wrap=(state:string)=>'{"world":{"initialGameState":'+state+'}}',empty=wrap('{"unassignedAreas":{},"worldVoices":{},"exact":9007199254740993}'),absent=wrap('{"exact":9007199254740993}');
+ const result=compareRemoteWorlds(empty,absent);
+ assert.equal(result.matches,true);assert.equal(result.total,0);assert.deepEqual(result.optionalEmptyCollections,[['world','initialGameState','unassignedAreas'],['world','initialGameState','worldVoices']]);
+ assert.deepEqual(JSON.parse(nativeRequest(JSON.stringify({operation:'compareRemoteWorlds',args:[empty,absent]}))),result);
+ assert.equal(compareRemoteWorlds(absent,empty).matches,true);
+ for(const [before,after] of [
+  [wrap('{"worldVoices":{"guide":{"name":"Guide"}}}'),wrap('{}')],
+  [wrap('{"unassignedAreas":{"pier":{}}}'),wrap('{}')],
+  [wrap('{"worldVoices":null}'),wrap('{}')],
+  [wrap('{"worldVoices":[]}'),wrap('{}')],
+  [wrap('{"unknownMap":{}}'),wrap('{}')],
+  [wrap('{"npcs":{"guide":{"worldVoices":{}}}}'),wrap('{"npcs":{"guide":{}}}')],
+  ['{"world":{"worldVoices":{},"initialGameState":{}}}',wrap('{}')],
+  [empty,absent.replace('9007199254740993','9007199254740992')]
+ ])assert.equal(compareRemoteWorlds(before,after).matches,false,before);
+ assert.match(voyageSaveFeedback({state:'CONFIRMED',comparison:result})!.detail,/empty optional collections/);
+});
 test('success feedback requires confirmed read-back; uncertain and rejected saves remain distinct',()=>{
   assert.equal(voyageSaveFeedback(null),null);
   assert.equal(voyageSaveFeedback({state:'CONFIRMED'})?.tone,'success');

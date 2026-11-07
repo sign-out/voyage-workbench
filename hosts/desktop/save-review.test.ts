@@ -14,15 +14,15 @@ function fixture(){
   const id='__generated_quest_progress__/'+name;
   triggers[id]={name:id,recurring:false,conditions:[condition],effects:[{type:'quest-progress',questId:name}]};
  }
- const state={heroesVersion:37,compatibilityRevision:16,unassignedAreas:{},worldVoices:{},parties:{'':{quests,questTriggers:{}}}};
- const normalized={heroesVersion:37,compatibilityRevision:16,parties:{'':{quests,questTriggers:triggers}},characterCreationMusic:'fantasy'};
+ const state={heroesVersion:37,compatibilityRevision:16,narratorStyle:'Original voice',unassignedAreas:{},worldVoices:{},parties:{'':{quests,questTriggers:{}}}};
+ const normalized={heroesVersion:37,compatibilityRevision:16,narratorStyle:'Changed voice',parties:{'':{quests,questTriggers:triggers}},characterCreationMusic:'fantasy'};
  const envelope=(value:any)=>'{"shortId":"WORLD","title":"Synthetic world","initialGameState":'+JSON.stringify(value)+',"creationNotes":"Local only"}';
  return {source:envelope(state),remote:envelope(normalized)};
 }
 test('save read-back adopts server-only additions with durable checkpoints and no second write',async()=>{
  const folder=mkdtempSync(path.join(os.tmpdir(),'voyage-save-additions-')),original=globalThis.fetch,resources=path.resolve('apps/workbench/public/references'),secrets={durable:false,get:()=> 'test-key',set:()=>{}};
  let service=new Service(folder,resources,secrets),writes=0;
- const source='{"shortId":"WORLD","title":"Synthetic world","initialGameState":{"heroesVersion":37,"compatibilityRevision":16,"parties":{"":{"questTriggers":{}}}}}',remote=source.replace('"questTriggers":{}','"questTriggers":{"__generated_quest_progress__/Example":{"exact":9007199254740993}}');
+ const source='{"shortId":"WORLD","title":"Synthetic world","initialGameState":{"heroesVersion":37,"compatibilityRevision":16,"unassignedAreas":{},"worldVoices":{},"parties":{"":{"questTriggers":{}}}}}',remote=source.replace('"unassignedAreas":{},"worldVoices":{},','').replace('"questTriggers":{}','"questTriggers":{"__generated_quest_progress__/Example":{"exact":9007199254740993}}');
  try{
   const {project}=await service.request('create',{source});service.store.dispatch(project.id,{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'"old"',envelopeSource:source});
   globalThis.fetch=async(_url,options)=>{if(String(_url).endsWith('/validate'))return new Response('{"data":{"valid":true,"errors":[]}}');if(options?.method==='PUT'){writes++;return new Response('{}');}return new Response('{"data":{"world":'+remote+'}}',{headers:{etag:'"added"'}});};
@@ -30,7 +30,7 @@ test('save read-back adopts server-only additions with durable checkpoints and n
   service.store.close();service=new Service(folder,resources,secrets);const restored=service.store.project(project.id);assert.equal(restored.activeSource,remote);assert.equal(restored.remote.operations[0].automaticAdditions.total,1);assert.equal(restored.remote.operations[0].payload.includes('__generated_quest_progress__'),false);assert.equal(writes,1);
  }finally{globalThis.fetch=original;service.store.close();rmSync(folder,{recursive:true,force:true});}
 });
-test('53 normalization differences can be reviewed, adopted and reopened without a second PUT',async()=>{
+test('authored edits mixed with server additions still require review and survive reopening without a second PUT',async()=>{
  const folder=mkdtempSync(path.join(os.tmpdir(),'voyage-save-review-')),original=globalThis.fetch,resources=path.resolve('apps/workbench/public/references'),secrets={durable:false,get:()=> 'test-key',set:()=>{}};
  let service=new Service(folder,resources,secrets),writes=0,reads=0;
  const {source,remote}=fixture();
@@ -43,7 +43,7 @@ test('53 normalization differences can be reviewed, adopted and reopened without
    reads++;return new Response('{"data":{"world":'+remote+'}}',{headers:{etag:'W/"normalized"'}});
   };
   await service.request('saveRemote',{id:project.id});
-  let current=service.store.project(project.id);assert.equal(current.remote.operations[0].comparison.total,53);assert.equal(current.remote.operations[0].state,'UNKNOWN');
+  let current=service.store.project(project.id);assert.equal(current.remote.operations[0].comparison.total,52);assert.equal(current.remote.operations[0].comparison.optionalEmptyCollections.length,2);assert.equal(current.remote.operations[0].state,'UNKNOWN');
   await service.request('saveRemote',{id:project.id});assert.equal(writes,1);
   const proposal=await service.request('reviewRemoteSave',{id:project.id});current=proposal.project;
   assert.equal(current.activeSource,source);assert.equal(current.candidates.length,1);assert.equal(current.remote.operations[0].state,'UNKNOWN');assert.equal(writes,1);
