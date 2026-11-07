@@ -75,6 +75,25 @@ added to public fixtures; regression worlds are synthetic.
 
 ## Safe recovery
 
+Read-back now treats missing versus empty `{}` as equivalent **only** for
+`world.initialGameState.unassignedAreas` and `world.initialGameState.worldVoices`.
+An otherwise matching save is confirmed, with the two paths recorded in the
+comparison receipt and an explanation in the success message. Local JSON is
+preserved. **Reconcile save** also resolves older uncertain saves caused only
+by these omissions without another PUT. Additive server updates can be adopted
+even when these empty maps are omitted in the same response. Nonempty maps,
+nulls, arrays, unknown fields, and identically named fields elsewhere still
+receive normal comparison; removing authored data still requires review.
+
+The latest supplied GameState export preserves every existing value in the
+updated source and adds 50 generated quest-progress triggers,
+`compatibilityRevision: 16`, and `characterCreationMusic: "fantasy"`. Both supplied
+files include the two empty maps. The screenshot identifies those paths but
+does not include the HTTP response; omission is supported by the earlier supplied
+API export and is reproduced with synthetic read-back data, not a live write.
+
+For other differences:
+
 1. Keep your local project and use **Review Voyage changes…** from Connections or
    Publish. This makes a GET on the linked world's original environment; it never
    repeats a PUT, requests moderation, or publishes a world.

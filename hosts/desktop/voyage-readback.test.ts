@@ -5,6 +5,26 @@ import os from 'node:os';
 import path from 'node:path';
 import {Service} from './service';
 import {hash,remotePayload} from '../../packages/core/project';
+import {voyageSaveFeedback} from '../../packages/core/voyage';
+
+test('omitted empty optional maps confirm saves and recover old uncertainty without rewriting local JSON or resending',async()=>{
+ const folder=mkdtempSync(path.join(os.tmpdir(),'voyage-empty-readback-')),original=globalThis.fetch,resources=path.resolve('apps/workbench/public/references'),secrets={durable:false,get:()=> 'test-key',set:()=>{}};
+ let service=new Service(folder,resources,secrets),writes=0;
+ const source='{"title":"World","initialGameState":{"unassignedAreas":{},"worldVoices":{},"exact":9007199254740993}}',remote=source.replace('"unassignedAreas":{},"worldVoices":{},','');
+ try{
+  globalThis.fetch=async(url,options)=>{
+   if(String(url).endsWith('/validate'))return new Response('{"data":{"valid":true,"errors":[]}}');
+   if(options?.method==='PUT'){writes++;assert.equal(options.body,remotePayload(source));return new Response('{}');}
+   return new Response('{"data":{"world":'+remote+'}}',{headers:{etag:'"next"'}});
+  };
+  const {project}=await service.request('create',{source});service.store.dispatch(project.id,{type:'remoteLink',environment:'alpha',worldId:'WORLD',etag:'"old"',envelopeSource:source});
+  await service.request('saveRemote',{id:project.id});
+  let current=service.store.project(project.id);assert.equal(current.remote.operations[0].state,'CONFIRMED');assert.equal(current.remote.operations[0].comparison.total,0);assert.equal(current.remote.operations[0].comparison.optionalEmptyCollections.length,2);assert.equal(current.activeSource,source);assert.equal(current.remote.etag,'"next"');assert.equal(current.candidates.length,0);assert.equal(writes,1);assert.match(voyageSaveFeedback(current.remote.operations[0])!.detail,/empty optional collections/);
+  service.store.close();service=new Service(folder,resources,secrets);current=service.store.project(project.id);assert.equal(current.remote.operations[0].comparison.optionalEmptyCollections.length,2);assert.equal(current.activeSource,source);
+  service.store.dispatch(project.id,{type:'savePrepare',id:'older-save',baseHash:hash(source),payload:remotePayload(source)});service.store.dispatch(project.id,{type:'saveState',id:'older-save',state:'SEND_ATTEMPTED'});service.store.dispatch(project.id,{type:'saveState',id:'older-save',state:'UNKNOWN',detail:'Read-back differs in 2 value(s).'});
+  await service.request('saveRemote',{id:project.id});current=service.store.project(project.id);assert.equal(current.remote.operations[0].state,'CONFIRMED');assert.equal(current.activeSource,source);assert.equal(writes,1);
+ }finally{globalThis.fetch=original;service.store.close();rmSync(folder,{recursive:true,force:true});}
+});
 
 test('saved and previously uncertain worlds reconcile reordered server JSON; real changes stay unconfirmed',async()=>{
   const folder=mkdtempSync(path.join(os.tmpdir(),'voyage-readback-')),original=globalThis.fetch;
