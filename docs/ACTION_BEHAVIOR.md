@@ -26,3 +26,6 @@ and contextual controls. Keep the exact target, source/revision checks,
 duplicate-click protection, durable receipts and uncertainty handling. Keep
 navigation out of operation helpers. Test the resulting workflow with delayed
 success/failure and stale context, rather than asserting only button text.
+
+See [scrollable lists and reachable editors](UX_LAYOUTS.md) for the shared
+list/detail layout and controls that must remain accessible in short windows.
