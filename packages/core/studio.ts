@@ -58,6 +58,17 @@ export function assetLocation(base:doc.Path,path:doc.Path){
  const parts=path.slice(base.length),party=parts[0]==='parties'&&parts.length>2;
  return {scope:party?base.concat(parts.slice(0,2)):base,relative:party?parts.slice(2):parts,partyId:party?String(parts[1]):undefined};
 }
+function authoredImageTarget(relative:doc.Path):string|undefined {
+ const section=relative[0],key=relative[relative.length-1];
+ if(section==='npcs'||section==='premadeCharacters'){
+  if(relative.length===3&&['portraitUrl','portrait'].includes(String(key))||section==='npcs'&&relative.length===4&&relative[2]==='portraits')return 'NPC_PORTRAIT';
+ }else if(section==='itemTypes'){
+  if(relative.length===3&&['imageUrl','image'].includes(String(key)))return 'ITEM_IMAGE';
+ }else if(section==='regions'||section==='locations'){
+  const area=section==='locations'&&relative[2]==='areas',entry=area?relative.slice(4):relative.slice(2);
+  if(entry.length===1&&['image','imageUrl','mapImageUrl','establishingShotUrl'].includes(String(key))||entry.length===3&&entry[0]==='images'&&key==='imageUrl')return section==='regions'?'REGION_MAP_IMAGE':area?'AREA_IMAGE':'LOCATION_IMAGE';
+ }
+}
 export function assetSlots(source:string){
  const root=doc.parse(source),base=doc.statePath(root),result:AssetSlot[]=[];let visited=0;
  const walk=(node:doc.Node,path:doc.Path,depth:number)=>{
@@ -65,10 +76,11 @@ export function assetSlots(source:string){
   const key=String(path[path.length-1]||'');
   if(node.kind==='string'){
    const music=path.includes('gameplayMusicSettings')&&path.includes('variants')&&['url','narrationUrl','gameplayUrl'].includes(key);
-   const {relative}=assetLocation(base,path),section=relative[0];
-   const namedPortrait=section==='npcs'&&relative.length===4&&relative[2]==='portraits';
-   const image=namedPortrait||/^(image|imageUrl|portraitUrl|portrait|mapImageUrl|establishingShotUrl)$/i.test(key);
-   if(music||image)result.push({path,kind:music?'audio':'image',url:String(node.value),target:music?undefined:section==='npcs'||section==='premadeCharacters'?'NPC_PORTRAIT':section==='itemTypes'?'ITEM_IMAGE':section==='regions'?'REGION_MAP_IMAGE':section==='locations'?(relative[2]==='areas'?'AREA_IMAGE':'LOCATION_IMAGE'):undefined});
+   const {relative}=assetLocation(base,path),target=authoredImageTarget(relative);
+   // Optional success decorations remain assignable, but have no world-artwork
+   // upload purpose and must never become creation/generation requirements.
+   const tierDecoration=relative.length===4&&relative[0]==='successLevelSettings'&&relative[1]==='tiers'&&typeof relative[2]==='number'&&key==='imageUrl';
+   if(music||target||tierDecoration)result.push({path,kind:music?'audio':'image',url:String(node.value),target:music?undefined:target});
   }
   node.children.forEach(child=>walk(child.node,path.concat(child.key),depth+1));
  };

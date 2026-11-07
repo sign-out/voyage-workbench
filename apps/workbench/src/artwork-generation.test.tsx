@@ -5,7 +5,8 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {create,hash} from '../../../packages/core/project';
 import type {ArtworkProposal} from '../../../packages/core/artwork-requests';
 import {defaultSettings,resolveRoute} from '../../../packages/core/providers';
-import {generateApprovedArtwork,type Generation} from './artwork-generation';
+import {generateApprovedArtwork,generateLocalArtwork,type Generation} from './artwork-generation';
+import {artworkDestinations} from '../../../packages/core/artwork';
 import {AssistantArtworkApprovals} from './AssistantArtworkApprovals';
 
 function fixture(){
@@ -80,4 +81,19 @@ test('world changes after reservation are rechecked before generation',async()=>
  item.dependencies.request=async(method,payload)=>{if(method==='project'&&item.projectReads===1)item.project.activeSource='{}';return invoke(method,payload);};
  await assert.rejects(generateApprovedArtwork('p',item.proposal,item.route,item.onHistory,item.dependencies),/No image request was sent/);
  assert.equal(item.calls.includes('imageGenerate'),false);assert.equal(item.jobs[0].state,'blocked');
+});
+test('direct artwork generation records its outcome without a UI subscriber and protects duplicate, cancelled and changed-route requests',async()=>{
+ const item=fixture(),destination=artworkDestinations(item.project.activeSource).find(value=>value.label==='Guide')!,source=item.project.activeSource;
+ let finish!:()=>void,started!:()=>void;
+ const began=new Promise<void>(resolve=>started=resolve),pending=new Promise<void>(resolve=>finish=resolve),invoke=item.dependencies.request;
+ item.dependencies.request=async(method,payload)=>{if(method==='imageGenerate'){started();await pending;}return invoke(method,payload);};
+ const options={project:item.project,destination,prompt:item.proposal.prompt,current:()=>item.project};
+ const running=generateLocalArtwork(options,{...item.dependencies,confirm:message=>{assert.match(message,/Guide.*Test images/);return true;}});
+ await began;await assert.rejects(generateLocalArtwork(options,item.dependencies),/already generating/);finish();
+ assert.equal((await running)?.id,'asset');assert.equal(item.jobs[0].state,'generated');assert.equal(item.jobs[0].destinationId,destination.id);assert.equal(item.calls.filter(method=>method==='imageGenerate').length,1);assert.equal(item.project.activeSource,source);
+ const cancelled=fixture();assert.equal(await generateLocalArtwork({...options,project:cancelled.project,current:()=>cancelled.project},{...cancelled.dependencies,confirm:()=>false}),undefined);assert.equal(cancelled.calls.includes('featureSet'),false);assert.equal(cancelled.calls.includes('imageGenerate'),false);
+ const drift=fixture(),original=drift.dependencies.request;
+ drift.dependencies.request=async(method,payload)=>{const result=await original(method,payload);if(method==='featureSet')drift.settings.routes.artwork.model='changed';return result;};
+ await assert.rejects(generateLocalArtwork({...options,project:drift.project,current:()=>drift.project},{...drift.dependencies,confirm:()=>true}),/No image request was sent.*provider or model changed/);
+ assert.equal(drift.jobs[0].state,'blocked');assert.equal(drift.calls.includes('imageGenerate'),false);
 });
