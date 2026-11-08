@@ -97,6 +97,11 @@ public class VoyageHttpPolicyTest {
   Harness harness=new Harness();harness.add(429,"daily_limit",null);assertEquals(429,harness.run("GET").status);assertEquals(1,harness.opened.size());assertTrue(harness.time.waits.isEmpty());
   assertTrue(VoyageHttpPolicy.errorMessage(429,"daily_limit","","",null).contains("did not supply a cooldown; automatic retry stopped"));
  }
+ @Test public void companionResponseLimitStopsOversizedReadsWithoutRetainingOrRetryingTheBody()throws Exception {
+  Harness harness=new Harness();Connection response=harness.add(200,"",null);response.text="12345";
+  Exception failure=assertThrows(IOException.class,()->harness.policy.execute("GET","https://example.invalid",headers(),null,text->"",4));
+  assertTrue(failure.getMessage().contains("memory safety limit"));assertEquals(1,harness.opened.size());assertTrue(response.disconnected);assertTrue(harness.time.waits.isEmpty());
+ }
  @Test public void invalidOrLongCooldownStopsInsteadOfFallingBack()throws Exception {
   for(String delay:new String[]{"6","999999999999999999999","","bogus","Sat, 24 Oct 2026 12:00:06 GMT"}){Harness harness=new Harness();harness.add(429,"",delay);assertEquals(delay,harness.run("GET").retryAfter);assertEquals(1,harness.opened.size());assertTrue(harness.time.waits.isEmpty());}
  }
@@ -142,6 +147,7 @@ public class VoyageHttpPolicyTest {
   }
  }
  @Test public void cleanPutRejectionClassificationExcludesUncertainCodes(){
+  for(String code:new String[]{"studio_version_upgrade_required","revision_version_mismatch","version_upgrade_mismatch","world_changed"})assertTrue(VoyageHttpPolicy.cleanRejection(409,code));
   for(int status:new int[]{400,401,403,404,405,412,413,415,422,428,429}){assertTrue(VoyageHttpPolicy.cleanRejection(status,""));assertFalse(VoyageHttpPolicy.cleanRejection(status,"request_status_unknown"));assertFalse(VoyageHttpPolicy.cleanRejection(status,"request_in_progress"));}
   assertTrue(VoyageHttpPolicy.cleanRejection(503,"studio_unavailable"));assertTrue(VoyageHttpPolicy.cleanRejection(409,"studio_version_mismatch"));assertFalse(VoyageHttpPolicy.cleanRejection(500,""));assertFalse(VoyageHttpPolicy.cleanRejection(409,""));
  }

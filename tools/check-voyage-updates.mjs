@@ -5,7 +5,9 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 
 export function curlArguments(url,options={}){
- if(!/^https:\/\/(api\.aidungeon\.com|api-alpha\.aidungeon\.com|api\.unofficial\.voyage)\//.test(url))throw new Error('Only the configured public Voyage documentation hosts are allowed');
+ const profiles=JSON.parse(readFileSync(new URL('../packages/core/voyage-compatibility.json',import.meta.url),'utf8'));
+ const allowed=[profiles.worldSchema.source,...Object.values(profiles.environments).flatMap(profile=>[profile.contractSource,profile.apiBase+'/agent-guide.md'])];
+ if(!allowed.includes(url))throw new Error('Only the configured public Voyage documentation URLs are allowed');
  return ['--disable','--proto','=https','--request','GET','--fail','--silent','--show-error','--max-time','20','--max-filesize','8388608','--header','Accept: '+(options.headers?.Accept||'application/json'),url];
 }
 export async function curlDocumentation(url,options){
@@ -34,7 +36,7 @@ export function schemaSections(root){
 export async function checkVoyageUpdates({offline=false,schema=false,fetcher=fetch}={}){
  const profiles=JSON.parse(readFileSync(new URL('../packages/core/voyage-compatibility.json',import.meta.url),'utf8'));
  if(profiles.format!==1)throw new Error('Unsupported Voyage compatibility profile format');
- const result={checked:new Date().toISOString(),offline,environments:{},differences:[],warnings:[],requiresReview:false};
+ const result={checked:new Date().toISOString(),offline,environments:{},differences:[],environmentDifferences:{},warnings:[],requiresReview:false};
  for(const [environment,profile] of Object.entries(profiles.environments)){
   const baseline=JSON.parse(readFileSync(new URL('../'+profile.contractBaseline,import.meta.url),'utf8'));
   let text,guide;
@@ -52,6 +54,7 @@ export async function checkVoyageUpdates({offline=false,schema=false,fetcher=fet
   if(cover&&guide.includes('`WORLD_COVER`: 1000 x 1000')&&(cover.recommendedWidth!==1000||cover.recommendedHeight!==1000))result.warnings.push(environment+' guide and contract disagree about the recommended cover size; inspect x-media-constraints.');
  }
  result.differences=contractChanges(result.environments.production.contract,result.environments.alpha.contract);
+ for(const environment of Object.keys(result.environments))if(environment!=='production')result.environmentDifferences[environment]=contractChanges(result.environments.production.contract,result.environments[environment].contract);
  for(const entry of Object.values(result.environments))delete entry.contract;
  if(schema){
   const source=profiles.worldSchema.source,baseline=JSON.parse(readFileSync(new URL('../'+profiles.worldSchema.baseline,import.meta.url),'utf8'));

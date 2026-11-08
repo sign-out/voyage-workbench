@@ -53,6 +53,11 @@ test('native bridge builds and reads cached community help without changing Game
 test('native compatibility profiles and revision-scoped references survive the ES5 bridge',()=>{
  assert.equal(request({operation:'coverRecommendation',args:['alpha']}).width,1280);
  assert.equal(request({operation:'coverRecommendation',args:['production']}).width,1000);
+ assert.deepEqual(request({operation:'coverRecommendation',args:['beta']}),{width:1280,height:720});
+ assert.equal(request({operation:'voyageProfile',args:['beta']}).apiBase,'https://api-beta.aidungeon.com/creator/v1');
+ assert.equal(request({operation:'isVoyageEnvironment',args:['beta']}),true);
+ const engineSource='{"initialGameState":{"heroesVersion":37,"compatibilityRevision":9}}',engineResponse='{"data":{"world":{"initialGameState":{"heroesVersion":37,"compatibilityRevision":10}},"savedVersion":{"heroesVersion":37,"compatibilityRevision":9},"pendingVersionUpgrade":{"sourceVersion":{"heroesVersion":37,"compatibilityRevision":9},"targetVersion":{"heroesVersion":37,"compatibilityRevision":10}}}}';
+ const engine=request({operation:'worldEngineStatus',args:[engineResponse,engineSource,'beta','WORLD',1]});assert.match(engine.warning,/V37 \/ revision 9 → V37 \/ revision 10/);assert.equal(engine.environment,'beta');
  const catalog=[{section:'value',schema:'number',schemaVersion:37,compatibilityRevision:2,environment:'alpha'},{section:'value',schema:'string',schemaVersion:37,compatibilityRevision:1,environment:'production'}];
  const text='{"heroesVersion":37,"compatibilityRevision":2,"value":1}';
  assert.equal(request({operation:'selectReferences',args:[text,catalog,{environment:'alpha'}]}).length,1);
@@ -61,6 +66,7 @@ test('native compatibility profiles and revision-scoped references survive the E
  const issues=request({operation:'releaseAdvisories',args:[state,'alpha','publish']});
  assert.equal(issues.length,1);assert.equal(issues[0].level,'warning');
  assert.deepEqual(request({operation:'releaseAdvisories',args:[state,'production','publish']}),[]);
+ assert.deepEqual(request({operation:'releaseAdvisories',args:[state,'beta','publish']}),[]);
 });
 
 function running(kind='work',localEditMode='proposal-only',options={}){

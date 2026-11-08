@@ -51,6 +51,7 @@ public class HostSaveBoundaryTest {
     JSONObject validationReport=new JSONObject().put("valid",true).put("errors",new JSONArray());
     void recoverInvalidRevision(String id){}
     String projectEnvironment(JSONObject project){return "alpha";}
+    String environment(){return "alpha";}
     JSONObject pending(JSONObject project){return null;}
     Object request(String method,JSONObject payload){return new JSONObject().put("report",validationReport);}
     String projectPayload(JSONObject project){return "{}";}

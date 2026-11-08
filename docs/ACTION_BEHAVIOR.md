@@ -12,9 +12,13 @@ Explicit setup, approval and image inspection can happen in place.
 - Header and Files & sync **Save to Voyage** invoke the same save action as the
   Voyage panel, with approval, official validation, conditional saving and
   read-back recovery. Progress and results appear on the current screen.
-  Missing links or the matching environment's key explain the setup required
+  Missing world IDs or the selected connection's key explain the setup required
   without navigating. **Open Voyage connections** and **Open private-draft
   setup** are explicit navigation choices. Unapplied edits block the save.
+  Worlds are not locked to their import host. Engine inspection reports progress
+  in place and includes any actual newer-version warning in save confirmation.
+  Where Voyage requires approval to persist an engine upgrade, **Open selected
+  Studio** is explicit navigation; Workbench never silently approves it.
 - **Suggest Work Order** creates the suggestion and reports it on the grading
   screen. Planning is opened through normal navigation when the creator chooses.
 - The asset library uses **Open artwork studio** and **Open soundtrack editor**;

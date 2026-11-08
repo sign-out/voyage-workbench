@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {coverRecommendation} from '../../../packages/core/voyage-compatibility';
+import {coverRecommendation,isVoyageEnvironment} from '../../../packages/core/voyage-compatibility';
 import {publicationDefaults} from '../../../packages/core/features';
 import {useVoyageConnection} from './CompatibilityStatus';
 import {artworkDestinations,artworkPrompt,assignArtwork,imageTargets,type ArtworkDestination} from '../../../packages/core/artwork';
@@ -22,8 +22,8 @@ export async function importArtworkFile(file:File){
 }
 export function ArtworkWorkspace({project,apply,onCover,onDirtyChange,command,initialDestinationId}:Props){
  const [connection]=useVoyageConnection(project.id);
- const environment=project.remote.worldId?project.remote.environment||'production':connection?.environment||'alpha';
- const coverSize=environment==='alpha'||environment==='production'?coverRecommendation(environment,connection?.contract):null;
+ const environment=connection?.environment||project.remote.environment||'alpha';
+ const coverSize=isVoyageEnvironment(environment)?coverRecommendation(environment,connection?.contract):null;
  const [details,setDetails]=useState('{}'),[selected,setSelected]=useState(''),[category,setCategory]=useState('All artwork'),[search,setSearch]=useState('');
  const [prompt,setPrompt]=useState(''),[dirty,setDirty]=useState(false),[asset,setAsset]=useState<Asset|null>(null),[reference,setReference]=useState(false);
  const [proposalId,setProposalId]=useState('');

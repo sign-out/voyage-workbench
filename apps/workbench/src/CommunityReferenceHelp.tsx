@@ -4,9 +4,9 @@ import {readReferenceHelp,type ReferenceHelpKind} from '../../../packages/core/c
 import {request} from './host';
 import type {Project} from '../../../packages/core/project';
 
-export function CommunityReferenceHelp({references,project,initialTopic='',onRefresh}:{references:any[];project:Project|null;initialTopic?:string;onRefresh:(sections:any[])=>void}){
+export function CommunityReferenceHelp({references,project,initialTopic='',environment,onRefresh}:{references:any[];project:Project|null;initialTopic?:string;environment?:string;onRefresh:(sections:any[])=>void}){
  const [choice,setChoice]=useState(initialTopic?'section:'+initialTopic:'index'),[query,setQuery]=useState(''),[offset,setOffset]=useState(0),[refreshing,setRefreshing]=useState(false),[message,setMessage]=useState('');
- const catalog=project?doc.selectReferences(project.activeSource,references,{environment:project.remote.environment}):references.filter(entry=>entry.schemaVersion===references.filter(entry=>entry.communityHelp).at(-1)?.schemaVersion);
+ const catalog=project?doc.selectReferences(project.activeSource,references,{environment:environment||project.remote.environment}):references.filter(entry=>entry.schemaVersion===references.filter(entry=>entry.communityHelp).at(-1)?.schemaVersion);
  const topics=doc.referenceHelpTopics(catalog),[kind,topic='']=choice.split(':') as [ReferenceHelpKind,string?],page=readReferenceHelp(catalog,kind,topic,offset);
  const matches=(entry:{id:string;title:string;summary:string;path?:string[]})=>choice.endsWith(':'+entry.id)||[entry.id,entry.title,entry.summary,...entry.path||[]].join(' ').toLowerCase().includes(query.toLowerCase());
  async function refresh(){setRefreshing(true);setMessage('Downloading public community references… Your world is not uploaded.');try{const result=await request('refreshReferences');if(!result.ok)throw new Error(result.error||'Refresh failed.');const snapshot=await request('references');onRefresh(snapshot.sections);setOffset(0);setMessage('Community help refreshed and cached for offline use. Your GameState is unchanged.');}catch(error){setMessage('Refresh failed; previous cache retained. '+(error as Error).message);}finally{setRefreshing(false);}}

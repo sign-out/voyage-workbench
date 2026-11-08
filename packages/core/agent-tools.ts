@@ -7,7 +7,7 @@ import type {Project,Task} from './project';
 import {taskToolCapabilities,toolJournalLimits} from './agent-orchestration';
 import type {ToolCapabilities} from './agent-orchestration';
 import {readCreation,creationReadiness,creationBriefHash,creationDestinations} from './world-creation';
-import {compatibilityIdentity,releaseAdvisories} from './voyage-compatibility';
+import {compatibilityIdentity,isVoyageEnvironment,releaseAdvisories} from './voyage-compatibility';
 
 export {toolJournalLimits};
 
@@ -112,7 +112,7 @@ export function executeWorldTool(project:Project,task:Task,name:string,args:any,
   case 'world_read':{const raw=doc.read(source,args.path);if(raw.length>100000)throw new Error('Read a smaller path using world_children.');return {result:{source:raw}};}
   case 'world_children':{const node=doc.describe(source,args.path);return {result:{kind:node.kind,children:node.children.slice(0,500),truncated:node.children.length>500}};}
   case 'world_search':return {result:doc.search(source,args.query)};
-  case 'world_validate':return {result:doc.validate(source,references,referenceContext).concat(['alpha','production'].includes(referenceContext.environment||'')?releaseAdvisories(source,referenceContext.environment,'draft'):[])};
+  case 'world_validate':return {result:doc.validate(source,references,referenceContext).concat(isVoyageEnvironment(referenceContext.environment)?releaseAdvisories(source,referenceContext.environment,'draft'):[])};
   case 'world_schema':return {result:doc.schemaGuidance(source,references,args.section,referenceContext)};
   case 'world_reference_docs':return {result:doc.referenceHelp(source,references,args.kind,args.topic||'',args.offset||0,referenceContext)};
   case 'world_notes':return {result:readBuilderNotes(task.builderNotes||[],args.path,args.offset||0)};

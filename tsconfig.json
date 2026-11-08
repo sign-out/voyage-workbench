@@ -4,5 +4,5 @@
     "strict": true, "esModuleInterop": true, "skipLibCheck": true, "resolveJsonModule": true,
     "lib": ["ES2022","DOM","WebWorker"], "types":["node"], "noEmit":true
   },
-  "include": ["packages/**/*.ts","hosts/**/*.ts","apps/workbench/src/**/*.ts","apps/workbench/src/**/*.tsx","vite.config.ts","capacitor.config.ts"]
+  "include": ["packages/**/*.ts","hosts/**/*.ts","apps/workbench/src/**/*.ts","apps/workbench/src/**/*.tsx","apps/sync/**/*.ts","vite.config.ts","capacitor.config.ts"]
 }
