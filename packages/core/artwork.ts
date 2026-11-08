@@ -15,7 +15,7 @@ export type ImageTarget=keyof typeof imageTargets;
 export type ArtworkDestination={id:string;path:doc.Path|null;label:string;category:string;target?:ImageTarget;url:string;context:string};
 export function artworkDestinations(source:string,creationDetails='{}'):ArtworkDestination[]{
  const root=doc.parse(source),base=doc.statePath(root);
- const result:ArtworkDestination[]=assetSlots(source).filter(slot=>slot.kind==='image').map(slot=>{
+ const result:ArtworkDestination[]=assetSlots(source).filter(slot=>slot.kind==='image'&&slot.target).map(slot=>{
   const {relative,scope,partyId}=assetLocation(base,slot.path),section=String(relative[0]);
   const cover=!!base.length&&JSON.stringify(slot.path)===JSON.stringify(base.slice(0,-1).concat('image'));
   const target=cover?'WORLD_COVER':slot.target as ImageTarget|undefined;

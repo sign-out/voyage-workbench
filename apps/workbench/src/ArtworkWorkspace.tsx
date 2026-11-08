@@ -1,9 +1,8 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {coverRecommendation} from '../../../packages/core/voyage-compatibility';
+import {coverRecommendation,isVoyageEnvironment} from '../../../packages/core/voyage-compatibility';
 import {publicationDefaults} from '../../../packages/core/features';
 import {useVoyageConnection} from './CompatibilityStatus';
 import {artworkDestinations,artworkPrompt,assignArtwork,imageTargets,type ArtworkDestination} from '../../../packages/core/artwork';
-import {resolveRoute} from '../../../packages/core/providers';
 import {hash,type Project} from '../../../packages/core/project';
 import type {ArtworkProposal} from '../../../packages/core/artwork-requests';
 import {AssetPicker,ImageFileImport} from './AssetLibrary';
@@ -12,7 +11,7 @@ import {ArtworkHistory} from './ArtworkHistory';
 import {ArtworkProgress,type ArtworkActivity} from './ArtworkProgress';
 import {feature,saveAsset,type Asset} from './features-api';
 import {request} from './host';
-import {saveGeneration,type Generation} from './artwork-generation';
+import {generateLocalArtwork,type Generation} from './artwork-generation';
 
 type Assignment={source:string;destination:ArtworkDestination;assetId?:string};
 type Props={project:Project;apply:(source:string,base:string)=>Promise<any>;onCover:(asset?:Asset)=>void;onDirtyChange?:(dirty:boolean)=>void;command?:(command:any)=>Promise<any>;initialDestinationId?:string};
@@ -23,8 +22,8 @@ export async function importArtworkFile(file:File){
 }
 export function ArtworkWorkspace({project,apply,onCover,onDirtyChange,command,initialDestinationId}:Props){
  const [connection]=useVoyageConnection(project.id);
- const environment=project.remote.worldId?project.remote.environment||'production':connection?.environment||'alpha';
- const coverSize=environment==='alpha'||environment==='production'?coverRecommendation(environment,connection?.contract):null;
+ const environment=connection?.environment||project.remote.environment||'alpha';
+ const coverSize=isVoyageEnvironment(environment)?coverRecommendation(environment,connection?.contract):null;
  const [details,setDetails]=useState('{}'),[selected,setSelected]=useState(''),[category,setCategory]=useState('All artwork'),[search,setSearch]=useState('');
  const [prompt,setPrompt]=useState(''),[dirty,setDirty]=useState(false),[asset,setAsset]=useState<Asset|null>(null),[reference,setReference]=useState(false);
  const [proposalId,setProposalId]=useState('');
@@ -68,29 +67,8 @@ export function ArtworkWorkspace({project,apply,onCover,onDirtyChange,command,in
  }
  async function generate(){
   if(!destination||!prompt.trim())throw new Error('Select a destination and describe the artwork first.');
-  const source=project.activeSource,started=Date.now();
-  setActivity({destination:destination.label,purpose:destination.category,started,phase:'preparing'});
-  const route=resolveRoute((await request('providerSettings')).settings,'artwork');
-  setActivity({destination:destination.label,purpose:destination.category,started,phase:'preparing',provider:route.name,model:route.model});
-  const previous=jobs.some(job=>job.destinationId===destination.id&&['generating','uncertain'].includes(job.state));
-  if(!window.confirm('Generate one image for '+destination.label+' ('+destination.category+') using '+route.name+' · '+(route.model||'provider default')+'? The brief'+(reference&&asset?' and selected reference image':'')+' will be sent to this provider and may incur charges. '+(previous?'A previous request for this destination has an unconfirmed outcome; another request may charge again. Inspect its history first. ':'')+'This saves artwork locally only; nothing is uploaded or attached automatically.'))return;
-  const job:Generation={id:crypto.randomUUID(),created:started,destination:destination.label,destinationId:destination.id,...(proposalId?{proposalId}:{}),prompt,state:'generating',provider:route.name,model:route.model};
-  setActiveJobId(job.id);
-  setJobs(await saveGeneration(key,job));
-  let sent=false;
-  try{
-   if(latest.current.id!==project.id||latest.current.activeSource!==source||latest.current.draft)throw new Error('The world changed or has unapplied edits. Review the destination again.');
-   const effective=resolveRoute((await request('providerSettings')).settings,'artwork');
-   if(JSON.stringify(effective)!==JSON.stringify(route))throw new Error('The Artwork provider or model changed. Review the connection and approve again.');
-   if(latest.current.id!==project.id||latest.current.activeSource!==source||latest.current.draft||latest.current.status&&latest.current.status!=='active')throw new Error('The world changed or is no longer editable. Review the destination again.');
-   setActivity({destination:destination.label,purpose:destination.category,started,phase:'generating',provider:route.name,model:route.model});sent=true;
-   const result=await request('imageGenerate',{prompt,route,...(reference&&asset?{referenceDataUrl:asset.dataUrl}:{})},{label:'Generating artwork for '+destination.label+' · '+route.name+' · '+(route.model||'configured default'),projectId:project.id});
-   setActivity({destination:destination.label,purpose:destination.category,started,phase:'saving',provider:route.name,model:route.model});
-   const saved=await saveAsset({dataUrl:result.dataUrl,prompt,name:destination.label+' · '+destination.category,route:result.route});
-   job.assetId=saved.id;job.state='generated';setAsset(saved);setDirty(false);
-   setNotice('Artwork for '+destination.label+' is ready to review below and in the gallery. Saved locally using '+route.name+'. Preview it, then explicitly attach it. Nothing was uploaded.');
-  }catch(reason){job.state=sent?'uncertain':'blocked';job.error=destination.label+': '+(sent?'The provider may have completed this request. No automatic retry. ':'No image request was sent. ')+(reason as Error).message;throw new Error(job.error);}
-  finally{setJobs(await saveGeneration(key,job));}
+  const saved=await generateLocalArtwork({project,destination,prompt,...(reference&&asset?{reference:asset}:{}),proposalId,current:()=>latest.current,onActivity:setActivity,onHistory:setJobs,onJob:job=>setActiveJobId(job.id)});
+  if(saved){setAsset(saved);setDirty(false);setNotice('Artwork for '+destination.label+' is ready to review below and in the gallery. Saved locally. Preview it, then explicitly attach it. Nothing was uploaded.');}
  }
  async function attach(value:string,snapshot:Assignment){
   const assertCurrent=()=>{const current=latest.current;if(current.id!==project.id||current.activeSource!==snapshot.source||current.draft)throw new Error('The world changed. Select the destination again before attaching artwork. Your image is retained.');return current;};
@@ -132,7 +110,7 @@ export function ArtworkWorkspace({project,apply,onCover,onDirtyChange,command,in
      <div className="eyebrow">{destination.category}</div><h3>{destination.label}</h3>
      <p>{destination.target?`${imageTargets[destination.target].label} · recommended ${destination.target==='WORLD_COVER'&&coverSize?coverSize.width:imageTargets[destination.target].width} × ${destination.target==='WORLD_COVER'&&coverSize?coverSize.height:imageTargets[destination.target].height} pixels. ${destination.target==='WORLD_COVER'?'Covers accept any positive dimensions':'Gameplay images require at least 600 × 600 pixels'}; at most 5 MiB per upload. Uploading and moderation do not save or publish the world.`:'This custom image field accepts a hosted HTTPS URL. No undocumented upload purpose is selected automatically.'}</p>
      <div ref={preview} className="artwork-preview-pair" aria-label="Artwork preview"><figure><figcaption>Currently attached · saved locally</figcaption><ArtworkPreview url={destination.url} name={destination.label+' current artwork'}/></figure><figure><figcaption>{asset?'Selected local artwork · not attached yet':'Choose artwork to preview'}</figcaption><ArtworkPreview url={asset?.dataUrl||''} name={asset?.name||'Selected artwork'}/></figure></div>
-     <section className="connection-card"><h4>1. Add or choose artwork</h4><ImageFileImport disabled={busy} onImported={file=>act(async()=>{const saved=await importArtworkFile(file);setAsset(saved);setNotice('Image saved locally. Preview it, then attach it explicitly. Nothing was uploaded.');})}/><div className="button-row"><button disabled={busy||!!project.draft} onClick={browse}>Browse library &amp; attach…</button>{asset&&<button disabled={busy} onClick={()=>void act(async()=>{await request('exportImage',{dataUrl:asset.dataUrl,name:(asset.name||'artwork')+'.png'});})}>Download selected artwork</button>}{destination.category==='World cover'&&<button disabled={busy} onClick={()=>onCover(asset||undefined)}>Cover crops &amp; rubric grading</button>}</div></section>
+     <section className="connection-card"><h4>1. Add or choose artwork</h4><ImageFileImport disabled={busy} onImported={file=>act(async()=>{const saved=await importArtworkFile(file);setAsset(saved);setNotice('Image saved locally. Preview it, then attach it explicitly. Nothing was uploaded.');})}/><div className="button-row"><button disabled={busy||!!project.draft} onClick={browse}>Browse library &amp; attach…</button>{asset&&<button disabled={busy} onClick={()=>void act(async()=>{await request('exportImage',{dataUrl:asset.dataUrl,name:(asset.name||'artwork')+'.png'});})}>Download selected artwork</button>}{destination.category==='World cover'&&<button disabled={busy} onClick={()=>onCover(asset||undefined)}>Open cover crops &amp; grading</button>}</div></section>
      <section className="connection-card"><h4>2. Or generate artwork</h4>{destination.category==='World cover'?<><p>Cover generation uses the dedicated Discover crop previews and your weighted rubric, with the Building vision model as the default grader.</p><button disabled={busy} onClick={()=>onCover(asset||undefined)}>Open cover generation &amp; grading</button></>:<><label>Artwork brief<textarea aria-label="Artwork brief" disabled={busy} rows={7} value={prompt} onChange={event=>{setPrompt(event.target.value);setDirty(true);}}/></label>{asset&&<label><input type="checkbox" disabled={busy} checked={reference} onChange={event=>setReference(event.target.checked)}/>Use selected artwork as a reference</label>}<p className="muted">Uses your Artwork image route from Models &amp; agents. Only this brief and an explicitly selected reference are sent—not the full world. A provider call may be billable.</p><button className="primary" aria-label={"Generate artwork locally for "+destination.label} disabled={busy||loading||!prompt.trim()||!!project.draft} onClick={()=>void act(generate)}>{activity?"Generating for "+destination.label+"…":"Generate artwork locally"}</button></>}</section>
      <section className="connection-card"><h4>3. Attach when ready</h4><button className="primary" disabled={busy||!asset||!!project.draft} onClick={browse}>{destination.target?'Upload & attach selected artwork…':'Choose a hosted image from the library…'}</button><p className="muted">Existing hosted URLs are reused without another upload. Local image uploads ask for confirmation and moderation before attachment.</p><label>Or paste a hosted image URL<input aria-label="Artwork hosted URL" type="url" value={url} disabled={busy} onChange={event=>setUrl(event.target.value)} placeholder="https://…"/></label><button disabled={busy||!url.trim()||!!project.draft} onClick={()=>void act(()=>attach(url.trim(),{source:project.activeSource,destination}))}>Attach hosted URL locally</button>{project.draft&&<p role="status">Apply or discard the current editor draft before attaching artwork.</p>}</section>
     </>:<div className="artwork-destination-placeholder"><h3>Start with a destination</h3><p>Select a character portrait, region map, location scene, area scene, item image, or world cover. Missing image fields are created when you attach—not when you browse.</p></div>}

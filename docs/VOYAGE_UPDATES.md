@@ -1,12 +1,60 @@
 # Maintaining Voyage compatibility
 
+## Shared worlds and engine warnings
+
+Worlds are not tied to Alpha, Beta or Production. A project links to a world ID;
+new remote actions use the selected connection. The recorded `remote.environment`
+is last-read/synced provenance, not a routing restriction. Existing projects need
+no re-import merely to change hosts, and credentials remain separate.
+
+Only unfinished saves, uploads and publication requests keep their original
+host, payload and request key. Reconciliation reads the original save host even
+after switching; unresolved mutations are never replayed against another host.
+This protects against duplicate actions without restricting the world itself.
+
+The app checks the selected host's world-read metadata and warns about actual
+newer `heroesVersion` / `compatibilityRevision` pairs. It distinguishes the
+persisted `savedVersion` from an in-memory converted draft and from
+`pendingVersionUpgrade`; an Alpha/Beta label alone does not trigger a warning.
+Unknown metadata never certifies write permission. A pending upgrade links to
+the selected Studio for the creator's required approval; Workbench does not
+automatically approve upgrades or rewrite version fields. Production can upgrade
+older worlds when they open, so a GET is not a guarantee that Voyage itself made
+no changes. See `VOYAGE_WORLD_ENGINE.md`.
+
+## Beta support verified November 7
+
+Connections now offers **Production**, **Beta** and **Alpha** on desktop and
+Android. Select **Beta**, connect a key for that environment, then list/import
+an owned world. Imports keep the world ID, while validation, saving, new artwork
+uploads and publication use whichever connection is selected. Switching does not
+change the world ID or copy another environment's key. Existing installations keep
+their previous selection. The legacy Python host remains Alpha-only.
+
+Beta's verified API origin is `https://api-beta.aidungeon.com/creator/v1`, not
+the website's origin. The public contract and guide were fetched without
+credentials. A dated snapshot and hashes are in
+`docs/references/creator-beta-2026-11-07.meta.json`. Failed documentation checks
+retain the prior connection and cached evidence.
+
+Beta currently advertises `1.3.0-preview` and recommends 1280 × 720 covers.
+Its contract matches the November 5 Alpha snapshot, not necessarily current
+Alpha. Current Alpha additionally describes version-upgrade responses and a
+version-upgrade endpoint that Beta does not advertise. Workbench does not
+silently upgrade worlds or borrow those operations for Beta. API version
+equality is not evidence of world, schema or engine compatibility. Beta can
+upgrade shared drafts beyond Production compatibility; select it explicitly.
+Alpha's announcement-derived item limits are not applied to Beta without
+separate rollout evidence. See `docs/VOYAGE_BETA_API_2026-11-07.md` for details
+and validation limits.
+
 ## Implemented in the November 5 follow-up
 
 The shared desktop/Android app now offers explicit Production and Alpha
 connections. Switching fetches both public documentation endpoints from the
 chosen host and checks the contract before committing the selection. Failed
 checks retain the old selection and cached evidence. Keys remain separated;
-linked projects, uploads and uncertain operations are never retargeted. Existing
+world IDs remain unchanged, and unfinished operations are never retargeted. Existing
 installs remain on Alpha until explicitly switched, including installs with an
 older ignored `voyageEnvironment` setting. The legacy Python host remains
 Alpha-only; this does not claim parity with that older UI.
@@ -57,7 +105,7 @@ Release labels are separate from authored/schema/engine identities. Production
 does not inherit Alpha's announced rules.
 
 The code deliberately has no automatic "latest" rule, automatic world upgrade,
-provider substitution or production/alpha mutation fallback. Codex images still
+provider substitution or cross-environment mutation fallback. Codex images still
 use Codex CLI, not a direct OpenAI API or Voyage's model display names.
 
 ## Check an upstream update
@@ -72,8 +120,8 @@ npm run voyage:check -- --schema --curl
 ```
 
 Live checks make public GETs only, with no credentials or Origin header. They
-compare both official contracts against their configured snapshots, compare
-guide hashes, list Production/Alpha differences and identify changed top-level
+compare all configured official contracts against their snapshots, compare
+guide hashes, list each environment's differences from Production and identify changed top-level
 community codec sections. A contract can drift without changing `info.version`.
 Community references do not certify official schema/environment compatibility.
 
@@ -81,6 +129,11 @@ The machine-readable report is written to the ignored
 `.build-tools/voyage-update-report.json`. `--check` exits 2 when reviewed baseline
 drift is found; network/parse failures exit 1. Offline checks inspect bundled
 fixtures only. The tool never changes snapshots, policies, keys or worlds.
+`environmentDifferences` includes Beta and Alpha independently; the existing
+`differences` field retains its Production/Alpha meaning for older consumers.
+Configured environments also drive the connection/artwork selectors and the
+public-documentation curl allowlist; a new host is not enabled by guessing its
+name. Android's native host allowlist must agree with the shared profiles.
 
 If Node networking times out but system curl works, explicitly choose `--curl`.
 This optional transport requires curl, disables its user configuration, performs

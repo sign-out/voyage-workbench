@@ -2,3 +2,7 @@
 .ce-cards .ce-card{display:block;width:100%;align-self:start;white-space:normal}.ce-card>strong{width:100%;line-height:1.5;word-break:normal}.ce-card .ce-portrait{min-height:100px}.ce-portrait-placeholder{width:65%;height:65%;color:#8fb9a8;opacity:.65}.ce-portrait .ce-initials{position:absolute;right:7px;bottom:7px;font-size:14px}.ce-detail-heading>div:last-child{min-width:0}.ce-detail-heading h3{overflow-wrap:anywhere}
 .ce-back{margin-bottom:18px}.ce-editor{scroll-margin-top:12px}.ce-detail-heading h3:focus{outline:2px solid var(--mint);outline-offset:4px}
 @media(max-width:1000px){.ce-panel.is-editing .ce-heading,.ce-panel.is-editing .ce-toolbar,.ce-panel.is-editing .ce-warnings,.ce-panel.is-editing .ce-cards{display:none}.ce-panel:not(.is-editing) .ce-editor{display:none}.ce-cards{max-height:none;overflow:visible}.ce-panel.is-editing .ce-layout{display:block}.ce-actions{bottom:0;z-index:2;flex-wrap:wrap}.ce-field textarea{font-size:14px}}
+.ce-generated-artwork{display:grid;gap:10px;margin-top:12px;max-width:100%;min-width:0}
+.ce-generated-artwork>img{width:min(100%,280px);max-height:360px;object-fit:contain;border-radius:8px}
+.ce-generated-artwork progress{width:100%}
+.ce-portrait-inspection img{display:block;max-width:85vw;max-height:75vh;object-fit:contain;margin-bottom:12px}

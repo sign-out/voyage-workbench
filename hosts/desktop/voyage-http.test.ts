@@ -53,6 +53,7 @@ test('failure messages retain usable recovery details through string-only bridge
 test('uncertain outcomes never become clean rejections',()=>{
   assert.equal(voyageCleanRejection(503,'studio_unavailable'),true);
   assert.equal(voyageCleanRejection(409,'studio_version_mismatch'),true);
+  for(const code of ['studio_version_upgrade_required','revision_version_mismatch','version_upgrade_mismatch','world_changed'])assert.equal(voyageCleanRejection(409,code),true);
   assert.equal(voyageCleanRejection(429,''),true);
   assert.equal(voyageCleanRejection(400,'request_status_unknown'),false);
   assert.equal(voyageCleanRejection(429,'request_in_progress'),false);

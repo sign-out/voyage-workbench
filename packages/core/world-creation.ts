@@ -59,7 +59,7 @@ export function recordCreationRead(workspace:CreationWorkspace,documentId:string
 export function creationWorldHash(source:string,hasher:Hasher){
  interface Branch {image?:boolean;children:Record<string,Branch>}
  const root=doc.parse(source),base=doc.statePath(root),images:Branch={children:Object.create(null)};
- for(const slot of assetSlots(source).filter(slot=>slot.kind==='image'&&base.every((key,index)=>slot.path[index]===key)&&slot.path.length>base.length)){let branch=images;for(const key of slot.path.slice(base.length)){const name=String(key);if(!branch.children[name])branch.children[name]={children:Object.create(null)};branch=branch.children[name];}branch.image=true;}
+ for(const slot of assetSlots(source).filter(slot=>slot.kind==='image'&&slot.target&&base.every((key,index)=>slot.path[index]===key)&&slot.path.length>base.length)){let branch=images;for(const key of slot.path.slice(base.length)){const name=String(key);if(!branch.children[name])branch.children[name]={children:Object.create(null)};branch=branch.children[name];}branch.image=true;}
  function normalized(node:doc.Node|undefined,branch?:Branch):string {
   if(branch?.image)return '""';
   if(node?.kind==='array')return '['+node.children.map(child=>normalized(child.node,branch?.children[String(child.key)])).join(',')+']';

@@ -16,6 +16,17 @@
       "cover": {"width": 1000, "height": 1000},
       "release": null
     },
+    "beta": {
+      "apiBase": "https://api-beta.aidungeon.com/creator/v1",
+      "studioUrl": "https://beta.voyage.io/studio",
+      "contractSource": "https://api-beta.aidungeon.com/creator/v1/openapi.json",
+      "contractBaseline": "docs/references/creator-beta-2026-11-07.openapi.json",
+      "guideBaseline": "docs/voyage-agent-guide.md",
+      "checked": "2026-11-07",
+      "contractHash": "22dd8eaa7a33665bd9e81f7c18928106aacf90357fdf29a62e7d93f11a8fced7",
+      "cover": {"width": 1280, "height": 720},
+      "release": null
+    },
     "alpha": {
       "apiBase": "https://api-alpha.aidungeon.com/creator/v1",
       "studioUrl": "https://alpha.voyage.io/studio",

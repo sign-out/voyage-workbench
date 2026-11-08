@@ -18,6 +18,7 @@ export function voyageReadRetry(method:string,status:number,code:string,attempt:
 export function voyageFailureGuidance(status:number,code:string,method:string):string {
   if(code==='request_status_unknown')return 'The remote action may have completed. Reconcile the live world and Studio state before retrying; keep the original request key.';
   if(code==='request_in_progress')return 'The original request is still protected. Wait before an exact retry using the same request key; do not start a replacement request.';
+  if(code==='studio_version_upgrade_required')return 'The selected environment requires approval to save this world at a newer engine version. Review the source and target versions in Studio before approving; this rejection did not save an upgrade. Your world is not tied to its previous connection.';
   if(code==='studio_version_mismatch')return 'Do not change version fields or retry on another host. Open the world in the selected environment’s Creator Studio to confirm an upgrade, or explicitly choose a compatible environment for a newer draft.';
   if(code==='studio_unavailable')return 'Voyage Studio is temporarily unavailable; this is a clean availability rejection. Retry the unchanged request after the cooldown. If it persists, contact Voyage support with the request ID.';
   if(status===401)return 'Reconnect a current Creator API key for this environment in Connections, then retry. Local editing remains available.';
@@ -31,5 +32,5 @@ export function voyageFailureGuidance(status:number,code:string,method:string):s
 
 export function voyageCleanRejection(status:number,code:string):boolean {
   if(['request_status_unknown','request_in_progress'].includes(code))return false;
-  return code==='studio_unavailable'||code==='studio_version_mismatch'||[400,401,403,404,405,412,413,415,422,428,429].includes(status);
+  return code==='studio_unavailable'||['studio_version_mismatch','studio_version_upgrade_required','revision_version_mismatch','version_upgrade_mismatch','world_changed'].includes(code)||[400,401,403,404,405,412,413,415,422,428,429].includes(status);
 }

@@ -2,6 +2,12 @@
 
 ## Public source and releases
 
+For older Android phones, the separate **Voyage Sync** micro companion imports
+world JSON, reviews real world changes and updates existing Voyage drafts without
+the full Workbench or any AI runtime. Download the
+[Voyage Sync Android prerelease](https://github.com/sign-out/voyage-workbench/releases/tag/sync-v0.1.0-test)
+or see [setup, limits and building](docs/VOYAGE_SYNC.md).
+
 For character-specific portrait generation, saved-image previews, and generation
 status feedback, see the [artwork workflow guide](docs/ARTWORK_WORKFLOW.md).
 
