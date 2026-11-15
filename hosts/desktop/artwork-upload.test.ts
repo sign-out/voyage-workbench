@@ -114,7 +114,7 @@ test('host rejects missing, foreign and stale image bindings before allowance, P
   const original=service.store.project(project.id);
   const production=(await service.request('create',{name:'Production',source:original.activeSource})).project;
   service.store.dispatch(production.id,{type:'remoteLink',worldId:'WORLD',environment:'production',etag:'"revision"',baselineHash:hash(production.activeSource)});
-  const invalid=[{}, {...binding,projectId:production.id}, {...binding,environment:'production'}, {...binding,worldId:'OTHER'}, {...binding,projectId:'missing'}];
+  const invalid=[{}, {...binding,environment:'production'}, {...binding,worldId:'OTHER'}, {...binding,projectId:'missing'}];
   for(const supplied of invalid){
    for(const endpoint of ['/uploads','/worlds/WORLD/uploads/exact-allowance/moderate'])await assert.rejects(service.request('creatorRequest',{...supplied,method:'POST',endpoint,body:'{}',idempotencyKey:'exact'}));
    await assert.rejects(service.request('signedUpload',{...supplied,url:'https://upload.example/image',mime:'image/png',base64:'aW1hZ2U='}));
@@ -128,14 +128,14 @@ test('host rejects missing, foreign and stale image bindings before allowance, P
  }finally{fixture.close();}
 });
 
-test('prepare journals the authoritative project environment and cannot upload a production link',async()=>{
+test('new artwork uses the selected connection regardless of the world’s previous sync host',async()=>{
  const fixture=await uploadFixture();const {api,service,project,asset,calls}=fixture;
  try{
   service.store.dispatch(project.id,{type:'remoteLink',worldId:'WORLD',environment:'production',etag:'"revision"',baselineHash:hash(project.activeSource)});
   const prepared=await api.prepareUpload(project,'NPC_PORTRAIT',asset);
-  assert.equal(prepared.environment,'production');assert.equal(prepared.projectId,project.id);
-  await assert.rejects(api.sendUpload(project,prepared.id),/linked to production/);
-  assert.deepEqual(calls,{allowances:0,puts:0,moderations:0});
+  assert.equal(prepared.environment,'alpha');assert.equal(prepared.projectId,project.id);
+  await api.sendUpload(project,prepared.id);
+  assert.deepEqual(calls,{allowances:1,puts:1,moderations:1});
  }finally{fixture.close();}
 });
 
@@ -197,8 +197,9 @@ test('resume cannot retarget either the environment or world persisted with the 
  try{
   const prepared=await api.prepareUpload(project,'NPC_PORTRAIT',asset);
   for(const [environment,worldId] of [['production','WORLD'],['alpha','OTHER']]){
+   service.store.setting('voyageEnvironmentSelection',environment);
    service.store.dispatch(project.id,{type:'remoteLink',worldId,environment,etag:'"revision"',baselineHash:hash(project.activeSource)});
-   await assert.rejects(api.sendUpload(project,prepared.id),/binding.*changed/);
+   await assert.rejects(api.sendUpload(project,prepared.id),/binding.*changed|unfinished upload/);
   }
   assert.deepEqual(calls,{allowances:0,puts:0,moderations:0});
  }finally{fixture.close();}

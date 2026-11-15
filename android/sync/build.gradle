@@ -1,0 +1,50 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'dev.voyage.sync'
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId 'dev.voyage.sync'
+        minSdk 26
+        targetSdk rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName '0.1.0-test'
+    }
+    sourceSets {
+        main {
+            java.srcDirs = ['src/main/java', layout.buildDirectory.dir('generated/shared-java')]
+            assets.srcDirs = [layout.buildDirectory.dir('generated/sync-assets')]
+        }
+        test {
+            java.srcDirs = ['src/test/java', layout.buildDirectory.dir('generated/shared-test-java')]
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies { testImplementation "junit:junit:$junitVersion" }
+
+def bundleSync = tasks.register('bundleSync', Exec) {
+    workingDir rootProject.projectDir.parentFile
+    commandLine System.getenv('VOYAGE_NODE') ?: 'node', 'tools/build-sync.mjs'
+    inputs.files(fileTree('../../apps/sync'), fileTree('../../packages/core'), file('../../tools/build-sync.mjs'), file('../../LICENSE'))
+    outputs.dir(layout.buildDirectory.dir('generated/sync-assets'))
+}
+def sharedJava = tasks.register('syncSharedJava', Sync) {
+    from('../app/src/main/java') { include 'dev/voyage/workbench/Secrets.java', 'dev/voyage/workbench/VoyageHttpPolicy.java' }
+    into layout.buildDirectory.dir('generated/shared-java')
+}
+def sharedTests = tasks.register('syncSharedTests', Sync) {
+    from('../app/src/test/java') { include 'dev/voyage/workbench/VoyageHttpPolicyTest.java' }
+    into layout.buildDirectory.dir('generated/shared-test-java')
+}
+tasks.named('preBuild').configure { dependsOn bundleSync, sharedJava, sharedTests }

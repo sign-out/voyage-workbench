@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {artworkDestinations,artworkPrompt,assignArtwork} from './artwork';
+import {assetSlots,assignAsset} from './studio';
+import {creationDestinations,creationWorldHash} from './world-creation';
 
 const state='{"npcs":{"areas":{"name":"Guide","description":"A guide","hiddenInfo":"SECRET"}},"premadeCharacters":[{"name":"Traveler"}],"regions":{"npcs":{"name":"Coast"}},"locations":{"areas":{"name":"Harbor","areas":{"npcs":{"name":"Dock"}}}},"itemTypes":{"npcs":{"name":"Compass"}},"exact":90071992547409931234,"unknown":1.2300e+42}';
 test('artwork catalogs every supported destination with structural upload purposes',()=>{
@@ -69,4 +71,17 @@ test('world covers use the verified upload purpose and named portraits have dist
   assert.equal(portrait.target,'NPC_PORTRAIT');
   assert.deepEqual(portrait.path,['initialGameState','npcs','guide','portraits',name]);
  }
+});
+test('optional tier decorations and unrelated image-like fields never become world-artwork jobs',()=>{
+ const source='{"heroesVersion":37,"successLevelSettings":{"tiers":[{"name":"Failure","imageUrl":""},{"name":"Success","imageUrl":"https://example.com/tier.png"}]},"custom":{"imageUrl":"https://example.com/custom.png"},"npcs":{"tiers":{"name":"Guide","notes":{"imageUrl":""}}},"regions":{"tiers":{"name":"Coast","images":{"map":{"imageUrl":""}}}},"exact":9007199254740993}';
+ const destinations=artworkDestinations(source);
+ assert.deepEqual(destinations.map(item=>item.label),['World cover','Coast','Guide']);
+ assert.ok(destinations.every(item=>item.target));
+ assert.equal(creationDestinations(source).length,3);
+ assert.equal(assetSlots(source).filter(slot=>slot.path[0]==='successLevelSettings').length,2);
+ assert.ok(!assetSlots(source).some(slot=>slot.path[0]==='custom'||slot.path.includes('notes')));
+ assert.throws(()=>assignArtwork(source,'{}',JSON.stringify(['successLevelSettings','tiers',0,'imageUrl']),'https://example.com/new.png'),/no longer exists/);
+ const decorated=assignAsset(source,['successLevelSettings','tiers',0,'imageUrl'],'https://example.com/optional.png');
+ assert.match(decorated,/9007199254740993/);assert.match(source,/"imageUrl":""/);
+ assert.notEqual(creationWorldHash(source,value=>value),creationWorldHash(decorated,value=>value),'Optional mechanics changes must not be mistaken for artwork-only changes');
 });

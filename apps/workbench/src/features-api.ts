@@ -74,7 +74,7 @@ async function runPublication(project:Project,kind:string,retry?:PublicationOper
  if(op.state==='CONFIRMED')return ops;
  if(op.state==='REJECTED')throw new Error('Voyage rejected this operation before any effect. Correct the problem and start a new action; do not replay this completed rejection.');
  const acknowledged=()=>op.state==='ACKNOWLEDGED'||op.result!==undefined;
- const assertHost=async()=>{const connection=await request('connection');if(!op.environment||!op.apiBase||connection.environment!==op.environment||connection.apiBase!==op.apiBase||current.remote.environment&&current.remote.environment!==op.environment)throw new Error('Publication environment is missing or changed. Restore the original selected host; do not replay on another environment. Alpha 1.3 and production 1.2 contracts may differ.');};
+ const assertHost=async()=>{const connection=await request('connection');if(!op.environment||!op.apiBase||connection.environment!==op.environment||connection.apiBase!==op.apiBase)throw new Error('The publication connection changed or is missing. Restore its original selected host to finish this request; new actions use the selected connection, but unfinished requests cannot be replayed on another host.');};
  await assertHost();
  if(!acknowledged()&&!inspectOnly){
   const cooldown=publicationCooldown(op);if(cooldown)throw new Error(cooldown);
@@ -110,7 +110,7 @@ async function runPublication(project:Project,kind:string,retry?:PublicationOper
    await request('checkpoint',{id:project.id,label:'Before Voyage '+kind});await assertSource();
    op.state='SEND_ATTEMPTED';op.sentAt=previousState==='RETRYABLE'?Date.now():op.sentAt??Date.now();await journal.save();
    sending=true;
-   const response=await request('creatorRequest',{method:'POST',endpoint:kind==='create'?'/worlds':'/worlds/'+encodeURIComponent(op.worldId)+'/'+kind,body:op.body,idempotencyKey:op.id});
+   const response=await request('creatorRequest',{method:'POST',environment:op.environment,endpoint:kind==='create'?'/worlds':'/worlds/'+encodeURIComponent(op.worldId)+'/'+kind,body:op.body,idempotencyKey:op.id});
    sending=false;received=true;op.state='ACKNOWLEDGED';op.result=response.text.trim()?JSON.parse(response.text):null;delete op.retryAt;delete op.retryBlocked;await journal.save();
   }
   await assertHost();
@@ -145,10 +145,10 @@ async function uploadJournal(projectId:string){
  const key='uploads:'+projectId;let raw=await request('featureGet',{key});const rows:Upload[]=raw?JSON.parse(raw):[];
  return {rows,save:async(upload:Upload)=>{upload.revision=crypto.randomUUID();const value=JSON.stringify(rows);await request('featureSet',{key,expected:raw,value});raw=value;}};
 }
-function uploadBinding(project:Project,upload?:Upload):UploadBinding{
+async function uploadBinding(project:Project,upload?:Upload):Promise<UploadBinding>{
  if(!project.remote.worldId)throw new Error('Create or download a Voyage draft first.');
- const environment=project.remote.environment||'production';
- if(upload&&(upload.projectId!==project.id||upload.environment!==environment||upload.shortId!==project.remote.worldId))throw new Error('Upload project/environment/world binding is missing or changed. Review the original upload; it cannot be retargeted.');
+ const environment=upload?.environment||(await request('connection')).environment;
+ if(upload&&(upload.projectId!==project.id||!upload.environment||upload.shortId!==project.remote.worldId))throw new Error('Upload project/environment/world binding is missing or changed. Review the original upload; it cannot be retargeted.');
  return {projectId:project.id,environment,worldId:project.remote.worldId};
 }
 async function repairUpload(upload:Upload,asset?:Asset){
@@ -156,7 +156,7 @@ async function repairUpload(upload:Upload,asset?:Asset){
  await registerRemote(upload.imageUrl,'image',asset?.name||'Uploaded image',{target:upload.target,state:'existing',environment:upload.environment,uploadId:upload.uploadId},upload.assetId);return upload;
 }
 async function repairCompletedUpload(project:Project,upload:Upload,save:(upload:Upload)=>Promise<void>,asset?:Asset){
- const binding=uploadBinding(project);
+ const binding=await uploadBinding(project);
  if(upload.projectId===undefined||upload.environment===undefined){
   const compatibleWorld=upload.shortId===binding.worldId&&(upload.projectId===undefined||upload.projectId===binding.projectId)&&(upload.environment===undefined||upload.environment===binding.environment);
   const catalog=await library(),entry=catalog.find(item=>item.kind==='image'&&item.storageId===upload.assetId);
@@ -164,11 +164,11 @@ async function repairCompletedUpload(project:Project,upload:Upload,save:(upload:
   if(upload.state!=='ready'||upload.step!=='done'||!compatibleWorld||!evidence)throw new Error('Completed upload binding is missing or changed and has no compatible library evidence. Review the original upload; it cannot be retargeted.');
   upload.projectId=binding.projectId;upload.environment=binding.environment;await save(upload);
  }
- uploadBinding(project,upload);return repairUpload(upload,asset);
+ await uploadBinding(project,upload);return repairUpload(upload,asset);
 }
 export function prepareUpload(p:Project,target:string,asset:Asset){return serializeUpload(p.id,()=>prepareImageUpload(p,target,asset));}
 async function prepareImageUpload(p:Project,target:string,asset:Asset){
- p=(await request('project',{id:p.id})).project;const binding=uploadBinding(p);
+ p=(await request('project',{id:p.id})).project;const binding=await uploadBinding(p);
  if(!p.remote.worldId)throw new Error('Create or download a Voyage draft first.');
  if(!Object.prototype.hasOwnProperty.call(imageTargets,target))throw new Error('Unknown upload target.');
  const journal=await uploadJournal(p.id),rows=journal.rows,matching=rows.filter(row=>row.assetId===asset.id&&row.target===target);
@@ -189,7 +189,8 @@ async function sendImageUpload(p:Project,id:string){
  const latest=(await request('project',{id:p.id})).project as Project;
  const asset=await feature<Asset|null>('asset:'+upload.assetId,null);
  if(upload.state==='ready'||upload.step==='done')return repairCompletedUpload(latest,upload,journal.save,asset||undefined);
- const binding=uploadBinding(latest,upload);
+ const binding=await uploadBinding(latest,upload);
+ if((await request('connection')).environment!==binding.environment)throw new Error('This unfinished upload belongs to its original connection. Select '+binding.environment+' to finish it; the world itself is not tied to that host.');
  if(Date.now()-upload.created>23*60*60*1000)throw new Error('Recorded upload replay window expired. Review its outcome before starting another.');
  try{
   while(upload.step!=='done'){

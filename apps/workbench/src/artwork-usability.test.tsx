@@ -20,7 +20,7 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
    import {create} from '../../../packages/core/project';
    import {defaultSettings} from '../../../packages/core/providers';
    import {charactersInspect} from '../../../packages/core/features';
-   import {initCharacterExplorer} from '../../../web/character-explorer.js';
+   import {LegacyView} from './LegacyViews';
    const root=createRoot(document.getElementById('root'));
    const project=create('portraits','Fixture world',JSON.stringify({title:'Fixture world',initialGameState:{npcs:{guide:{name:'Guide',visualDescription:'Blue cloak and silver hair'}},premadeCharacters:[{name:'Hero',visualDescription:'Red cloak'}]}}),1);
    createRoot(document.getElementById('activity')).render(<OperationActivity project={project}/>);window.operationSnapshot=operationSnapshot;
@@ -42,6 +42,7 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
    window.voyage={invoke:async(method,payload)=>{
     window.calls.push(method);
     if(method==='providerSettings')return {settings};
+    if(method==='references')return {sections:[]};
     if(method==='connection')return {environment:'alpha',contract:null};
     if(method==='featureGet')return store.get(payload.key)||null;
     if(method==='featureSet'){
@@ -60,14 +61,8 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
    }};
    window.mountArtwork=(id=guideId)=>root.render(<ArtworkWorkspace key={crypto.randomUUID()} project={project} initialDestinationId={id} apply={async()=>{window.applies++;throw Error('Artwork must not auto-attach');}} onCover={()=>{throw Error('Portrait must not open cover');}}/>);
    window.mountLibraryPreview=storageId=>root.render(<MediaPreview asset={{id:storageId,name:'Offline portrait',kind:'image',mime:'image/png',created:1,storageId,aliases:[],tags:[],remote:[{url:'https://offline-artwork.invalid/portrait.png',state:'durable',created:1}]}}/>);
-   window.mountCharacters=async()=>{
-    root.render(<div/>);await new Promise(resolve=>setTimeout(resolve,30));
-    const host=document.createElement('div');document.body.append(host);window.characterHost=host;
-    const node=(tag,text,cls)=>{const element=document.createElement(tag);if(text!==undefined)element.textContent=text;if(cls)element.className=cls;return element;};
-    const explorer=initCharacterExplorer({host,node,api:async()=>charactersInspect(project.activeSource,[]),getSource:()=>project.activeSource,getProject:()=>project,applyText:async()=>{window.applies++;},status:message=>window.characterStatus=message,onArtwork:selection=>{window.characterSelection=selection;host.remove();window.mountArtwork(JSON.stringify(selection.path.concat('portraitUrl')));}});
-    await explorer.render();
-   };
-  `,resolveDir:path.resolve('apps/workbench/src'),loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser'});
+   window.mountCharacters=()=>root.render(<LegacyView kind="characters" project={project} compute={async(method,text)=>{if(method==='charactersInspect')return charactersInspect(text,[]);throw Error('Unexpected edit '+method);}} apply={async()=>{window.applies++;throw Error('Generation must not edit the world');}}/>);
+  `,resolveDir:path.resolve('apps/workbench/src'),loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',loader:{'.css':'empty'}});
   const styles=['apps/workbench/src/style.css','apps/workbench/src/adaptive.css','apps/workbench/src/operation-progress.css','web/character-explorer.css'].map(file=>readFileSync(file,'utf8')).join('\n');
   writeFileSync(path.join(directory,'fixture.html'),`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>${styles}</style><div class="adaptive-app"><div id="activity"></div><div id="root"></div></div><script>${bundle.outputFiles[0].text}</script>`);
   writeFileSync(path.join(directory,'run.cjs'),`
@@ -116,13 +111,24 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
      check(JSON.parse(window.store.get('artwork-studio:portraits'))[0].state==='uncertain','Failure did not preserve uncertain outcome');await settle();check(window.imageCalls===2,'Failed image was automatically retried');
      window.driftRoute=true;button('Generate artwork locally').click();await wait(()=>document.body.innerText.includes('No image request was sent. The Artwork provider or model changed'));
      check(window.imageCalls===2,'Provider drift sent an unapproved image request');
-     await window.mountCharacters();document.querySelector('[aria-label="Edit Guide"]').click();await wait(()=>document.querySelector('[aria-label="Generate artwork for Guide"]'));
+     window.mountCharacters();await wait(()=>document.querySelector('[aria-label="Edit Guide"]'));document.querySelector('[aria-label="Edit Guide"]').click();await wait(()=>document.querySelector('[aria-label="Generate artwork for Guide"]'));
      const description=document.querySelector('textarea[aria-label="visual Description"]');check(description,'Character description field missing');description.value='Unsaved appearance';description.dispatchEvent(new Event('input',{bubbles:true}));
-     document.querySelector('[aria-label="Generate artwork for Guide"]').click();await wait(()=>window.characterStatus?.includes('Apply or discard'));
-     check(!window.characterSelection,'Dirty character form navigated to generation');button('Discard edits').click();document.querySelector('[aria-label="Generate artwork for Guide"]').click();await wait(()=>heading()==='Guide');
-     check(JSON.stringify(window.characterSelection.path)==='["initialGameState","npcs","guide"]','Character shortcut used the wrong exact path');
-     check(document.querySelector('[aria-label="Artwork brief"]').value.includes('Blue cloak and silver hair'),'Character appearance was not included in the prepared brief');
-     check(window.imageCalls===2&&window.applies===0,'Portrait shortcut silently generated or mutated the world');
+     document.querySelector('[aria-label="Generate artwork for Guide"]').click();await wait(()=>document.body.innerText.includes('Apply or discard'));
+     check(window.imageCalls===2,'Dirty character form generated artwork');button('Discard edits').click();document.querySelector('[aria-label="Generate artwork for Guide"]').click();await wait(()=>window.imageCalls===3);
+     check(document.querySelector('.ce-panel')&&!document.querySelector('.artwork-destination-editor'),'Generate portrait navigated away from the character');
+     check(document.querySelector('[aria-label="Generate artwork for Guide"]').disabled,'Portrait generation allowed duplicate clicks');document.querySelector('[aria-label="Generate artwork for Guide"]').click();check(window.imageCalls===3,'Duplicate portrait request sent');
+     check(window.lastImageRequest.prompt.includes('Blue cloak and silver hair'),'Character appearance was not sent in the portrait brief');
+     check(JSON.parse(window.store.get('artwork-studio:portraits'))[0].destinationId==='["initialGameState","npcs","guide","portraitUrl"]','Portrait used the wrong exact destination');
+     check(document.querySelector('.ce-generated-artwork').innerText.includes('Generating portrait for Guide'),'Missing inline portrait progress');
+     const beforeRefresh=document.querySelector('[aria-label="Generate artwork for Guide"]');button('Refresh characters').click();await wait(()=>document.querySelector('[aria-label="Generate artwork for Guide"]')!==beforeRefresh);
+     check(document.querySelector('[aria-label="Generate artwork for Guide"]').disabled&&document.querySelector('.ce-generated-artwork progress'),'Refreshing the character lost its running request or duplicate guard');
+     window.finishGeneration();await wait(()=>document.querySelector('.ce-generated-artwork img')?.naturalWidth===128);
+     check(document.querySelector('.ce-panel')&&document.body.innerText.includes('Portrait for Guide is ready here'),'Portrait completion moved screens or omitted feedback');
+     check(!document.querySelector('[aria-label="Generate artwork for Guide"]').disabled,'Refreshed portrait button stayed disabled after completion');
+     button('← All characters').click();await wait(()=>document.querySelector('[aria-label="Edit Guide"]'));document.querySelector('[aria-label="Edit Guide"]').click();await wait(()=>document.querySelector('.ce-generated-artwork img')?.naturalWidth===128);
+     check(document.documentElement.scrollWidth<=innerWidth,'Inline portrait overflows phone width');
+     button('Inspect portrait full size').click();await wait(()=>document.querySelector('dialog[open] img')?.naturalWidth===128);button('Close').click();
+     check(window.applies===0,'Portrait generation silently attached artwork or mutated the world');
      window.mountLibraryPreview('hero-image');await wait(()=>document.querySelector('.library-preview')?.naturalWidth===128);
      check(document.querySelector('.library-preview').src.startsWith('data:image/png;'),'Available original was hidden behind an unavailable hosted preview');
      document.querySelector('[aria-label="Inspect Offline portrait full size"]').click();await wait(()=>document.querySelector('dialog[open] img')?.naturalWidth===128);button('Close').click();
@@ -133,7 +139,7 @@ test('rendered portrait workflow previews real saved bytes, targets the correct 
      await wait(()=>field('World title')?.value==='Source title');check(field('Player fantasy / premise').value==='Source premise','Premise was not filled from GameState');check(field('Cover art direction').value==='Source watercolor style','Visual direction was not filled from world data');
      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field('World title'),'My edited title');field('World title').dispatchEvent(new Event('input',{bubbles:true}));await settle();
      window.mountCover('cover','Changed source title','Updated source premise','Updated source style');await wait(()=>field('Player fantasy / premise')?.value==='Updated source premise');check(field('World title').value==='My edited title','World refresh overwrote the edited title');check(field('Cover art direction').value==='Updated source style','Pristine art direction did not follow world data');
-     window.mountCover('another-cover','Another world','Another premise','Another style');await wait(()=>field('World title')?.value==='Another world');check(field('Player fantasy / premise').value==='Another premise','Project switch retained another world brief');check(window.imageCalls===2&&window.applies===0,'Autofill triggered paid generation or changed the world');
+     window.mountCover('another-cover','Another world','Another premise','Another style');await wait(()=>field('World title')?.value==='Another world');check(field('Player fantasy / premise').value==='Another premise','Project switch retained another world brief');check(window.imageCalls===3&&window.applies===0,'Autofill triggered paid generation or changed the world');
     })()`)});}finally{window.destroy();}
    }).then(()=>app.exit(0)).catch(error=>{console.error(error);app.exit(1)});
   `);

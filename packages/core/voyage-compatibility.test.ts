@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {voyageProfile,inspectVoyageContract,coverRecommendation,releaseAdvisories,workspacePersistence,compatibilityIdentity} from './voyage-compatibility';
+import {voyageProfile,inspectVoyageContract,coverRecommendation,releaseAdvisories,workspacePersistence,compatibilityIdentity,worldEngineStatus} from './voyage-compatibility';
 import {create,reduce,hash,nativeRequest} from './project';
 import {executeWorldTool,completionEvidence} from './agent-tools';
 import * as doc from './document';
@@ -12,6 +12,23 @@ import {createWorkspace,creationArtifactSpecs,creationBriefHash} from './world-c
 import {prepareCreationTransfer} from './creation-transfer';
 
 const contract=readFileSync('docs/openapi.json','utf8'),guide=readFileSync('docs/voyage-agent-guide.md','utf8');
+test('engine warnings use world versions, distinguish persisted and converted drafts, and never guess from a host label',()=>{
+ const source='{"shortId":"WORLD","initialGameState":{"heroesVersion":37,"compatibilityRevision":9,"exact":9007199254740993}}';
+ const response=(state=source,metadata={})=>'{"data":{"world":'+state+','+JSON.stringify(metadata).slice(1)+'}';
+ const older={heroesVersion:37,compatibilityRevision:9},newer={heroesVersion:37,compatibilityRevision:10},upgraded=source.replace('"compatibilityRevision":9','"compatibilityRevision":10');
+ for(const environment of ['alpha','beta','production']){
+  const same=worldEngineStatus('{"data":{"world":'+source+'}}',source,environment,'WORLD',1);
+  assert.equal(same.warning,'');assert.equal(same.savedVersion,undefined);assert.equal(same.environment,environment);
+  const warning=worldEngineStatus(response(upgraded,{savedVersion:older,pendingVersionUpgrade:{sourceVersion:older,targetVersion:newer}}),source,environment,'WORLD',2);
+  assert.match(warning.warning,/V37 \/ revision 9 → V37 \/ revision 10/);assert.match(warning.warning,/requires your approval/);assert.match(warning.warning,/No upgrade has been approved/);assert.deepEqual(warning.savedVersion,older);assert.deepEqual(warning.draftVersion,newer);
+ }
+ assert.match(worldEngineStatus('{"data":{"world":'+upgraded+'}}',source,'beta','WORLD').warning,/did not report the persisted/);
+ assert.match(worldEngineStatus(response(upgraded,{savedVersion:newer}),source,'alpha','WORLD').warning,/World engine upgrade/);
+ assert.equal(worldEngineStatus(response(upgraded,{savedVersion:newer}),upgraded,'production','WORLD').warning,'');
+ assert.throws(()=>worldEngineStatus(response(source,{pendingVersionUpgrade:{targetVersion:newer}}),source,'alpha','WORLD'),/incomplete/);
+ assert.throws(()=>worldEngineStatus(response(source,{savedVersion:{heroesVersion:37,compatibilityRevision:-1}}),source,'alpha','WORLD'),/invalid/);
+ assert.match(source,/9007199254740993/);assert.match(source,/"compatibilityRevision":9/);
+});
 test('configured official contract baselines retain their pinned source fingerprints',()=>{
  const profiles=JSON.parse(readFileSync('packages/core/voyage-compatibility.json','utf8'));
  assert.equal(profiles.format,1);
@@ -19,13 +36,23 @@ test('configured official contract baselines retain their pinned source fingerpr
   const raw=readFileSync(profile.contractBaseline,'utf8');
   assert.equal(createHash('sha256').update(raw.replace(/\n$/,'')).digest('hex'),profile.contractHash);
  }
- const raw=readFileSync('docs/references/creator-alpha-2026-11-05.openapi.json','utf8'),metadata=JSON.parse(readFileSync('docs/references/creator-alpha-2026-11-05.meta.json','utf8'));
- assert.equal(createHash('sha256').update(raw).digest('hex'),metadata.bundledSha256);
+ for(const name of ['creator-alpha-2026-11-05','creator-beta-2026-11-07']){
+  const raw=readFileSync('docs/references/'+name+'.openapi.json','utf8'),metadata=JSON.parse(readFileSync('docs/references/'+name+'.meta.json','utf8'));
+  assert.equal(createHash('sha256').update(raw).digest('hex'),metadata.bundledSha256);
+  if(metadata.guideBaseline)assert.equal(createHash('sha256').update(readFileSync(metadata.guideBaseline)).digest('hex'),metadata.guideSha256);
+ }
 });
 test('profiles separate API hosts, cover recommendations and release evidence',()=>{
  assert.equal(voyageProfile('production').apiBase,'https://api.aidungeon.com/creator/v1');
  assert.throws(()=>voyageProfile('https://other.test'));
- assert.throws(()=>voyageProfile('beta'));
+ assert.equal(voyageProfile('beta').apiBase,'https://api-beta.aidungeon.com/creator/v1');
+ assert.equal(voyageProfile('beta').studioUrl,'https://beta.voyage.io/studio');
+ assert.equal(voyageProfile('beta').release,null);
+ assert.deepEqual(coverRecommendation('beta'),{width:1280,height:720});
+ const beta=inspectVoyageContract('beta',readFileSync(voyageProfile('beta').contractBaseline,'utf8'),guide,1);
+ assert.equal(beta.environment,'beta');assert.equal(beta.version,'1.3.0-preview');assert.equal(beta.operations.length,27);
+ assert.ok(!beta.operations.some(operation=>operation.includes('version-upgrade')));
+ assert.deepEqual(coverRecommendation('beta',beta),{width:1280,height:720});
  assert.deepEqual(coverRecommendation('alpha'),{width:1280,height:720});
  assert.deepEqual(coverRecommendation('production'),{width:1000,height:1000});
  const snapshot=inspectVoyageContract('production',contract,guide,1);
@@ -47,7 +74,11 @@ test('source-to-world artwork pins its target without changing legacy plans or A
  assert.match(creationArtifactSpecs(production,'{}',hash)[0].prompt,/1000 × 1000/);
  assert.notEqual(creationBriefHash(alpha,hash),creationBriefHash(production,hash));
  assert.equal(prepareCreationTransfer(alpha,'{}',hash,'restored').targetEnvironment,'alpha');
- assert.throws(()=>createWorkspace({...input,targetEnvironment:'beta'},hash),/not confirmed/);
+ const beta=createWorkspace({...input,targetEnvironment:'beta'},hash);beta.artwork=alpha.artwork;
+ assert.match(creationArtifactSpecs(beta,'{}',hash)[0].prompt,/1280 × 720/);
+ assert.notEqual(creationBriefHash(alpha,hash),creationBriefHash(beta,hash));
+ assert.equal(prepareCreationTransfer(beta,'{}',hash,'restored-beta').targetEnvironment,'beta');
+ assert.throws(()=>createWorkspace({...input,targetEnvironment:'unverified'},hash),/Unsupported/);
 });
 test('release advisories are stage and environment scoped and never change source',()=>{
  for(const wrapper of [(state:string)=>state,(state:string)=>'{"data":{"world":{"initialGameState":'+state+'}}}']){

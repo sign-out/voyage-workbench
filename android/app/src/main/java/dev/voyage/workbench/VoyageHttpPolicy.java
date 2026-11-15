@@ -40,21 +40,25 @@ final class VoyageHttpPolicy {
  VoyageHttpPolicy(Clock clock,Sleeper sleeper,Connections connections,long budgetMillis){this.clock=clock;this.sleeper=sleeper;this.connections=connections;this.budgetMillis=budgetMillis;}
 
  Response execute(String method,String url,Map<String,String> headers,byte[] body,ErrorCode errorCode)throws IOException,InterruptedException {
+  return execute(method,url,headers,body,errorCode,Integer.MAX_VALUE);
+ }
+ Response execute(String method,String url,Map<String,String> headers,byte[] body,ErrorCode errorCode,int maxResponseBytes)throws IOException,InterruptedException {
+  if(maxResponseBytes<1)throw new IllegalArgumentException("Response limit must be positive");
   long deadline=clock.elapsedMillis()+budgetMillis;
   Thread caller=Thread.currentThread();
   AtomicReference<HttpURLConnection> active=new AtomicReference<>();
   ScheduledExecutorService guard=Executors.newSingleThreadScheduledExecutor(task->{Thread thread=new Thread(task,"voyage-http-deadline");thread.setDaemon(true);return thread;});
-  guard.scheduleAtFixedRate(()->{if(caller.isInterrupted()||clock.elapsedMillis()>=deadline){HttpURLConnection connection=active.get();if(connection!=null)connection.disconnect();}},25,25,TimeUnit.MILLISECONDS);
+  guard.scheduleWithFixedDelay(()->{if(caller.isInterrupted()||clock.elapsedMillis()>=deadline){HttpURLConnection connection=active.get();if(connection!=null)connection.disconnect();}},25,25,TimeUnit.MILLISECONDS);
   try {
    for(int attempt=1;;attempt++){
     check(deadline);
     Response response;
-    try{response=exchange(method,url,headers,body,errorCode,deadline,active);}
+    try{response=exchange(method,url,headers,body,errorCode,deadline,active,maxResponseBytes);}
     catch(IOException failure){
      check(deadline);
      if(failure instanceof InterruptedIOException&&!(failure instanceof SocketTimeoutException)){caller.interrupt();throw failure;}
      if(!"GET".equals(method))throw new IOException("Voyage transport failed; the write outcome may be unknown. Reconcile the live world and Studio state before retrying; keep the original idempotency key and do not create a replacement key.",failure);
-     if(failure instanceof ResponseReadFailure||attempt>=MAX_ATTEMPTS)throw failure;
+     if(failure instanceof ResponseReadFailure||failure instanceof ResponseLimitFailure||attempt>=MAX_ATTEMPTS)throw failure;
      long delay=500L<<(attempt-1);
      if(delay>=deadline-clock.elapsedMillis())throw failure;
      pause(delay,deadline);
@@ -79,7 +83,7 @@ final class VoyageHttpPolicy {
   if(clock.elapsedMillis()>=deadline)throw new SocketTimeoutException("Voyage request exceeded the 45-second overall budget. For a write, reconcile the live world and Studio state before retrying; do not create a new idempotency key.");
  }
  private int timeout(long deadline,int cap)throws InterruptedException,SocketTimeoutException {check(deadline);return (int)Math.max(1,Math.min(cap,deadline-clock.elapsedMillis()));}
- private Response exchange(String method,String url,Map<String,String> headers,byte[] body,ErrorCode errorCode,long deadline,AtomicReference<HttpURLConnection> active)throws IOException,InterruptedException {
+ private Response exchange(String method,String url,Map<String,String> headers,byte[] body,ErrorCode errorCode,long deadline,AtomicReference<HttpURLConnection> active,int maxResponseBytes)throws IOException,InterruptedException {
   HttpURLConnection connection=connections.open(url);
   active.set(connection);
   try {
@@ -94,15 +98,16 @@ final class VoyageHttpPolicy {
    connection.setReadTimeout(timeout(deadline,45000));
    InputStream input=status>=400?connection.getErrorStream():connection.getInputStream();
    ByteArrayOutputStream bytes=new ByteArrayOutputStream();
-   if(input!=null)try(InputStream stream=input){byte[] buffer=new byte[8192];for(;;){connection.setReadTimeout(timeout(deadline,45000));int count=stream.read(buffer);check(deadline);if(count<0)break;bytes.write(buffer,0,count);}}catch(IOException failure){if(failure instanceof InterruptedIOException&&!(failure instanceof SocketTimeoutException))throw failure;if(status>=400)throw new ResponseReadFailure(failure);throw failure;}
+   if(input!=null)try(InputStream stream=input){byte[] buffer=new byte[8192];for(;;){connection.setReadTimeout(timeout(deadline,45000));int count=stream.read(buffer);check(deadline);if(count<0)break;if(count>maxResponseBytes-bytes.size())throw new ResponseLimitFailure();bytes.write(buffer,0,count);}}catch(IOException failure){if(failure instanceof InterruptedIOException&&!(failure instanceof SocketTimeoutException))throw failure;if(status>=400)throw new ResponseReadFailure(failure);throw failure;}
    String text=new String(bytes.toByteArray(),StandardCharsets.UTF_8);
    return new Response(status,text,connection.getHeaderField("ETag"),connection.getHeaderField("Retry-After"),errorCode.read(text));
   } finally {active.compareAndSet(connection,null);connection.disconnect();}
  }
  private static final class ResponseReadFailure extends IOException {ResponseReadFailure(IOException cause){super("Voyage error response could not be read; automatic retry stopped because its safety code is unknown.",cause);}}
+ private static final class ResponseLimitFailure extends IOException {ResponseLimitFailure(){super("Voyage response exceeds this app's memory safety limit. The local world and recorded save are preserved.");}}
  static boolean cleanRejection(int status,String code){
   if("request_status_unknown".equals(code)||"request_in_progress".equals(code))return false;
-  return "studio_unavailable".equals(code)||"studio_version_mismatch".equals(code)||status==400||status==401||status==403||status==404||status==405||status==412||status==413||status==415||status==422||status==428||status==429;
+  return "studio_unavailable".equals(code)||"studio_version_mismatch".equals(code)||"studio_version_upgrade_required".equals(code)||"revision_version_mismatch".equals(code)||"version_upgrade_mismatch".equals(code)||"world_changed".equals(code)||status==400||status==401||status==403||status==404||status==405||status==412||status==413||status==415||status==422||status==428||status==429;
  }
  static boolean retryable(String method,int status,String code){
   if(!"GET".equals(method)||"request_status_unknown".equals(code)||"request_in_progress".equals(code)||"studio_version_mismatch".equals(code))return false;
@@ -125,6 +130,7 @@ final class VoyageHttpPolicy {
   String guidance="";
   if("request_status_unknown".equals(code))guidance="The mutation may have completed. Reconcile the live world and Studio state before any retry; do not create new idempotency keys. The existing key remains protected for the full 24-hour replay window.";
   else if("request_in_progress".equals(code))guidance="The request is still protected for the 24-hour replay window. Recheck only after the server cooldown; Retry-After is not a key-expiry promise. Do not send another mutation or create a new key.";
+  else if("studio_version_upgrade_required".equals(code))guidance="The selected environment requires approval to save this world at a newer engine version. Review the reported versions in Studio before approving. This rejection did not save an upgrade; worlds are not tied to a previous connection.";
   else if("studio_version_mismatch".equals(code))guidance="Not retryable. Open the world in the selected environment's Creator Studio to confirm an upgrade for an older world, or explicitly choose a compatible environment for a newer draft. Never modify version fields or automatically switch hosts.";
   else if(status==401||status==403||"creator_api_access_required".equals(code))guidance="Check the Creator API key in the selected environment's Studio → Settings → API keys, its scopes, account eligibility and Creator API access; world access is owner-only. Enable access or contact Voyage support with the request ID. Local editing remains available.";
   else if("studio_unavailable".equals(code))guidance="Clean availability failure: no state reconciliation is required for this failure. After the cooldown, explicitly retry the identical request with the same idempotency key, if present. Repeated failures should be escalated with the request ID; no mutation was automatically retried.";

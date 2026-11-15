@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "vite",
     "build": "node tools/build.mjs",
+    "build:sync": "node tools/build-sync.mjs",
+    "package:sync": "node tools/package-sync.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test packages/core/*.test.ts hosts/desktop/*.test.ts hosts/provider/*.test.ts apps/workbench/src/*.test.tsx tools/check-voyage-updates.test.mjs",

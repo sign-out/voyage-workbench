@@ -3,15 +3,19 @@
 ## Start from a character
 
 Open **Characters**, select an NPC or premade character, and choose **Generate
-portrait…** near the character heading. This opens Artwork with that character's
-exact portrait destination and a brief based on its saved appearance information.
-It does not start a provider request. Apply or discard pending character/editor
-changes first so the brief represents the saved character.
+portrait** near the character heading. Approving the provider confirmation starts
+generation there, using the saved character's appearance and exact portrait
+destination. The screen stays on the character, with progress and the returned
+image shown inline. **Inspect portrait full size** opens the image in place;
+**Use generated portrait…** selects those exact saved bytes in the attachment
+picker. Apply or discard pending edits first so the brief represents the saved
+character. Generation never attaches or uploads the image automatically.
 
-Review or edit the brief and choose **Generate artwork locally**. The confirmation
-names the character, purpose, provider, and model, and explains the potential
-charge. An optional reference image is sent only when explicitly selected. The
-full world is not sent with this artwork request.
+For a custom brief or reference image, open **Artwork** through navigation and
+choose **Generate artwork locally** after editing the brief. Both entry points
+use the same journal, route checks, local asset storage and duplicate protection.
+The confirmation names the character, purpose, provider, and model, and explains
+the potential charge. The full world is not sent with this artwork request.
 
 To reuse an image without generating, choose **Choose or upload portrait…** in the
 character details. The shared library includes generated and imported artwork.
@@ -55,6 +59,15 @@ confirm a running worker, it says **Awaiting confirmed outcome**, not that it is
 definitely interrupted. While such requests are recorded, Artwork checks the local
 journal every three seconds; **Refresh artwork history** is also available. These
 are local reads, not new image requests.
+
+## Supported destinations
+
+World-artwork destinations come from supported character, item, region, location,
+area and cover paths, rather than any field whose name resembles an image URL.
+Optional success-tier decorations (`successLevelSettings.tiers[*].imageUrl`) are
+preserved in the source and remain assignable through the asset library, but are
+not listed as world-artwork generation tasks or creation requirements. In
+particular, empty tier image fields do not create generic **tiers** cards.
 
 ## Attach only when ready
 

@@ -1,5 +1,21 @@
 .library-layout{display:grid;grid-template-columns:minmax(200px,1fr) minmax(0,2fr);gap:20px;align-items:start;margin-top:16px}
 .library-layout>section{min-width:0}
+.list-detail-layout{height:min(52dvh,36rem);min-height:180px;grid-template-rows:minmax(0,1fr);align-items:stretch}
+.list-detail-layout>section{min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;scrollbar-width:auto;scrollbar-color:var(--app-muted) var(--app-panel-alt);padding:4px}
+.list-detail-layout>section::-webkit-scrollbar{width:12px}
+.list-detail-layout>section::-webkit-scrollbar-thumb{background:var(--app-muted);border:3px solid var(--app-panel-alt);border-radius:6px}
+.list-detail-layout>section:focus-visible{outline:2px solid var(--app-accent);outline-offset:-2px}
+.list-detail-mobile-heading{display:none}
+.creation-workspace-host:not([hidden]){display:flex;flex:1;min-height:0;min-width:0;overflow:hidden}
+.creation-workspace-host>.world-creation{min-height:0;min-width:0}
+.media-dialog[open]>header{position:sticky;top:0;z-index:3;background:var(--app-panel);flex-shrink:0}
+.media-dialog>header h2{min-width:0;overflow-wrap:anywhere}
+.media-dialog>header>button{flex-shrink:0}
+@media(width < 761px), (pointer:coarse) and (height < 501px){
+ .list-detail-layout:not(.has-selection)>.list-detail-editor,.list-detail-layout.has-selection>.list-detail-list{display:none}
+ .list-detail-mobile-heading{display:block;position:sticky;top:-4px;z-index:2;padding:4px 0 8px;background:var(--app-bg)}
+ .list-detail-back{min-height:44px;max-width:100%;white-space:normal}
+}
 .publication-workspace{flex:1;min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain}
 .publication-workspace>.feature-page{overflow:visible;flex:none;min-height:auto}
 .publication-workspace>.readiness-checklist{margin:16px}

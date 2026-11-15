@@ -53,6 +53,9 @@ test('validation requires an affirmative valid result with no errors, never gene
   await validateSource(current.project.activeSource,'publish');
   const body=current.calls[0].payload.body;assert.match(body,/90071992547409931234/);assert.match(body,/"parties"/);
   assert.equal(current.calls[0].payload.idempotencyKey,undefined);
+  current.connection.environment='beta';current.connection.apiBase='https://api-beta.aidungeon.com/creator/v1';
+  await publicationAction(current.project,'publish');
+  assert.equal(current.rows()[0].environment,'beta');assert.equal(current.rows()[0].state,'CONFIRMED');assert.equal(current.project.remote.environment,'alpha');
  }finally{current.close();}
 });
 
@@ -61,6 +64,7 @@ test('clean rejections are terminal while unknown outcomes retain their key',asy
   ['Voyage HTTP 400 (invalid_world): Correct this world.','REJECTED'],
   ['Voyage HTTP 401: Reconnect.','REJECTED'],
   ['Voyage HTTP 409 (studio_version_mismatch): Upgrade in Studio.','REJECTED'],
+  ['Voyage HTTP 409 (studio_version_upgrade_required): Approve the newer engine in Studio.','REJECTED'],
   ['Voyage HTTP 503 (studio_unavailable): Clean availability failure.','RETRYABLE'],
   ['Voyage HTTP 503 (server_error): No side-effect guarantee.','UNKNOWN'],
   ['Voyage HTTP 409 (request_status_unknown): May have completed.','UNKNOWN'],
@@ -233,7 +237,7 @@ test('expired and legacy ambiguous operations remain blocking and inspectable wi
   await publicationAction(current.project,'publish',operation,true);assert.equal(current.rows()[0].state,'UNKNOWN');assert.equal(current.posts.length,1);
   await assert.rejects(publicationAction(current.project,'publish'),/do not create a new key/);
   delete operation.environment;current.store.set('publication:'+current.project.id,JSON.stringify([operation]));
-  await assert.rejects(publicationAction(current.project,'publish',operation),/environment is missing/);assert.equal(current.posts.length,1);
+  await assert.rejects(publicationAction(current.project,'publish',operation),/original selected host/);assert.equal(current.posts.length,1);
  }finally{current.close();}
 });
 
