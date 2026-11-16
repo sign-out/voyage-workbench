@@ -51,6 +51,8 @@ test('native bridge builds and reads cached community help without changing Game
 });
 
 test('native compatibility profiles and revision-scoped references survive the ES5 bridge',()=>{
+ assert.deepEqual(request({operation:'creatorReportRequest',args:[{report:'feedback',environment:'alpha',rating:'negative',page:2,limit:50},'alpha']}),{environment:'alpha',method:'GET',endpoint:'/feedback?rating=negative&page=2&limit=50'});
+ for(const environment of ['beta','production'])assert.throws(()=>request({operation:'creatorReportRequest',args:[{report:'summary',environment,worldId:'WORLD'},environment]}),/only on Alpha/);
  assert.equal(request({operation:'coverRecommendation',args:['alpha']}).width,1280);
  assert.equal(request({operation:'coverRecommendation',args:['production']}).width,1000);
  assert.deepEqual(request({operation:'coverRecommendation',args:['beta']}),{width:1280,height:720});

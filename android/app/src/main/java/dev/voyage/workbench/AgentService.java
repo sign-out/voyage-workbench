@@ -1,7 +1,7 @@
 package dev.voyage.workbench;
 import android.app.*;import android.content.*;import android.os.*;import org.json.*;import java.io.*;import java.util.*;
 public final class AgentService extends Service {
- Store store;volatile Rpc rpc;volatile boolean canceled,running;String projectId,taskId,attempt;AgentTaskTarget activeTarget;int latestStartId;StringBuilder reply=new StringBuilder();long flushed;boolean completed;
+ Store store;volatile Rpc rpc;volatile boolean canceled,running;String projectId,taskId,attempt,loginAttempt;AgentTaskTarget activeTarget;int latestStartId;StringBuilder reply=new StringBuilder();long flushed;boolean completed;
  Recovery recovery;String nativeThread,pendingCorrection;int nativeTurns;
  public IBinder onBind(Intent i){return null;}
  public void onCreate(){super.onCreate();try{store=new Store(this);}catch(Exception e){throw new RuntimeException(e);}NotificationManager n=getSystemService(NotificationManager.class);n.createNotificationChannel(new NotificationChannel("agent","Voyage agent",NotificationManager.IMPORTANCE_LOW));PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),PendingIntent.FLAG_IMMUTABLE);startForeground(1,new Notification.Builder(this,"agent").setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Voyage Workbench").setContentText("Local agent is working").setContentIntent(open).build());}
@@ -9,6 +9,11 @@ public final class AgentService extends Service {
   latestStartId=startId;
   if(i==null){if(!running)stopSelf(startId);return START_NOT_STICKY;}
   String mode=i.getStringExtra("mode");
+  if("login-cancel".equals(mode)){
+   if(running&&loginAttempt!=null&&loginAttempt.equals(i.getStringExtra("loginAttempt"))){canceled=true;try{JSONObject state=CodexLogin.status(store);if(rpc!=null&&(state==null||!state.has("loginId")))rpc.close();}catch(Exception ignored){}}
+   else if(!running)stopSelf(startId);
+   return START_NOT_STICKY;
+  }
   if("stop".equals(mode)){
    if(running&&activeTarget!=null&&activeTarget.matches(i.getStringExtra("projectId"),i.getStringExtra("taskId"),i.getStringExtra("attempt"))){
     canceled=true;
@@ -18,14 +23,14 @@ public final class AgentService extends Service {
    return START_NOT_STICKY;
   }
   if(running)return START_NOT_STICKY;
-  projectId=null;taskId=null;attempt=null;activeTarget=null;
+  projectId=null;taskId=null;attempt=null;activeTarget=null;loginAttempt="login".equals(mode)?i.getStringExtra("loginAttempt"):null;
   if(!"login".equals(mode)&&!"cli-login".equals(mode)){
    activeTarget=new AgentTaskTarget(i.getStringExtra("projectId"),i.getStringExtra("taskId"),i.getStringExtra("attempt"));
    if(!activeTarget.matches(activeTarget.projectId,activeTarget.taskId,activeTarget.attempt)){activeTarget=null;stopSelf(startId);return START_NOT_STICKY;}
    projectId=activeTarget.projectId;taskId=activeTarget.taskId;attempt=activeTarget.attempt;
   }
   running=true;canceled=false;completed=false;rpc=null;reply=new StringBuilder();flushed=0;recovery=null;nativeThread=null;pendingCorrection=null;nativeTurns=0;
-  new Thread(()->{try{if("login".equals(mode))login();else if("cli-login".equals(mode))CliLogin.run(this,i.getStringExtra("profileId"),i.getStringExtra("authMethod"),()->canceled);else run(i);}catch(Exception e){try{if(projectId!=null)command(new JSONObject().put("type","taskStop").put("state",canceled?"CANCELED":"FAILED").put("error",e.getMessage()));else if("login".equals(mode))store.setting("login",new JSONObject().put("error",e.getMessage()).toString());}catch(Exception ignored){}}finally{if(rpc!=null)rpc.close();store.setting("agentHeartbeat","0");new Handler(getMainLooper()).post(()->{running=false;activeTarget=null;rpc=null;stopSelf(latestStartId);});}},"voyage-agent").start();
+  new Thread(()->{try{if("login".equals(mode))login();else if("cli-login".equals(mode))CliLogin.run(this,i.getStringExtra("profileId"),i.getStringExtra("authMethod"),()->canceled);else run(i);}catch(Exception e){try{if(projectId!=null)command(new JSONObject().put("type","taskStop").put("state",canceled?"CANCELED":"FAILED").put("error",e.getMessage()));else if("login".equals(mode))CodexLogin.finish(store,loginAttempt,canceled?"canceled":"failed",String.valueOf(e.getMessage()));}catch(Exception ignored){}}finally{if(rpc!=null)rpc.close();if(loginAttempt!=null)CodexLogin.release(loginAttempt);store.setting("agentHeartbeat","0");new Handler(getMainLooper()).post(()->{running=false;activeTarget=null;rpc=null;loginAttempt=null;stopSelf(latestStartId);});}},"voyage-agent").start();
   return START_NOT_STICKY;
  }
  void command(JSONObject c)throws Exception{c.put("taskId",taskId).put("attempt",attempt);store.dispatch(projectId,c);}
@@ -37,7 +42,32 @@ public final class AgentService extends Service {
  Object executeTool(String name,Object arguments,String callId)throws Exception{requireTool(name);try{if(!(arguments instanceof JSONObject))throw new Exception("Tool arguments must be an object");Object output=tool(name,new JSONObject(arguments.toString()),callId);ensureTaskRunning();return output;}catch(Exception failure){ensureTaskRunning();return correctiveOpportunity(failure);}}
  String completionCorrection(String text)throws Exception{ensureTaskRunning();JSONObject current=task();if(!current.has("grading")&&!current.has("fieldFill"))return null;try{store.core.doc("assistantCompletionValidation",store.project(projectId),current,text);return null;}catch(Exception failure){ensureTaskRunning();return correctiveOpportunity(failure).toString();}}
  void nativeTurn(String text)throws Exception{ensureTaskRunning();if(nativeTurns>=80)throw new Exception("Task reached its 80-turn limit. Review partial changes before restarting.");nativeTurns++;rpc.rpc("turn/start",new JSONObject().put("threadId",nativeThread).put("input",new JSONArray().put(new JSONObject().put("type","text").put("text",text))),60);}
- void login()throws Exception{rpc=new Rpc(this,new File(getFilesDir(),"auth"));rpc.init();JSONObject start=rpc.rpc("account/login/start",new JSONObject().put("type","chatgptDeviceCode"),60);store.setting("login",start.toString());rpc.listener=e->{if("account/login/completed".equals(e.optString("method"))){start.put("complete",e.getJSONObject("params").optBoolean("success"));start.put("error",e.getJSONObject("params").optString("error"));store.setting("login",start.toString());completed=true;}};long end=System.currentTimeMillis()+15*60*1000;while(!completed&&!canceled&&System.currentTimeMillis()<end){store.setting("agentHeartbeat",Long.toString(System.currentTimeMillis()));try{rpc.pump();}catch(IOException e){if(!e.getMessage().startsWith("Timed out"))throw e;}}}
+ void login()throws Exception{
+  if(loginAttempt==null||!CodexLogin.claim(store,loginAttempt))return;
+  rpc=new Rpc(this,new File(getFilesDir(),"auth"));List<JSONObject> early=new ArrayList<>();
+  rpc.listener=event->{if(!"account/login/completed".equals(event.optString("method"))||!CodexLogin.current(store,loginAttempt))return;JSONObject state=CodexLogin.status(store),params=event.getJSONObject("params");if("starting".equals(state.getString("state"))){if(early.size()<16)early.add(params);return;}completeLogin(params);};
+  if(canceled||!CodexLogin.current(store,loginAttempt))return;
+  rpc.init();if(canceled||!CodexLogin.current(store,loginAttempt))return;
+  JSONObject saved=rpc.readAccount();if(canceled||!CodexLogin.current(store,loginAttempt))return;
+  if(!(Boolean)store.core.doc("codexLoginNeedsAuthentication",saved)){CodexLogin.reused(store,loginAttempt);completed=true;return;}
+  JSONObject start=rpc.rpc("account/login/start",new JSONObject().put("type","chatgptDeviceCode"),60);
+  String loginId=start.optString("loginId");
+  try{
+   if(canceled||!CodexLogin.current(store,loginAttempt))return;
+   CodexLogin.change(store,loginAttempt,"codexLoginStarted",start,System.currentTimeMillis());
+   for(JSONObject event:early)completeLogin(event);
+   while(!completed&&!canceled&&CodexLogin.current(store,loginAttempt)){CodexLogin.status(store);if(!CodexLogin.current(store,loginAttempt))break;store.setting("agentHeartbeat",Long.toString(System.currentTimeMillis()));try{rpc.pump(1);}catch(IOException error){if(error.getMessage()==null||!error.getMessage().startsWith("Timed out"))throw error;}}
+   if(canceled)CodexLogin.finish(store,loginAttempt,"canceled","");
+  }finally{JSONObject state=CodexLogin.status(store);if(!loginId.isEmpty()&&(state==null||!"complete".equals(state.optString("state"))))try{rpc.rpc("account/login/cancel",new JSONObject().put("loginId",loginId),5);}catch(Exception ignored){}}
+ }
+ void completeLogin(JSONObject params)throws Exception{
+  JSONObject before=CodexLogin.status(store);if(before==null||!"waiting".equals(before.optString("state"))||!before.optString("loginId").equals(params.optString("loginId")))return;
+  JSONObject state=CodexLogin.change(store,loginAttempt,"codexLoginEvent",params,System.currentTimeMillis());
+  if(state==null||!"verifying".equals(state.optString("state")))return;
+  JSONObject account=rpc.readAccount();if(canceled||!CodexLogin.current(store,loginAttempt))return;
+  if(account.optJSONObject("account")==null||!"chatgpt".equals(account.getJSONObject("account").optString("type")))throw new Exception("Codex reported sign-in success but its saved ChatGPT account could not be verified. Refresh status before another sign-in; existing credentials were not removed.");
+  CodexLogin.finish(store,loginAttempt,"complete","");completed=true;
+ }
  void run(Intent intent)throws Exception{JSONObject t=task();if(canceled||!attempt.equals(t.getString("attempt")))throw new Exception("Task stopped or superseded before service startup");
  // Service creation recovers old work; this explicitly dispatched task alone is allowed to start.
  if(!"PREPARED".equals(t.getString("state")))throw new Exception("Task was interrupted before service startup. Start it again explicitly.");

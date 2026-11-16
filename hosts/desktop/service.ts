@@ -12,6 +12,7 @@ import * as doc from '../../packages/core/document';import {hash,remotePayload,l
 import {serverAdditions,voyageRevision,invalidRevisionFailure,compareRemoteWorlds} from '../../packages/core/voyage';
 import {voyageHttp} from './voyage-http';
 import {voyageCleanRejection} from '../../packages/core/voyage-api';
+import {creatorReportRequest} from '../../packages/core/creator-reports';
 import {voyageEnvironment,voyageProfile,inspectVoyageContract,worldEngineStatus} from '../../packages/core/voyage-compatibility';
 export interface Secrets {get(key:string):string;set(key:string,value:string):void;durable:boolean}
 function stagesModel(settings:Settings,profileId:string){return stages.filter(stage=>stage!=='artwork').map(stage=>settings.routes[stage]).find(route=>route.profileId===profileId&&route.model.trim())?.model||'';}
@@ -34,6 +35,7 @@ export class Service {
   providerSettings():Settings{return JSON.parse(this.store.setting('providers')||JSON.stringify(defaultSettings()));}
   async request(method:string,p:any={}):Promise<any>{
     switch(method){
+      case 'creatorReport':{const target=this.voyageEnvironment(),report=creatorReportRequest(p,target),response=await this.voyage('GET',report.endpoint,undefined,undefined,undefined,target);return {...response,environment:target,report:p.report};}
       case 'localEditingSettings':return {mode:localEditMode(this.store.setting('localEditMode'))};
       case 'assistantRecoverySettings':return this.recoverySettings();
       case 'saveAssistantRecoverySettings':{const input=p.settings??p;if(!input||typeof input.enabled!=='boolean'||input.maxAttempts===undefined)throw new Error('Provide settings with enabled and maxAttempts.');const settings=assistantRecoverySettings(input);this.store.setting('assistantRecovery',JSON.stringify(settings));return settings;}
@@ -72,9 +74,11 @@ export class Service {
       case 'references':return {sections:this.references,meta:JSON.parse(this.store.setting('referenceMeta')||'{"source":"Bundled community references","updated":0}'),official:false};
       case 'refreshReferences':return this.refreshReferences();
       case 'auth':return this.agent.auth();
-      case 'login':return this.agent.loginStart();
-      case 'logout':return this.agent.logout();
-      case 'useCliLogin':{const auth=path.join(process.env.CODEX_HOME||path.join(os.homedir(),'.codex'),'auth.json');if(!existsSync(auth))throw new Error('No existing CLI login was found. Use Sign in instead.');mkdirSync(this.agent.home,{recursive:true});copyFileSync(auth,path.join(this.agent.home,'auth.json'));return this.agent.auth();}
+      case 'login':if(this.agent.running.size||this.media.busy)throw new Error('Finish or stop Codex work before changing its sign-in.');return this.agent.loginStart();
+      case 'loginStatus':return this.agent.loginStatus();
+      case 'loginCancel':return this.agent.loginCancel(p.attempt);
+      case 'logout':if(this.agent.running.size||this.media.busy)throw new Error('Finish or stop Codex work before signing out.');return this.agent.logout();
+      case 'useCliLogin':{if(this.agent.running.size||this.media.busy)throw new Error('Finish or stop Codex work before changing its sign-in.');const current=await this.agent.auth();if(!current.available)throw new Error('Existing Codex authentication could not be checked. No new sign-in or credential replacement was started. '+current.error);if(current.account)return current;if(current.login&&(current.login.busy||['starting','waiting','verifying'].includes(current.login.state)))throw new Error('Cancel or finish the current sign-in before importing CLI credentials.');const auth=path.join(process.env.CODEX_HOME||path.join(os.homedir(),'.codex'),'auth.json');if(!existsSync(auth))throw new Error('No file-based CLI login was found. If your CLI uses a system credential store, this file import cannot access it. No new sign-in was started.');mkdirSync(this.agent.home,{recursive:true});copyFileSync(auth,path.join(this.agent.home,'auth.json'));this.agent.invalidateAuthStatus();return this.agent.auth();}
       case 'providerSettings':{const settings=this.providerSettings();return {settings,availability:availability(settings.profiles),keys:settings.profiles.filter(v=>!!this.secrets.get('provider-'+v.id)).map(v=>v.id),durable:this.secrets.durable};}
       case 'saveProviderSettings':{const settings=validateSettings(p.settings);for(const previous of this.providerSettings().profiles)if(!settings.profiles.some(profile=>profile.id===previous.id))this.secrets.set('provider-'+previous.id,'');this.store.setting('providers',JSON.stringify(settings));return this.request('providerSettings');}
       case 'providerKey':{if(!this.providerSettings().profiles.some(v=>v.id===p.profileId))throw new Error('Provider not found.');this.secrets.set('provider-'+p.profileId,String(p.key||'').trim());return this.request('providerSettings');}

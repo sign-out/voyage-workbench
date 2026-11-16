@@ -88,7 +88,8 @@ final class Rpc implements AutoCloseable {
  }
  void init()throws Exception {rpc("initialize",new JSONObject().put("clientInfo",new JSONObject().put("name","voyage_workbench").put("version","0.1.0")).put("capabilities",new JSONObject().put("experimentalApi",true)),60);send(new JSONObject().put("method","initialized").put("params",new JSONObject()));}
  synchronized void send(JSONObject value)throws Exception {input.write(value.toString());input.newLine();input.flush();}
- void pump()throws Exception{listener.event(next(60));}
+ void pump()throws Exception{pump(60);}
+ void pump(int seconds)throws Exception{listener.event(next(seconds));}
  public void close(){if(child!=null){child.destroy();child.destroyForcibly();}}
     JSONObject next(int seconds) throws Exception {
         String line=output.poll(seconds,TimeUnit.SECONDS);
