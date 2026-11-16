@@ -1,5 +1,6 @@
 import {structuralReferences} from './relationships';
 import {referenceVersion,referencesForVersion} from './references';
+import {alphaAuthoringReferences} from './alpha-authoring';
 import {readReferenceHelp,type ReferenceHelpKind} from './community-reference';
 export {normalizeReferences,referenceVersion,mergeReferenceSets} from './references';
 export {planWorldImport,worldImportDiff,readImportReview,importOmissions} from './world-import';
@@ -10,7 +11,7 @@ export function referenceHelp(source:string,references:any[],kind:ReferenceHelpK
 }
 
 export function selectReferences(source:string,references:any[],context:{environment?:string;engineVersion?:string;schemaId?:string}={}):any[] {
- try{const root=parse(source),world=at(root,statePath(root)),version=world.children.find(child=>child.key==='heroesVersion')?.node,revision=world.children.find(child=>child.key==='compatibilityRevision')?.node;return referencesForVersion(references,version?.kind==='number'?Number(source.slice(version.start,version.end)):null,{...context,compatibilityRevision:revision?.kind==='number'?Number(source.slice(revision.start,revision.end)):undefined});}catch{return [];}
+ try{const root=parse(source),world=at(root,statePath(root)),version=world.children.find(child=>child.key==='heroesVersion')?.node,revision=world.children.find(child=>child.key==='compatibilityRevision')?.node,number=version?.kind==='number'?Number(source.slice(version.start,version.end)):null;return alphaAuthoringReferences(referencesForVersion(references,number,{...context,compatibilityRevision:revision?.kind==='number'?Number(source.slice(revision.start,revision.end)):undefined}),number,context.environment);}catch{return [];}
 }
 export function schemaGuidance(source:string,references:any[],section:string,context:{environment?:string;engineVersion?:string;schemaId?:string}={}):any[] {
  const selected=selectReferences(source,references,context),matches=selected.filter(entry=>entry.section===section).slice(0,3).map(({communityHelp,...entry})=>entry);

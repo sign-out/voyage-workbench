@@ -128,7 +128,9 @@ final class VoyageHttpPolicy {
  static String errorMessage(int status,String code,String message,String requestId,String retryAfter){return errorMessage(status,code,message,requestId,retryAfter,System.currentTimeMillis());}
  static String errorMessage(int status,String code,String message,String requestId,String retryAfter,long now){
   String guidance="";
-  if("request_status_unknown".equals(code))guidance="The mutation may have completed. Reconcile the live world and Studio state before any retry; do not create new idempotency keys. The existing key remains protected for the full 24-hour replay window.";
+  if("analytics_unavailable".equals(code))guidance="Analytics are temporarily unavailable, not zero. Wait for Retry-After before requesting this completed-day report again; no world changes were made.";
+  else if("feedback_unavailable".equals(code))guidance="The Creator Analytics feedback inbox is not enabled for this account. This is an access limit, not an empty inbox. Shared feedback remains read-only; no world changes were made.";
+  else if("request_status_unknown".equals(code))guidance="The mutation may have completed. Reconcile the live world and Studio state before any retry; do not create new idempotency keys. The existing key remains protected for the full 24-hour replay window.";
   else if("request_in_progress".equals(code))guidance="The request is still protected for the 24-hour replay window. Recheck only after the server cooldown; Retry-After is not a key-expiry promise. Do not send another mutation or create a new key.";
   else if("studio_version_upgrade_required".equals(code))guidance="The selected environment requires approval to save this world at a newer engine version. Review the reported versions in Studio before approving. This rejection did not save an upgrade; worlds are not tied to a previous connection.";
   else if("studio_version_mismatch".equals(code))guidance="Not retryable. Open the world in the selected environment's Creator Studio to confirm an upgrade for an older world, or explicitly choose a compatible environment for a newer draft. Never modify version fields or automatically switch hosts.";

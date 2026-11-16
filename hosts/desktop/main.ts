@@ -28,4 +28,4 @@ app.whenReady().then(()=>{
   });
   window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(url!==window.webContents.getURL())event.preventDefault();});void window.loadFile(entry);
 });
-app.on('window-all-closed',()=>app.quit());app.on('before-quit',()=>{if(service){for(const run of service.agent.running.values())run.rpc.close();for(const run of service.providers.running.values())run.abort.abort();}});
+app.on('window-all-closed',()=>app.quit());app.on('before-quit',()=>{if(service){service.agent.loginRpc?.close();for(const run of service.agent.running.values())run.rpc.close();for(const run of service.providers.running.values())run.abort.abort();}});

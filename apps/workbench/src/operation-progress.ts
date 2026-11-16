@@ -2,8 +2,8 @@ export interface OperationProgress {id:number;method:string;label:string;project
 const operations:OperationProgress[]=[];
 const listeners=new Set<()=>void>();
 let sequence=0;
-const passive=new Set(['project','projects','references','providerSettings','connection','worldEngine','feature','getFeature','featureGet','featureSet','asset','history','compute','orchestrationCapabilities']);
-const labels:Record<string,string>={imageGenerate:'Generating image',coverGrade:'Reviewing cover artwork',creationVisualReview:'Reviewing world artwork',saveRemote:'Saving world to Voyage',reconcileSave:'Checking Voyage save',reviewRemoteSave:'Reading Voyage changes',refreshSchema:'Refreshing authoring references',refreshCommunityReferences:'Refreshing community references',startAgent:'Starting model work',stopAgent:'Stopping model work',export:'Exporting JSON',exportMedia:'Exporting artwork or audio'};
+const passive=new Set(['project','projects','references','providerSettings','connection','worldEngine','loginStatus','feature','getFeature','featureGet','featureSet','asset','history','compute','orchestrationCapabilities']);
+const labels:Record<string,string>={creatorReport:'Reading Creator report',imageGenerate:'Generating image',coverGrade:'Reviewing cover artwork',creationVisualReview:'Reviewing world artwork',saveRemote:'Saving world to Voyage',reconcileSave:'Checking Voyage save',reviewRemoteSave:'Reading Voyage changes',refreshSchema:'Refreshing authoring references',refreshCommunityReferences:'Refreshing community references',startAgent:'Starting model work',stopAgent:'Stopping model work',export:'Exporting JSON',exportMedia:'Exporting artwork or audio'};
 function emit(){listeners.forEach(listener=>listener());}
 export function beginOperation(method:string,payload:any,activity?:{label:string;projectId?:string}){
  if(passive.has(method)&&!activity)return;

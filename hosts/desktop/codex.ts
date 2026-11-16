@@ -11,6 +11,7 @@ import * as doc from '../../packages/core/document';
 import {modelCatalog} from '../../packages/core/model-catalog';
 import {type Task} from '../../packages/core/project';
 import {taskToolCapabilities} from '../../packages/core/agent-orchestration';
+import {codexLoginActive,codexLoginStarting,codexLoginStarted,codexLoginEvent,codexLoginExpire,codexLoginFinish,codexLoginNeedsAuthentication,type CodexLogin} from '../../packages/core/codex-login';
 const disabled=['shell_tool','unified_exec','plugins','remote_plugin','apps','hooks','browser_use','browser_use_external','computer_use','view_image','multi_agent','multi_agent_v2','workspace_dependencies','skill_search','skill_mcp_dependency_install','image_generation','memories','goals','sleep_tool','recommended_plugins','code_mode','code_mode_only'];
 export function binary(){const custom=process.env.VOYAGE_CODEX_BINARY;if(custom&&existsSync(custom))return custom;
   const dirs=(process.env.PATH||'').split(path.delimiter).concat([path.join(os.homedir(),'.local','bin'),path.join(os.homedir(),'.t3','tools','codex','0.156.1','bin'),path.join(process.env.APPDATA||'','npm')]);
@@ -64,13 +65,66 @@ import {toolDefinitions,agentSystem} from '../../packages/core/providers';
 import {assistantPacket} from '../../packages/core/assistant-context';
 export class AgentHost {
   executeTool=async(projectId:string,taskId:string,attempt:string,callId:string,name:string,args:any)=>dispatchWorldTool(this.store,projectId,taskId,attempt,callId,name,args);
-  running=new Map<string,{rpc:Rpc;task:Task;threadId?:string;stop?:()=>void}>();loginRpc?:Rpc;login:any=null;
+  running=new Map<string,{rpc:Rpc;task:Task;threadId?:string;stop?:()=>void}>();loginRpc?:Rpc;login:CodexLogin|null=null;
+  private loginTimer?:ReturnType<typeof setTimeout>;
+  private authPending?:Promise<any>;
+  private loginCleanup?:Promise<void>;
   createRpc=(home:string,cwd:string)=>new Rpc(home,cwd);
   constructor(public store:Store,public home:string,public references:()=>any[]){ }
   async models(){const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();return await readCodexModels(rpc);}finally{rpc.close();}}
-  async auth(){try{const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();const r=await readCodexAccount(rpc);return {available:true,account:r.account,login:this.login};}finally{rpc.close();}}catch(e){return {available:false,error:(e as Error).message,login:this.login};}}
-  async loginStart(){this.loginRpc?.close();const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));this.loginRpc=rpc;rpc.onEvent=(method,p)=>{if(method==='account/login/completed'){this.login={...this.login,complete:p.success,error:p.error};rpc.close();}};await rpc.init();this.login=await rpc.request('account/login/start',{type:'chatgptDeviceCode'});return this.login;}
-  async logout(){const rpc=new Rpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();await rpc.request('account/logout');this.login=null;}finally{rpc.close();}return {ok:true};}
+  async auth(){
+    if(this.authPending)return this.authPending;
+    const pending=(async()=>{try{const rpc=this.createRpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();const r=await readCodexAccount(rpc);codexLoginNeedsAuthentication(r);return {available:true,account:r.account,requiresOpenaiAuth:r.requiresOpenaiAuth,login:this.loginStatus()};}finally{rpc.close();}}catch(e){return {available:false,error:(e as Error).message,login:this.loginStatus()};}})();
+    this.authPending=pending;try{return await pending;}finally{if(this.authPending===pending)this.authPending=undefined;}
+  }
+  invalidateAuthStatus(){this.authPending=undefined;}
+  private closeLogin(rpc=this.loginRpc){if(rpc!==this.loginRpc)return;this.loginRpc=undefined;clearTimeout(this.loginTimer);this.loginTimer=undefined;rpc?.close();}
+  private releaseLogin(){
+    if(this.loginCleanup)return this.loginCleanup;
+    const rpc=this.loginRpc,loginId=this.login?.loginId;this.loginRpc=undefined;clearTimeout(this.loginTimer);this.loginTimer=undefined;
+    if(!rpc)return Promise.resolve();
+    const pending=(async()=>{try{if(loginId)await rpc.request('account/login/cancel',{loginId},5000);}catch{}finally{rpc.close();}})();
+    this.loginCleanup=pending;void pending.then(()=>{if(this.loginCleanup===pending)this.loginCleanup=undefined;});return pending;
+  }
+  loginStatus(){
+    if(this.login){const next=codexLoginExpire(this.login);if(next!==this.login){this.login=next;void this.releaseLogin();}}
+    return this.login?{...this.login,busy:!!this.loginCleanup}:null;
+  }
+  async loginStart(){
+    if(this.loginCleanup)await this.loginCleanup;
+    if(codexLoginActive(this.loginStatus()))return this.loginStatus();
+    const attempt=randomUUID();this.login=codexLoginStarting(attempt);
+    let rpc:Rpc;
+    const current=()=>this.login?.attempt===attempt&&codexLoginActive(this.login)&&this.loginRpc===rpc;
+    const fail=(error:unknown)=>{if(current()){this.login=codexLoginFinish(this.login!,'failed',error instanceof Error?error.message:String(error));this.closeLogin(rpc);}};
+    try{
+      rpc=this.createRpc(this.home,path.join(this.store.directory,'auth'));this.loginRpc=rpc;
+      const early:any[]=[];
+      const completed=async(params:any)=>{
+        if(!current())return;
+        if(this.login!.state==='starting'){if(early.length<16)early.push(params);return;}
+        const next=codexLoginEvent(this.login!,params);if(next===this.login)return;this.login=next;
+        if(next.state==='failed'){this.closeLogin(rpc);return;}
+        try{const account=await readCodexAccount(rpc);if(!current())return;if(account.account?.type!=='chatgpt')throw new Error('Codex reported sign-in success, but its saved ChatGPT account could not be verified. Refresh status before starting another sign-in; existing credentials were not removed.');this.login=codexLoginFinish(this.login!,'complete');this.invalidateAuthStatus();this.closeLogin(rpc);}catch(error){fail(error);}
+      };
+      rpc.onEvent=(method,params)=>{if(method==='account/login/completed')void completed(params);else if(method==='host/exited')fail(new Error('Codex exited before sign-in was verified. Refresh status, then start a new attempt if needed.'));};
+      this.loginTimer=setTimeout(()=>{if(current()){this.login=codexLoginExpire(this.login!,this.login!.expiresAt);void this.releaseLogin();}},this.login.expiresAt-Date.now());this.loginTimer.unref();
+      await rpc.init();if(!current())return this.loginStatus();
+      const saved=await readCodexAccount(rpc);if(!current())return this.loginStatus();
+      if(!codexLoginNeedsAuthentication(saved)){this.login={...codexLoginFinish(this.login!,'complete'),reused:true};this.invalidateAuthStatus();this.closeLogin(rpc);return this.loginStatus();}
+      const response=await rpc.request('account/login/start',{type:'chatgptDeviceCode'});if(!current())return this.loginStatus();
+      this.login=codexLoginStarted(this.login!,response);
+      for(const event of early)await completed(event);
+    }catch(error){if(this.login?.attempt===attempt&&codexLoginActive(this.login)){this.login=codexLoginFinish(this.login,'failed',error instanceof Error?error.message:String(error));this.closeLogin();}}
+    return this.loginStatus();
+  }
+  async loginCancel(attempt?:string){
+    if(!this.login||attempt&&attempt!==this.login.attempt)return this.loginStatus();
+    if(codexLoginActive(this.login))this.login=codexLoginFinish(this.login,'canceled');
+    await this.releaseLogin();
+    return this.loginStatus();
+  }
+  async logout(){await this.loginCancel();this.invalidateAuthStatus();const rpc=this.createRpc(this.home,path.join(this.store.directory,'auth'));try{await rpc.init();await rpc.request('account/logout');this.login=null;}finally{this.invalidateAuthStatus();rpc.close();}return {ok:true};}
   async run(projectId:string,taskId:string,onSettled:()=>void=()=>{}){const project=this.store.project(projectId),task=project.tasks.find(t=>t.id===taskId);if(!task)throw new Error('Task not found.');
     const cwd=path.join(this.store.directory,'tasks',task.id);mkdirSync(cwd,{recursive:true});writeFileSync(path.join(cwd,'world.json'),task.kind==='work'?task.stagedSource:task.baseSource);
     let rpc:Rpc;try{rpc=this.createRpc(this.home,cwd);}catch(e){this.store.dispatch(projectId,{type:'taskStop',taskId,state:'FAILED',error:(e as Error).message});onSettled();return;}

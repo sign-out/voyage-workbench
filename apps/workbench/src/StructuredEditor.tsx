@@ -1,6 +1,6 @@
 import React,{createContext,useContext,useEffect,useId,useMemo,useState} from 'react';
 import {at,edit,insert,parse,remove,type Node,type Path} from '../../../packages/core/document';
-import {childSchema,enumValues,fieldTitle,initialValue,moveArrayItem,schemaFields,type Schema} from './structured-source';
+import {childSchema,enumValues,fieldTitle,initialValue,moveArrayItem,schemaFields,schemaForNode,type Schema} from './structured-source';
 import {entryImage,healthSummary,nodeText,referenceCatalog,referenceTarget,safeImageUrl,type ReferenceCatalog} from './world-references';
 import {TextField} from './TextField';
 import {ImageInspection} from './ImageInspection';
@@ -20,6 +20,7 @@ export function StructuredEditor({text,onChange,readOnly=false,schema,worldSourc
  return <WorldEditorContext.Provider value={{catalog,worldSource,section,basePath}}><div className="structured-editor"><FormNode source={text} node={root} path={[]} schema={schema} readOnly={readOnly} change={onChange} title={root.kind==='string'?'Text value':'Value'}/></div></WorldEditorContext.Provider>;
 }
 function FormNode({source,node,path,schema,readOnly,change,title}:{source:string;node:Node;path:Path;schema?:Schema;readOnly:boolean;change:(text:string)=>void;title:string}){
+ schema=schemaForNode(schema,node);
  const [query,setQuery]=useState(''),[selected,setSelected]=useState<string|number|null>(null),[newKey,setNewKey]=useState(''),[error,setError]=useState(''),[limit,setLimit]=useState(50);
  const inputId=useId();
  const context=useContext(WorldEditorContext);

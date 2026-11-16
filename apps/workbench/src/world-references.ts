@@ -7,7 +7,7 @@ export function referenceCatalog(source:string):ReferenceCatalog{
  const catalog:ReferenceCatalog={};
  try{
   const root=parse(source),world=at(root,statePath(root));
-  for(const section of ['factions','regions','realms','locations','worldVoices','npcTypes']){
+  for(const section of ['factions','regions','realms','locations','worldVoices','npcTypes','resourceSettings']){
    const collection=world.children.find(child=>child.key===section)?.node;
    catalog[section]=(collection?.kind==='object'?collection.children:[]).map(child=>({id:String(child.key),name:nodeText(child.node,'properName')||nodeText(child.node,'name')||nodeText(child.node,'label')||String(child.key)}));
   }
@@ -21,11 +21,13 @@ export function referenceCatalog(source:string):ReferenceCatalog{
  return catalog;
 }
 export function referenceTarget(section:string|undefined,path:Path){
- const keys=path.filter(key=>typeof key==='string') as string[],field=keys.at(-1),scope=section||keys.find(key=>['npcs','premadeCharacters','locations','regions'].includes(key));
+ const keys=path.filter(key=>typeof key==='string') as string[],field=keys.at(-1),scope=section||keys.find(key=>['npcs','premadeCharacters','locations','regions','triggerDefinitions','questTriggers','narrativeEvents','quests','attributeSettings'].includes(key));
  if(!scope)return undefined;
  if(['npcs','premadeCharacters'].includes(scope))return ({faction:'factions',currentLocation:'locations',currentArea:'areas',worldVoiceId:'worldVoices',type:'npcTypes'} as Record<string,string>)[field||''];
  if(scope==='locations')return ({region:'regions',factions:'factions'} as Record<string,string>)[field||''];
  if(scope==='regions')return ({realm:'realms',factions:'factions'} as Record<string,string>)[field||''];
+ if(['triggerDefinitions','questTriggers','narrativeEvents','quests'].includes(scope))return ({location:'locations',region:'regions'} as Record<string,string>)[field||''];
+ if(scope==='attributeSettings'&&keys.includes('attributeStatModifiers')&&field==='variable')return 'resourceSettings';
  return undefined;
 }
 export function safeImageUrl(value:string){try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password?url.href:'';}catch{return '';}}

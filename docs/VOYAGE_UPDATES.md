@@ -1,5 +1,10 @@
 # Maintaining Voyage compatibility
 
+For Alpha's analytics/feedback endpoints, moving-location triggers, resource
+descriptions and multi-resource boosts, see the
+[November 9 compatibility update](VOYAGE_ALPHA_UPDATES_2026-11-09.md). These are
+host-scoped capabilities, not a world-engine migration or a new release.
+
 ## Shared worlds and engine warnings
 
 Worlds are not tied to Alpha, Beta or Production. A project links to a world ID;

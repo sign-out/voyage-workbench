@@ -1,0 +1,12 @@
+{
+  "source": "https://api-alpha.aidungeon.com/creator/v1/openapi.json",
+  "guideSource": "https://api-alpha.aidungeon.com/creator/v1/agent-guide.md",
+  "retrieved": "2026-11-09",
+  "version": "1.3.0-preview",
+  "environment": "alpha",
+  "sha256": "c44a2d13378c501cf37dcd5d39e893598024b385b18152d2669e4862f8779133",
+  "bundledSha256": "2b37ec348a77fb4c70ec59efaeb29cb1e3f722aa6beffe3e312100e9b6c790c9",
+  "guideSha256": "320d82028952b0284de64caa11c171bf5f6620545423bb3669e8b71a114b7010",
+  "guideBaseline": "docs/references/creator-alpha-2026-11-09.agent-guide.md",
+  "scope": "Public documentation only, not authenticated account acceptance. Contract bundled with a final newline. No keys, world reads, writes, upgrades, publication or paid generation used. Production/Beta baselines are unchanged."
+}

@@ -16,6 +16,8 @@ export function voyageReadRetry(method:string,status:number,code:string,attempt:
 }
 
 export function voyageFailureGuidance(status:number,code:string,method:string):string {
+  if(code==='analytics_unavailable')return 'Analytics are temporarily unavailable, not zero. Wait for Retry-After before requesting this completed-day report again; no world changes were made.';
+  if(code==='feedback_unavailable')return 'The Creator Analytics feedback inbox is not enabled for this account. This is an access limit, not an empty inbox. Shared feedback remains read-only; no world changes were made.';
   if(code==='request_status_unknown')return 'The remote action may have completed. Reconcile the live world and Studio state before retrying; keep the original request key.';
   if(code==='request_in_progress')return 'The original request is still protected. Wait before an exact retry using the same request key; do not start a replacement request.';
   if(code==='studio_version_upgrade_required')return 'The selected environment requires approval to save this world at a newer engine version. Review the source and target versions in Studio before approving; this rejection did not save an upgrade. Your world is not tied to its previous connection.';

@@ -9,6 +9,7 @@ const contractFor=url=>{
  assert.ok(profile,'Request must use a configured environment');
  return readFileSync(profile.contractBaseline,'utf8');
 };
+const guideFor=url=>readFileSync(Object.values(profiles.environments).find(profile=>url.startsWith(profile.apiBase+'/')).guideBaseline,'utf8');
 
 test('reports nested drift even with identical version strings',()=>{
  const before={info:{version:'same'},limits:{cover:1000}},after={info:{version:'same'},limits:{cover:1280},newOperation:true};
@@ -24,7 +25,8 @@ test('explicit curl transport disables user config, redirects and credentials',(
 });
 test('offline checks require no network or credentials',async()=>{
  const report=await checkVoyageUpdates({offline:true,fetcher:()=>{throw Error('Network forbidden');}});
- assert.equal(report.offline,true);for(const environment of ['production','alpha','beta'])assert.equal(report.environments[environment].baselineChanges.length,0);assert.equal(report.requiresReview,false);assert.equal(report.differences.length,3);assert.equal(report.environmentDifferences.beta.length,3);
+ assert.equal(report.offline,true);for(const environment of ['production','alpha','beta'])assert.equal(report.environments[environment].baselineChanges.length,0);assert.equal(report.requiresReview,false);
+ for(const environment of ['alpha','beta'])assert.deepEqual(report.environmentDifferences[environment],contractChanges(JSON.parse(contractFor(profiles.environments.production.apiBase+'/openapi.json')),JSON.parse(contractFor(profiles.environments[environment].apiBase+'/openapi.json'))));
 });
 test('live checker uses only public documentation and flags contract/guide disagreement',async()=>{
  const calls=[],contract=JSON.parse(readFileSync('docs/openapi.json','utf8')),guide=readFileSync('docs/voyage-agent-guide.md','utf8');
@@ -50,7 +52,7 @@ test('guide-only and beta-only drift trigger review independently of API version
  const report=await checkVoyageUpdates({fetcher:async url=>new Response(url.endsWith('.md')?'Creator API workflow changed':contractFor(url))});
  assert.equal(report.requiresReview,true);for(const environment of Object.keys(profiles.environments)){assert.equal(report.environments[environment].guideChanged,true);assert.equal(report.environments[environment].baselineChanges.length,0);}
  const beta=await checkVoyageUpdates({fetcher:async url=>{
-  if(url.endsWith('.md'))return new Response(readFileSync('docs/voyage-agent-guide.md','utf8'));
+  if(url.endsWith('.md'))return new Response(guideFor(url));
   const contract=JSON.parse(contractFor(url));if(url.startsWith(profiles.environments.beta.apiBase+'/'))contract['x-media-constraints'].targets.WORLD_COVER.recommendedWidth=1600;
   return new Response(JSON.stringify(contract));
  }});

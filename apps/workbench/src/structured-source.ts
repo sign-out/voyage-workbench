@@ -1,4 +1,4 @@
-import {at,edit,parse,read,type Path} from '../../../packages/core/document';
+import {at,edit,parse,read,type Node,type Path} from '../../../packages/core/document';
 
 export type Schema=string|{_type?:string;fields?:Record<string,Schema>;parts?:Schema[];of?:Schema|Schema[];codomain?:Schema;value?:string|boolean|number};
 export function schemaFields(schema?:Schema):Record<string,Schema>{
@@ -16,11 +16,27 @@ export function enumValues(schema?:Schema):string[]{
  if(!schema||typeof schema==='string'||schema._type!=='union'||!Array.isArray(schema.of))return [];
  return schema.of.every(item=>typeof item==='object'&&item._type==='literal'&&typeof item.value==='string')?schema.of.map(item=>String((item as Exclude<Schema,string>).value)):[];
 }
+export function schemaForNode(schema:Schema|undefined,node:Node):Schema|undefined{
+ if(!schema||typeof schema==='string'||schema._type!=='union'||!Array.isArray(schema.of)||enumValues(schema).length)return schema;
+ const candidates=schema.of.filter(part=>{
+  if(typeof part==='string')return part===node.kind;
+  if(part._type==='array')return node.kind==='array';
+  if(['record','required','partial','intersection'].includes(part._type||''))return node.kind==='object';
+  return part._type==='literal'&&part.value===node.value;
+ });
+ if(candidates.length===1)return candidates[0];
+ const types=candidates.flatMap(part=>enumValues(schemaFields(part).type));
+ const discriminator=node.children.find(child=>child.key==='type')?.node,selected=discriminator?.kind==='string'?candidates.find(part=>enumValues(schemaFields(part).type).includes(String(discriminator.value))):undefined;
+ const typeField:Schema={_type:'partial',fields:{type:{_type:'union',of:[...new Set(types)].map(value=>({_type:'literal',value}))}}};
+ return selected?{_type:'intersection',parts:[selected,typeField]}:types.length&&!discriminator?typeField:undefined;
+}
 export function initialValue(schema?:Schema):string{
  if(schema==='string')return '""';
  if(schema==='boolean')return 'false';
  if(schema==='number')return '0';
  const values=enumValues(schema);if(values.length)return JSON.stringify(values[0]);
+ if(typeof schema==='object'&&schema._type==='literal')return JSON.stringify(schema.value);
+ if(typeof schema==='object'&&schema._type==='union'&&Array.isArray(schema.of)&&schema.of.length)return initialValue(schema.of[0]);
  if(typeof schema==='object'&&schema._type==='array')return '[]';
  return '{}';
 }

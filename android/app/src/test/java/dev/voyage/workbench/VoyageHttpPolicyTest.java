@@ -152,6 +152,8 @@ public class VoyageHttpPolicyTest {
   assertTrue(VoyageHttpPolicy.cleanRejection(503,"studio_unavailable"));assertTrue(VoyageHttpPolicy.cleanRejection(409,"studio_version_mismatch"));assertFalse(VoyageHttpPolicy.cleanRejection(500,""));assertFalse(VoyageHttpPolicy.cleanRejection(409,""));
  }
  @Test public void bridgeMessagesPreservePrefixSanitizedIdAndCooldown(){
+  assertTrue(VoyageHttpPolicy.errorMessage(503,"analytics_unavailable","","","10").contains("unavailable, not zero"));
+  assertTrue(VoyageHttpPolicy.errorMessage(403,"feedback_unavailable","","",null).contains("not an empty inbox"));
   String message=VoyageHttpPolicy.errorMessage(400,"invalid_revision","Bad revision","req\r\n<script>_1","10");
   assertTrue(message.startsWith("Voyage HTTP 400 (invalid_revision):"));assertTrue(message.contains("Request ID: reqscript_1."));assertTrue(message.contains("Retry-After: 10."));assertFalse(message.contains("\n"));
   assertTrue(VoyageHttpPolicy.errorMessage(429,"rate_limit","Wait","","nonsense").contains("Voyage supplied an invalid cooldown; check again later."));

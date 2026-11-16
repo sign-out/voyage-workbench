@@ -12,6 +12,25 @@ function fixture(){
  const secrets={durable:true,get:(key:string)=>keys.get(key)||'',set:(key:string,value:string)=>{keys.set(key,value);}};
  return {directory,keys,secrets,service:new Service(directory,path.resolve('apps/workbench/public/references'),secrets)};
 }
+test('Creator reports route read-only requests through Alpha without replacing local worlds or falling back to another connection',async()=>{
+ const {service,directory}=fixture(),original=globalThis.fetch,calls:any[]=[];
+ try{
+  const project=(await service.request('create',{name:'World',source:'{"heroesVersion":37,"exact":9007199254740993}'})).project,before=JSON.stringify(service.store.project(project.id));
+  globalThis.fetch=async(url,init)=>{calls.push({url:String(url),init});return new Response('{"data":{"fixture":true}}');};
+  for(const report of ['summary','daily','session-depth','sources','feedback']){
+   const response=await service.request('creatorReport',{report,environment:'alpha',worldId:'WORLD'});
+   assert.equal(response.environment,'alpha');assert.equal(response.report,report);assert.equal(response.text,'{"data":{"fixture":true}}');
+  }
+  assert.equal(calls.length,5);for(const call of calls){assert.match(call.url,/^https:\/\/api-alpha\.aidungeon\.com\/creator\/v1\//);assert.equal(call.init.method,'GET');assert.equal(call.init.headers.Authorization,'Bearer alpha-key');assert.equal(call.init.headers['Idempotency-Key'],undefined);assert.equal(call.init.body,undefined);}
+  assert.equal(JSON.stringify(service.store.project(project.id)),before);
+  for(const environment of ['beta','production']){service.store.setting('voyageEnvironmentSelection',environment);await assert.rejects(service.request('creatorReport',{report:'feedback',environment}),/only on Alpha/);}
+  assert.equal(calls.length,5);service.store.setting('voyageEnvironmentSelection','alpha');
+  await assert.rejects(service.request('creatorReport',{report:'feedback',environment:'beta'}),/connection changed/);assert.equal(calls.length,5);
+  globalThis.fetch=async()=>new Response('{"error":{"code":"feedback_unavailable","message":"Not enabled"}}',{status:403});
+  await assert.rejects(service.request('creatorReport',{report:'feedback',environment:'alpha'}),/not an empty inbox/);
+  assert.equal(JSON.stringify(service.store.project(project.id)),before);
+ }finally{globalThis.fetch=original;service.store.close();rmSync(directory,{recursive:true,force:true});}
+});
 test('explicit switches verify docs, isolate keys and let shared worlds use the selected host after restart',async()=>{
  const setup=fixture(),original=globalThis.fetch,calls:any[]=[];let service=setup.service;
  try{

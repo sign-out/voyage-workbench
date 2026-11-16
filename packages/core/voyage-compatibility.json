@@ -12,6 +12,7 @@
       "contractBaseline": "docs/openapi.json",
       "guideBaseline": "docs/voyage-agent-guide.md",
       "checked": "2026-11-05",
+      "creatorReports": [],
       "contractHash": "2e002a431201777891dcd8eff01129613b14940e4c1d77af4a7b13efe8258340",
       "cover": {"width": 1000, "height": 1000},
       "release": null
@@ -23,6 +24,7 @@
       "contractBaseline": "docs/references/creator-beta-2026-11-07.openapi.json",
       "guideBaseline": "docs/voyage-agent-guide.md",
       "checked": "2026-11-07",
+      "creatorReports": [],
       "contractHash": "22dd8eaa7a33665bd9e81f7c18928106aacf90357fdf29a62e7d93f11a8fced7",
       "cover": {"width": 1280, "height": 720},
       "release": null
@@ -31,10 +33,11 @@
       "apiBase": "https://api-alpha.aidungeon.com/creator/v1",
       "studioUrl": "https://alpha.voyage.io/studio",
       "contractSource": "https://api-alpha.aidungeon.com/creator/v1/openapi.json",
-      "contractBaseline": "docs/references/creator-alpha-2026-11-05.openapi.json",
-      "guideBaseline": "docs/voyage-agent-guide.md",
-      "checked": "2026-11-05",
-      "contractHash": "22dd8eaa7a33665bd9e81f7c18928106aacf90357fdf29a62e7d93f11a8fced7",
+      "contractBaseline": "docs/references/creator-alpha-2026-11-09.openapi.json",
+      "guideBaseline": "docs/references/creator-alpha-2026-11-09.agent-guide.md",
+      "checked": "2026-11-09",
+      "creatorReports": ["summary", "daily", "session-depth", "sources", "feedback"],
+      "contractHash": "c44a2d13378c501cf37dcd5d39e893598024b385b18152d2669e4862f8779133",
       "cover": {"width": 1280, "height": 720},
       "release": {
         "label": "Voyage 2.55.0",
@@ -43,7 +46,7 @@
         "itemCatalogCharacters": 350000,
         "itemMediaCharacters": 4000,
         "schemaNotices": [
-          "Resource descriptions and multiple resource boosts per attribute are announced, but their new serialized shapes are not verified by the bundled codec. Preserve unfamiliar fields; do not convert or remove them using an older schema."
+          "Alpha resource descriptions, multiple resource boosts per attribute and location-move effects have supplemental community-codec guidance checked November 9. This is not official engine compatibility. Preserve unfamiliar fields. Older single-boost mappings are preserved, not automatically migrated; use arrays of {variable, amount} for new multiple boosts and let official validation decide acceptance."
         ]
       }
     }

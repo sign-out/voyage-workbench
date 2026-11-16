@@ -36,7 +36,7 @@ test('configured official contract baselines retain their pinned source fingerpr
   const raw=readFileSync(profile.contractBaseline,'utf8');
   assert.equal(createHash('sha256').update(raw.replace(/\n$/,'')).digest('hex'),profile.contractHash);
  }
- for(const name of ['creator-alpha-2026-11-05','creator-beta-2026-11-07']){
+ for(const name of ['creator-alpha-2026-11-05','creator-beta-2026-11-07','creator-alpha-2026-11-09']){
   const raw=readFileSync('docs/references/'+name+'.openapi.json','utf8'),metadata=JSON.parse(readFileSync('docs/references/'+name+'.meta.json','utf8'));
   assert.equal(createHash('sha256').update(raw).digest('hex'),metadata.bundledSha256);
   if(metadata.guideBaseline)assert.equal(createHash('sha256').update(readFileSync(metadata.guideBaseline)).digest('hex'),metadata.guideSha256);

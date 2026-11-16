@@ -2,6 +2,13 @@
 
 ## Public source and releases
 
+The latest Workbench test build is
+[0.2.25-test](https://github.com/sign-out/voyage-workbench/releases/tag/v0.2.25-test),
+with Codex sign-in reuse and Alpha Creator updates. It does not replace the stable release.
+
+Alpha Creator Analytics, shared feedback and the new Alpha authoring fields are
+covered in the [November 9 compatibility guide](docs/VOYAGE_ALPHA_UPDATES_2026-11-09.md).
+
 For older Android phones, the separate **Voyage Sync** micro companion imports
 world JSON, reviews real world changes and updates existing Voyage drafts without
 the full Workbench or any AI runtime. Download the
@@ -15,7 +22,7 @@ This repository contains the application source, tests, build scripts, bundled a
 
 Version **0.2.18** is a regular release of the existing application; provider and Voyage integrations retain their documented limitations. Android retains the full/offline default. See [release notes](docs/RELEASE_0.2.18_NOTES.md). Windows uses a self-signed certificate, so unknown-publisher or SmartScreen warnings may remain. Android retains the existing update-signing identity. Linux and the checksum manifest have detached signatures; public verification material is in `checksums.json`. A regular release does not establish public certificate trust or device-testing coverage.
 
-Test build **0.2.24** (`v0.2.24-test`) fixes false unconfirmed-save warnings when Voyage omits the empty optional `unassignedAreas` and `worldVoices` maps. Reconcile save can resolve older affected saves without uploading again. It retains the world-focused import review, world-backed form defaults, activity feedback, artwork and Codex CLI fixes from previous test builds and upgrades over them (Android version code 26) without replacing stable 0.2.18. Live provider access and generated output still need account-specific testing. See [test release notes and installation precautions](docs/RELEASE_0.2.24_TEST_NOTES.md).
+Test build **0.2.25** (`v0.2.25-test`) reuses saved Codex CLI authentication before creating a sign-in attempt, monitors one pending login, and never automatically re-authenticates or signs out in response to a session limit. It adds Alpha Creator analytics/shared feedback and narrow authoring guidance, retaining the earlier world-focused import, artwork, usability and empty-optional-map save fixes. It updates previous test builds in place (Android version code 27) without replacing stable 0.2.18. No physical-device or live account-session testing is claimed. See [test release notes and installation precautions](docs/RELEASE_0.2.25_TEST_NOTES.md).
 
 For source development, install Node.js 22 or newer, then run `npm ci`, `npm run build`, `npm run typecheck`, `npm test`, and `npm run dev`. The build generates the reference assets required by desktop service tests. Run `npm run desktop` for the Electron app. Android also requires a JDK, Android SDK, and separately prepared native/provider runtimes; see [development and packaging prerequisites](docs/PERSONAL_APPS.md). Packaging scripts currently expect locally prepared provider runtimes and retained dependency compliance inputs, which are not included in this source snapshot. Building from source does not reproduce the distributor's signing identity; never share private signing keys.
 
